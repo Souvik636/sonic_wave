@@ -9,7 +9,6 @@ import '../widgets/glassmorphic_card.dart';
 import '../widgets/premium_interaction.dart';
 import '../services/storage_location_service.dart';
 import '../services/updater/github_release_client.dart';
-import '../services/updater/mock_update_client.dart';
 import '../widgets/updater/update_dialog.dart';
 import '../widgets/app_toast.dart';
 import 'sound_studio_screen.dart';
@@ -1623,175 +1622,48 @@ class SettingsScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      AppToast.show(context, 'Checking GitHub for latest 64-bit APK release...', type: ToastType.info);
-                      final client = GitHubReleaseClient(currentVersion: '1.0.0+3');
-                      try {
-                        final release = await client.checkForUpdate();
-                        if (!context.mounted) return;
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  AppToast.show(context, 'Checking GitHub for latest 64-bit APK release...', type: ToastType.info);
+                  final client = GitHubReleaseClient(currentVersion: '1.0.0+3');
+                  try {
+                    final release = await client.checkForUpdate();
+                    if (!context.mounted) return;
 
-                        if (release != null && release.targetAsset != null) {
-                          await UpdateDialog.show(
-                            context,
-                            updateClient: client,
-                            release: release,
-                          );
-                        } else {
-                          AppToast.show(context, 'You are running the latest 64-bit Android release!', type: ToastType.success);
-                        }
-                      } catch (e) {
-                        if (!context.mounted) return;
-                        AppToast.show(context, 'Could not check for updates: $e', type: ToastType.warning);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primary.withValues(alpha: 0.20),
-                      foregroundColor: Colors.white,
-                      side: BorderSide(color: primary.withValues(alpha: 0.4)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      elevation: 0,
-                    ),
-                    icon: const Icon(Icons.cloud_download_rounded, size: 18),
-                    label: const Text(
-                      'Check Updates',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                  ),
+                    if (release != null && release.targetAsset != null) {
+                      await UpdateDialog.show(
+                        context,
+                        updateClient: client,
+                        release: release,
+                      );
+                    } else {
+                      AppToast.show(context, 'You are running the latest 64-bit Android release!', type: ToastType.success);
+                    }
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    AppToast.show(context, 'Could not check for updates: $e', type: ToastType.warning);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primary.withValues(alpha: 0.20),
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: primary.withValues(alpha: 0.4)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 0,
                 ),
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: () => _showMockScenarioPicker(context),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: primary,
-                    side: BorderSide(color: primary.withValues(alpha: 0.5)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                  icon: const Icon(Icons.bug_report_rounded, size: 18),
-                  label: const Text('Mock Test UI', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                icon: const Icon(Icons.cloud_download_rounded, size: 18),
+                label: const Text(
+                  'Check for Updates',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
-              ],
+              ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  void _showMockScenarioPicker(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF16162A),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Select Mock Update Scenario',
-              style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Simulate update pipeline UI, progress bar & error states offline',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-            ),
-            const SizedBox(height: 16),
-            _mockTile(
-              context: ctx,
-              title: '1. Update Available (v1.0.0 → v1.1.0)',
-              subtitle: 'Simulates 64-bit setup download, progress bar & checksum verification',
-              icon: Icons.system_update_rounded,
-              color: Colors.purpleAccent,
-              scenario: MockScenario.updateAvailable,
-            ),
-            _mockTile(
-              context: ctx,
-              title: '2. Checksum Mismatch Error',
-              subtitle: 'Simulates corrupt download file hash mismatch detection',
-              icon: Icons.gpp_bad_rounded,
-              color: Colors.redAccent,
-              scenario: MockScenario.checksumMismatch,
-            ),
-            _mockTile(
-              context: ctx,
-              title: '3. GitHub API Rate Limit',
-              subtitle: 'Simulates HTTP 403 / 429 rate limit exception',
-              icon: Icons.access_time_filled_rounded,
-              color: Colors.orangeAccent,
-              scenario: MockScenario.rateLimited,
-            ),
-            _mockTile(
-              context: ctx,
-              title: '4. Network Disconnect',
-              subtitle: 'Simulates internet connection failure',
-              icon: Icons.wifi_off_rounded,
-              color: Colors.amberAccent,
-              scenario: MockScenario.networkError,
-            ),
-            _mockTile(
-              context: ctx,
-              title: '5. Up to Date',
-              subtitle: 'Simulates "You are running the latest version"',
-              icon: Icons.check_circle_rounded,
-              color: Colors.greenAccent,
-              scenario: MockScenario.upToDate,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _mockTile({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required MockScenario scenario,
-  }) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-        child: Icon(icon, color: color, size: 20),
-      ),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-      subtitle: Text(subtitle, style: const TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-      onTap: () async {
-        Navigator.pop(context);
-        final mockClient = MockUpdateClient(
-          currentVersion: '1.0.0',
-          scenario: scenario,
-        );
-
-        try {
-          final release = await mockClient.checkForUpdate();
-          if (release != null && context.mounted) {
-            await UpdateDialog.show(
-              context,
-              updateClient: mockClient,
-              release: release,
-            );
-          } else {
-            if (context.mounted) {
-              AppToast.show(context, 'Mock: App is already up to date!', type: ToastType.success);
-            }
-          }
-        } catch (e) {
-          if (context.mounted) {
-            AppToast.show(context, 'Mock Error Triggered: $e', type: ToastType.warning);
-          }
-        }
-      },
     );
   }
 }
