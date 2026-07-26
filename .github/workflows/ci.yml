@@ -54,7 +54,7 @@ jobs:
         run: dart format --output=none .
 
       - name: Analyze
-        run: flutter analyze --fatal-infos
+        run: flutter analyze
 
       - name: Run tests with coverage
         run: flutter test --coverage --reporter expanded

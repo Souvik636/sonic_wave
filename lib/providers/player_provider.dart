@@ -1,7 +1,6 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1306,9 +1305,6 @@ class PlayerProvider extends ChangeNotifier {
         for (final song in album.songs) {
           final srcPath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
           if (srcPath != null && srcPath.isNotEmpty && File(srcPath).existsSync()) {
-            final fileName = song.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_') +
-                (srcPath.contains('.') ? '.${srcPath.split('.').last}' : '.mp3');
-            final destPath = '${recoveryDir.path}${Platform.pathSeparator}$fileName';
             try {
               await StorageLocationService().moveFile(srcPath, recoveryDir);
             } catch (_) {}

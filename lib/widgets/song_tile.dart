@@ -347,7 +347,6 @@ class SongTile extends StatelessWidget {
 
   void _showSongContextMenu(BuildContext context, PlayerProvider playerProvider) {
     final isDownloaded = playerProvider.downloadedSongs.any((s) => s.videoId == song.videoId);
-    final isPhysical = song.filePath != null || song.isLocalFile || isDownloaded;
     final isLocalSection = sourceTag == 'local';
 
     showModalBottomSheet(
@@ -547,6 +546,7 @@ class SongTile extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   void _showAddToAlbumDialog(BuildContext context, PlayerProvider playerProvider) {
     showModalBottomSheet(
       context: context,

@@ -7,7 +7,6 @@ import '../providers/player_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/glassmorphic_card.dart';
 import '../widgets/premium_interaction.dart';
-import 'dart:io';
 import '../services/storage_location_service.dart';
 import '../services/updater/github_release_client.dart';
 import '../services/updater/mock_update_client.dart';

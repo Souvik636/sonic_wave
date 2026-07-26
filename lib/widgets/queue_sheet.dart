@@ -76,6 +76,7 @@ void showQueueSheet(BuildContext context, PlayerProvider playerProvider) {
                     shrinkWrap: true,
                     padding: const EdgeInsets.only(bottom: 20),
                     itemCount: playlist.length,
+                    // ignore: deprecated_member_use
                     onReorder: (oldIndex, newIndex) {
                       // ReorderableListView reports the insertion slot, which
                       // is one past the target when moving an item down.

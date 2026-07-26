@@ -135,7 +135,6 @@ void main() {
     expect(await oldCoverFile.exists(), isTrue);
 
     // 2. Perform Migration to SD Card (pointing to our tempDir)
-    final targetPath = '${tempDir.path}/sonicWave';
     final isMigrated = await provider.migrateDownloadedFiles(
       StorageType.appInternal,
       StorageType.sdCard,
