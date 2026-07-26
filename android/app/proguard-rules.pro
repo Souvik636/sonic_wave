@@ -22,7 +22,6 @@
 -dontwarn io.github.junkfood02.**
 
 # Keep Media3 / ExoPlayer
--keep class androidx.media3.** { *; }
--keep class com.google.android.exoplayer2.** { *; }
--dontwarn androidx.media3.**
--dontwarn com.google.android.exoplayer2.**
+# Keep SonicWave app package and MethodChannels
+-keep class com.sonicwave.sonic_wave.** { *; }
+-dontwarn com.sonicwave.sonic_wave.**
