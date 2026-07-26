@@ -1,0 +1,1105 @@
+import 'dart:io';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:audio_session/audio_session.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:just_audio/just_audio.dart';
+import '../models/song.dart';
+import '../providers/settings_provider.dart';
+import 'youtube_service.dart';
+import 'download_service.dart';
+import 'stream_resolver_service.dart';
+
+class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHandler {
+  late final AudioPlayer _player;
+  final YouTubeService _youtubeService = YouTubeService();
+  AndroidEqualizer? _equalizer;
+  SoundEnhancer _lastAppliedEnhancerMode = SoundEnhancer.none;
+
+  final List<Song> _playlist = [];
+  int _currentIndex = -1;
+  bool _isShuffled = false;
+  AudioServiceRepeatMode _repeatMode = AudioServiceRepeatMode.none;
+
+  // Generation counter to cancel stale play requests
+  int _playGeneration = 0;
+  Timer? _prefetchTimer;
+
+  /// Sleep-timer "end of track": when true, playback stops after the current
+  /// song completes instead of advancing the queue. One-shot — reset on fire.
+  bool stopAfterCurrentSong = false;
+
+  /// Called when the end-of-track sleep stop fires, so UI state can update.
+  VoidCallback? onStopAfterCurrentFired;
+
+  /// Called when approaching the end of queue so PlayerProvider can auto-inject recommendations.
+  VoidCallback? onQueueNearEnd;
+
+  /// Global crossfade duration in seconds (0 = off). Applied as a volume
+  /// envelope at track edges when the song has no explicit fade of its own.
+  int crossfadeSeconds = 0;
+
+  /// Queue index we already ran the near-end prefetch for (avoids re-firing
+  /// every position tick in the final seconds).
+  int _nearEndPrefetchedIndex = -1;
+
+  /// Restore-on-launch: when [playSong] loads this exact song next, seek here
+  /// once, then clear. Set by [restoreQueue].
+  Duration? _pendingRestorePosition;
+  String? _pendingRestoreSongId;
+
+  List<double>? _customGains;
+  bool _useCustomGains = false;
+  bool _isKaraokeMode = false;
+  List<double> _currentGains = [0.0, 0.0, 0.0, 0.0, 0.0];
+
+  Future<void> setSpeedAndPitch(double speed, double pitch) async {
+    await _player.setSpeed(speed);
+    await _player.setPitch(pitch);
+  }
+
+  Future<void> setEqualizerPreset(SoundEnhancer mode) async {
+    _useCustomGains = false;
+    _lastAppliedEnhancerMode = mode;
+    await _applyEqualizerPreset(mode, smooth: true);
+  }
+
+  Future<void> setCustomEqualizerGains(List<double> gains) async {
+    _useCustomGains = true;
+    _customGains = List.from(gains);
+    await _applyCustomEqualizerGains(gains, smooth: true);
+  }
+
+  Future<void> setKaraokeMode(bool enabled) async {
+    _isKaraokeMode = enabled;
+    if (_useCustomGains && _customGains != null) {
+      await _applyCustomEqualizerGains(_customGains!, smooth: true);
+    } else {
+      await _applyEqualizerPreset(_lastAppliedEnhancerMode, smooth: true);
+    }
+  }
+
+  /// ExoPlayer's stock buffering is tuned for video: it withholds playback until
+  /// ~2.5s is buffered, which is dead air at the start of every track. Music is
+  /// a fraction of the bitrate of video, so a much smaller pre-roll is safe and
+  /// audio starts noticeably sooner. The back buffer keeps a short seek-back
+  /// window in memory so scrubbing backwards doesn't force a re-fetch.
+  static AudioLoadConfiguration get _loadConfiguration => AudioLoadConfiguration(
+        androidLoadControl: const AndroidLoadControl(
+          minBufferDuration: Duration(seconds: 15),
+          maxBufferDuration: Duration(seconds: 50),
+          // Start playing as soon as this much is ready (default 2.5s).
+          bufferForPlaybackDuration: Duration(milliseconds: 600),
+          // After a rebuffer, resume this quickly (default 5s).
+          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
+          backBufferDuration: Duration(seconds: 20),
+        ),
+      );
+
+  SonicWaveAudioHandler() {
+    if (Platform.isAndroid) {
+      _equalizer = AndroidEqualizer();
+      final pipeline = AudioPipeline(androidAudioEffects: [_equalizer!]);
+      _player = AudioPlayer(
+        audioPipeline: pipeline,
+        audioLoadConfiguration: _loadConfiguration,
+        userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+      );
+    } else {
+      _player = AudioPlayer(
+        audioLoadConfiguration: _loadConfiguration,
+        userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+      );
+    }
+    _init();
+  }
+
+  void _init() {
+    // Listen to playback event streams and map to playbackState.
+    // IMPORTANT: must be .listen(playbackState.add), NOT .pipe(playbackState).
+    // pipe() locks the subject via addStream, after which BaseAudioHandler.stop()'s
+    // own playbackState.add() throws "Bad state: You cannot add items while items
+    // are being added from addStream" — an unhandled exception that kills the
+    // audio service mid-stop and crashes the app on next launch (see run_log.txt).
+    _player.playbackEventStream.map(_transformEvent).listen(
+      playbackState.add,
+      onError: (Object e, StackTrace st) {
+        // just_audio surfaces player errors on this stream; reflect them in
+        // playbackState instead of letting them escape as unhandled errors.
+        debugPrint('[AudioHandler] playbackEventStream error: $e');
+        playbackState.add(playbackState.value.copyWith(
+          processingState: AudioProcessingState.error,
+        ));
+      },
+    );
+
+    // Listen for when current song completes
+    _player.processingStateStream.listen((state) {
+      if (state == ProcessingState.completed) {
+        _handleSongCompletion();
+      }
+    });
+
+    // Listen for headphone unplug / Bluetooth disconnection events ("Becoming Noisy")
+    AudioSession.instance.then((session) async {
+      try {
+        await session.configure(const AudioSessionConfiguration.music());
+        session.becomingNoisyEventStream.listen((_) {
+          debugPrint('[AudioHandler] Headphones/Bluetooth disconnected. Auto-pausing.');
+          pause();
+        });
+      } catch (e) {
+        debugPrint('[AudioHandler] Error configuring AudioSession: $e');
+      }
+    });
+
+    // Listen to position updates to modulate volume for fade in / out envelopes
+    _player.positionStream.listen((_) {
+      _applyVolumeModulation();
+      _maybePrefetchNearEnd();
+    });
+  }
+
+  double _userVolume = 1.0;
+
+  /// Last volume actually pushed to the player, so identical values aren't
+  /// re-sent. This runs on every position tick (~every 200ms), and each call is
+  /// a platform-channel round-trip — but the volume only actually changes
+  /// during a fade, which is a few seconds out of a whole track.
+  double? _lastAppliedVolume;
+
+  void updateVolume(double val) {
+    _userVolume = val;
+    _applyVolumeModulation();
+  }
+
+  /// Push [volume] to the player only when it differs from the last value sent.
+  void _setVolumeIfChanged(double volume) {
+    final last = _lastAppliedVolume;
+    // Sub-half-percent differences are inaudible; skip the channel hop.
+    if (last != null && (last - volume).abs() < 0.005) return;
+    _lastAppliedVolume = volume;
+    _player.setVolume(volume);
+  }
+
+  void _applyVolumeModulation() {
+    final song = currentSong;
+    if (song == null) {
+      _setVolumeIfChanged(_userVolume);
+      return;
+    }
+
+    final pos = _player.position.inMilliseconds;
+    final total = song.duration.inMilliseconds;
+
+    // Per-song fades (Sound Studio) win; global crossfade fills in when the
+    // song has none of its own, giving smooth edges on automatic transitions.
+    final fadeInMs = song.fadeIn > 0
+        ? song.fadeIn * 1000
+        : (crossfadeSeconds > 0 ? crossfadeSeconds * 1000.0 : 0.0);
+    final fadeOutMs = song.fadeOut > 0
+        ? song.fadeOut * 1000
+        : (crossfadeSeconds > 0 ? crossfadeSeconds * 1000.0 : 0.0);
+
+    double factor = 1.0;
+
+    if (fadeInMs > 0 && pos < fadeInMs) {
+      factor = pos / fadeInMs;
+    } else if (fadeOutMs > 0 && total > 0 && total - pos < fadeOutMs) {
+      final double remaining = (total - pos).toDouble();
+      factor = (remaining / fadeOutMs).clamp(0.0, 1.0);
+    }
+
+    _setVolumeIfChanged(_userVolume * factor);
+  }
+
+  /// In the final stretch of the current track, warm the NEXT track's stream
+  /// URL cache so the automatic transition (or a late manual skip) is
+  /// near-instant. Runs once per queue index.
+  void _maybePrefetchNearEnd() {
+    if (!_player.playing) return;
+    if (_currentIndex < 0 || _currentIndex >= _playlist.length - 1) return;
+    if (_nearEndPrefetchedIndex == _currentIndex) return;
+
+    final song = currentSong;
+    if (song == null) return;
+    final total = song.duration.inMilliseconds;
+    if (total <= 0) return;
+
+    final remaining = total - _player.position.inMilliseconds;
+    // 20s before the end (or crossfade window + 10s, whichever is larger).
+    final triggerMs = (crossfadeSeconds > 0 ? (crossfadeSeconds + 10) * 1000 : 20000);
+    if (remaining > 0 && remaining <= triggerMs) {
+      _nearEndPrefetchedIndex = _currentIndex;
+      final nextSong = _playlist[_currentIndex + 1];
+      if (!nextSong.isLocalFile) {
+        debugPrint('[AudioHandler] Near-end prefetch for next track: ${nextSong.title}');
+        _youtubeService.prefetchStreamUrl(nextSong.videoId);
+      }
+    }
+  }
+
+  AudioPlayer get player => _player;
+  List<Song> get playlist => List.unmodifiable(_playlist);
+  int get currentIndex => _currentIndex;
+  Song? get currentSong => _currentIndex >= 0 && _currentIndex < _playlist.length
+      ? _playlist[_currentIndex]
+      : null;
+  bool get isShuffled => _isShuffled;
+  AudioServiceRepeatMode get repeatMode => _repeatMode;
+
+  /// Play a song by fetching its stream URL or using downloaded file.
+  /// Uses a generation counter so if a newer request comes in, the older one
+  /// aborts gracefully without overriding the player.
+  Future<void> playSong(Song song) async {
+    // Increment generation — any in-flight play with an older generation
+    // will detect this and bail out before setting the audio source.
+    final thisGeneration = ++_playGeneration;
+
+    // Playing anything other than the restored song discards the saved resume
+    // position — it belonged to a previous session's context.
+    if (_pendingRestoreSongId != null && _pendingRestoreSongId != song.videoId) {
+      _pendingRestoreSongId = null;
+      _pendingRestorePosition = null;
+    }
+
+    // Pause current audio so previous track stops smoothly without tearing down ExoPlayer audio session
+    try {
+      if (_player.playing) {
+        await _player.pause();
+      }
+    } catch (_) {}
+
+    try {
+      // Update playlist immediately so UI reflects the correct song
+      final existingIndex = _playlist.indexWhere((s) => s.videoId == song.videoId);
+      if (existingIndex >= 0) {
+        _currentIndex = existingIndex;
+      } else {
+        _playlist.add(song);
+        _currentIndex = _playlist.length - 1;
+      }
+
+      // Update media item immediately for responsive UI
+      _updateMediaItem(song);
+
+      // Instant Fast-Path for Local Media & Offline Downloads (0ms resolution)
+      String? localPath;
+      if (song.filePath != null && song.filePath!.isNotEmpty && File(song.filePath!).existsSync()) {
+        localPath = song.filePath;
+      } else if (song.videoId.startsWith('content://') || song.videoId.startsWith('file://') || song.videoId.startsWith('/')) {
+        final cleanPath = song.videoId.startsWith('file://') ? Uri.parse(song.videoId).toFilePath() : song.videoId;
+        if (cleanPath.startsWith('content://') || File(cleanPath).existsSync()) {
+          localPath = cleanPath;
+        }
+      } else {
+        localPath = DownloadService().getCachedLocalPathSync(song.videoId);
+      }
+
+      if (_playGeneration != thisGeneration) return;
+
+      if (localPath != null && localPath.isNotEmpty) {
+        final mediaItem = MediaItem(
+          id: song.videoId,
+          album: song.albumFolderName ?? (song.isLocalFile ? 'Local Storage' : 'Downloads'),
+          title: song.title,
+          artist: song.artist,
+          artUri: song.thumbnailUrl.isNotEmpty
+              ? (song.thumbnailUrl.startsWith('http')
+                  ? Uri.parse(song.thumbnailUrl)
+                  : Uri.file(song.thumbnailUrl))
+              : null,
+          duration: song.duration,
+        );
+
+        if (localPath.startsWith('content://') || localPath.startsWith('file://')) {
+          await _player.setAudioSource(
+            AudioSource.uri(Uri.parse(localPath), tag: mediaItem),
+          );
+        } else {
+          await _player.setAudioSource(
+            AudioSource.file(localPath, tag: mediaItem),
+          );
+        }
+      } else {
+        // Online stream, or a late local lookup when the index isn't ready yet.
+        //
+        // Once the download index is loaded, the synchronous probe above is
+        // authoritative — it already checked song.filePath, the metadata list
+        // and every candidate extension. Re-running the async isSongDownloaded
+        // + _resolveLocalPath pair here would repeat that same disk work on the
+        // way to every streamed song, so only fall back to it before the first
+        // loadDownloads() has populated the index.
+        String? resolvedLocalPath;
+        if (!DownloadService().isIndexLoaded) {
+          final isDownloaded =
+              await DownloadService().isSongDownloaded(song.videoId);
+          if (_playGeneration != thisGeneration) return;
+
+          resolvedLocalPath = await _resolveLocalPath(song, isDownloaded);
+          if (_playGeneration != thisGeneration) return;
+        }
+
+        if (resolvedLocalPath != null) {
+          await _player.setAudioSource(
+            AudioSource.file(
+              resolvedLocalPath,
+              tag: MediaItem(
+                id: song.videoId,
+                album: song.albumFolderName ?? 'Downloads',
+                title: song.title,
+                artist: song.artist,
+                artUri: song.thumbnailUrl.isNotEmpty
+                    ? (song.thumbnailUrl.startsWith('http')
+                        ? Uri.parse(song.thumbnailUrl)
+                        : Uri.file(song.thumbnailUrl))
+                    : null,
+                duration: song.duration,
+              ),
+            ),
+          );
+        } else {
+          await _resolveAndLoadStream(song, thisGeneration);
+        }
+      }
+
+      // Final check before starting playback
+      if (_playGeneration != thisGeneration) return;
+
+      // Re-apply speed and pitch (setting new source resets them in just_audio)
+      await _player.setSpeed(song.speed);
+      await _player.setPitch(1.0 + (song.pitch / 12.0));
+      if (song.isolationMode == 'vocal') {
+        _isKaraokeMode = false;
+        await _applyCustomEqualizerGains(const [-12.0, -12.0, 12.0, 12.0, -12.0]);
+      } else if (song.isolationMode == 'instrument') {
+        _isKaraokeMode = true;
+        await _applyEqualizerPreset(_lastAppliedEnhancerMode);
+      } else if (_useCustomGains && _customGains != null) {
+        _isKaraokeMode = false;
+        await _applyCustomEqualizerGains(_customGains!);
+      } else {
+        _isKaraokeMode = false;
+        await _applyEqualizerPreset(_lastAppliedEnhancerMode);
+      }
+
+      // Session restore: resume where the user left off (one-shot).
+      if (_pendingRestoreSongId == song.videoId &&
+          _pendingRestorePosition != null) {
+        final restorePos = _pendingRestorePosition!;
+        _pendingRestoreSongId = null;
+        _pendingRestorePosition = null;
+        try {
+          await _player.seek(restorePos);
+        } catch (_) {}
+      }
+
+      _nearEndPrefetchedIndex = -1;
+      _player.play();
+
+      // Prefetch next song's stream URL in background for instant skip
+      _prefetchNext();
+    } catch (e) {
+      // Clean player reset on failure so player engine doesn't freeze or lock up
+      try {
+        await _player.stop();
+      } catch (_) {}
+      // Only throw if this is still the active request
+      if (_playGeneration == thisGeneration) {
+        throw Exception(_friendlyErrorMessage(e));
+      }
+    }
+  }
+
+  final Map<String, _PrefetchedStream> _prefetchedStreams = {};
+
+  /// How long a pre-resolved stream stays usable. Kept below the 5-minute
+  /// expiry YouTube puts on its stream URLs so we never hand ExoPlayer a URL
+  /// that has already died.
+  static const Duration _prefetchTtl = Duration(minutes: 4);
+
+  /// Drop every pre-resolved stream. Called when the audio-quality setting
+  /// changes — entries are keyed by videoId only, so without this a queued song
+  /// would still play at the previous quality.
+  void clearPrefetchedStreams() {
+    _prefetchedStreams.clear();
+  }
+
+  /// Take a prefetched stream if one is present and still fresh.
+  ///
+  /// Consuming removes the entry: a stream URL is single-use here, and leaving
+  /// a stale entry behind meant a failed play would keep re-reading the same
+  /// dead URL on every retry.
+  ResolvedStream? _takePrefetched(String videoId) {
+    final entry = _prefetchedStreams.remove(videoId);
+    if (entry == null) return null;
+    if (DateTime.now().difference(entry.resolvedAt) > _prefetchTtl) {
+      debugPrint('[AudioHandler] Discarded stale prefetch for $videoId');
+      return null;
+    }
+    return entry.stream;
+  }
+
+  /// Resolve stream URL and load it, with multi-stage fallback and automatic retry.
+  Future<void> _resolveAndLoadStream(Song song, int thisGeneration) async {
+    ResolvedStream? resolved = _takePrefetched(song.videoId);
+    if (resolved != null) {
+      debugPrint('[AudioHandler] Pre-fetched stream hit for instant skip: ${song.title}');
+    } else {
+      resolved = await StreamResolverService().resolve(song);
+    }
+
+    if (resolved == null) {
+      throw Exception('Could not find a playable stream. Please check your internet connection and try again.');
+    }
+    if (_playGeneration != thisGeneration) return;
+
+    try {
+      await _loadResolvedSource(resolved, song);
+    } catch (playerError) {
+      debugPrint('[AudioHandler] Primary source failed (${resolved.source}): $playerError');
+
+      if (resolved.source == 'jiosaavn') {
+        // JioSaavn failed → try YouTube primary
+        if (_playGeneration != thisGeneration) return;
+        try {
+          final ytUrl = await _youtubeService.getAudioStreamUrl(song.videoId);
+          if (_playGeneration != thisGeneration) return;
+          await _loadResolvedSource(ResolvedStream(ytUrl, source: 'youtube', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song);
+          return;
+        } catch (ytError) {
+          debugPrint('[AudioHandler] YouTube primary also failed: $ytError');
+        }
+      }
+
+      // YouTube primary failed (or JioSaavn→YouTube failed) → try proxy fallback
+      if (_playGeneration != thisGeneration) return;
+      try {
+        final fallbackUrl = await _youtubeService.getFallbackStreamUrl(song.videoId);
+        if (fallbackUrl == null) {
+          throw Exception('No proxy stream available');
+        }
+        if (_playGeneration != thisGeneration) return;
+        await _loadResolvedSource(ResolvedStream(fallbackUrl, source: 'youtube_fallback', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song);
+        return;
+      } catch (fbError) {
+        debugPrint('[AudioHandler] Proxy fallback also failed: $fbError');
+      }
+
+      // All fallbacks exhausted — retry once with extended timeouts for slow connections
+      if (_playGeneration != thisGeneration) return;
+      debugPrint('[AudioHandler] All primary sources failed. Retrying with extended timeout...');
+      try {
+        final retryUrl = await _youtubeService
+            .getAudioStreamUrl(song.videoId)
+            .timeout(const Duration(seconds: 12));
+        if (_playGeneration != thisGeneration) return;
+        await _loadResolvedSource(ResolvedStream(retryUrl, source: 'youtube', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song);
+        return;
+      } catch (retryError) {
+        debugPrint('[AudioHandler] Extended retry failed: $retryError');
+        throw Exception(
+          'Unable to play this song. Your internet connection may be too slow or the song is temporarily unavailable. Please try again later.'
+        );
+      }
+    }
+  }
+
+  /// Convert raw exception messages into user-friendly error messages.
+  String _friendlyErrorMessage(dynamic error) {
+    final msg = error.toString().toLowerCase();
+
+    if (msg.contains('socketexception') || msg.contains('connection refused') || msg.contains('network is unreachable')) {
+      return 'No internet connection. Please check your network and try again.';
+    }
+    if (msg.contains('handshakeexception') || msg.contains('certificate')) {
+      return 'Secure connection failed. Please check your network settings.';
+    }
+    if (msg.contains('timeout') || msg.contains('timed out')) {
+      return 'Connection timed out. Your internet may be slow — please try again.';
+    }
+    if (msg.contains('429') || msg.contains('too many requests')) {
+      return 'Too many requests. Please wait a moment and try again.';
+    }
+    if (msg.contains('403') || msg.contains('forbidden')) {
+      return 'This song is currently restricted. Please try a different song.';
+    }
+    if (msg.contains('404') || msg.contains('not found')) {
+      return 'This song is no longer available. Please try a different song.';
+    }
+    if (msg.contains('source error') || msg.contains('playback error')) {
+      return 'Unable to play this song. Please try again or choose a different song.';
+    }
+    if (msg.contains('could not find') || msg.contains('unavailable')) {
+      return error.toString().replaceAll('Exception:', '').trim();
+    }
+
+    // Default
+    return 'Something went wrong. Please try again.';
+  }
+
+  Future<void> _loadResolvedSource(ResolvedStream resolved, Song song) async {
+    final isLocal = song.isLocalFile || song.filePath != null || resolved.source == 'local';
+    final defaultAlbum = isLocal
+        ? 'Local Storage'
+        : (resolved.source == 'radio'
+            ? 'Live Radio'
+            : (resolved.source == 'jamendo'
+                ? 'Jamendo'
+                : (resolved.source == 'jiosaavn'
+                    ? 'JioSaavn'
+                    : (resolved.source == 'archive' ? 'Archive' : 'YouTube'))));
+
+    final mediaItem = MediaItem(
+      id: song.videoId,
+      album: song.albumFolderName ?? defaultAlbum,
+      title: song.title,
+      artist: song.artist,
+      artUri: song.thumbnailUrl.isNotEmpty
+          ? (song.thumbnailUrl.startsWith('http')
+              ? Uri.parse(song.thumbnailUrl)
+              : Uri.file(song.thumbnailUrl))
+          : null,
+      duration: song.duration,
+    );
+
+    if (resolved.isLive) {
+      final headers = resolved.headers ?? const {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+      };
+      await _player.setAudioSource(
+        AudioSource.uri(
+          Uri.parse(resolved.url),
+          headers: headers,
+          tag: mediaItem,
+        ),
+      );
+    } else if (resolved.url.startsWith('file://')) {
+      final filePath = Uri.parse(resolved.url).toFilePath();
+      debugPrint('[AudioHandler] Playing local Seal cached file: $filePath');
+      await _player.setAudioSource(
+        AudioSource.file(filePath, tag: mediaItem),
+      );
+    } else {
+      debugPrint('[AudioHandler] Playing HTTP stream URL: ${resolved.url}');
+      final headers = resolved.headers ?? const {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+      };
+      await _player.setAudioSource(
+        AudioSource.uri(
+          Uri.parse(resolved.url),
+          headers: headers,
+          tag: mediaItem,
+        ),
+      );
+    }
+  }
+
+  /// Prefetch the next 2 songs' stream URLs so skipping is instant
+  /// Returns a playable on-disk path for [song], or null to fall through to
+  /// streaming. Order: real `song.filePath` (album/moved/folder songs) → the
+  /// reconstructed Download path (only if it exists). Never returns a path that
+  /// isn't actually on disk, so a stale reference cleanly falls back to stream.
+  Future<String?> _resolveLocalPath(Song song, bool isDownloaded) async {
+    final fp = song.filePath;
+    if (fp != null && fp.isNotEmpty) {
+      try {
+        if (await File(fp).exists()) return fp;
+      } catch (_) {}
+    }
+    try {
+      final cachedPath = DownloadService().getCachedLocalPathSync(song.videoId);
+      if (cachedPath != null && await File(cachedPath).exists()) return cachedPath;
+    } catch (_) {}
+    if (isDownloaded) {
+      try {
+        final localPath = await DownloadService().getLocalAudioPath(song.videoId);
+        if (await File(localPath).exists()) return localPath;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  void _prefetchNext() {
+    // Only rearm if nothing is already pending. The timer used to be cancelled
+    // and restarted on every playSong, so skipping faster than the 2s delay
+    // meant prefetch never fired at all — exactly when it is most useful.
+    if (_prefetchTimer?.isActive ?? false) return;
+    _prefetchTimer = Timer(const Duration(seconds: 2), () async {
+      // Snapshot the index: by the time these resolves finish the user may have
+      // skipped again, and we don't want to write prefetches for a stale queue.
+      final baseIndex = _currentIndex;
+      final targets = <Song>[];
+      for (int offset = 1; offset <= 2; offset++) {
+        final nextIdx = baseIndex + offset;
+        if (nextIdx < _playlist.length) {
+          final nextSong = _playlist[nextIdx];
+          if (!_prefetchedStreams.containsKey(nextSong.videoId) &&
+              !nextSong.isLocalFile) {
+            targets.add(nextSong);
+          }
+        }
+      }
+      if (targets.isEmpty) return;
+
+      // Resolve both in parallel — the old sequential await made the +2 song
+      // wait for the +1 song's full network round-trip.
+      await Future.wait(targets.map((nextSong) async {
+        try {
+          final resolved = await StreamResolverService().resolve(nextSong);
+          if (resolved != null) {
+            _prefetchedStreams[nextSong.videoId] =
+                _PrefetchedStream(resolved, DateTime.now());
+            debugPrint('[AudioHandler] Pre-resolved stream: ${nextSong.title}');
+          }
+        } catch (_) {}
+      }));
+    });
+  }
+
+  void _updateMediaItem(Song song) {
+    final bool isHttp = song.thumbnailUrl.startsWith('http://') || song.thumbnailUrl.startsWith('https://');
+    final bool isLocal = song.thumbnailUrl.isNotEmpty && !isHttp &&
+        (song.thumbnailUrl.startsWith('/') ||
+         (song.thumbnailUrl.length >= 3 && song.thumbnailUrl[1] == ':' && (song.thumbnailUrl[2] == '/' || song.thumbnailUrl[2] == '\\')));
+        
+    Uri? artUri;
+    if (song.thumbnailUrl.isNotEmpty) {
+      try {
+        artUri = isLocal ? Uri.file(song.thumbnailUrl) : Uri.parse(song.thumbnailUrl);
+      } catch (e) {
+        debugPrint('Error parsing artUri: $e');
+      }
+    }
+
+    mediaItem.add(MediaItem(
+      id: song.videoId,
+      title: song.title,
+      artist: song.artist,
+      artUri: artUri,
+      duration: song.duration,
+    ));
+  }
+
+  void updateMediaItemCustom(Song song) {
+    _updateMediaItem(song);
+  }
+
+  void updatePlaylistSong(
+    String videoId,
+    String title,
+    String artist,
+    Duration? duration, {
+    double? speed,
+    double? pitch,
+    double? fadeIn,
+    double? fadeOut,
+  }) {
+    for (int i = 0; i < _playlist.length; i++) {
+      if (_playlist[i].videoId == videoId) {
+        _playlist[i] = _playlist[i].copyWith(
+          title: title,
+          artist: artist,
+          duration: duration ?? _playlist[i].duration,
+          speed: speed ?? _playlist[i].speed,
+          pitch: pitch ?? _playlist[i].pitch,
+          fadeIn: fadeIn ?? _playlist[i].fadeIn,
+          fadeOut: fadeOut ?? _playlist[i].fadeOut,
+        );
+        if (_currentIndex == i) {
+          _updateMediaItem(_playlist[i]);
+          if (speed != null) {
+            _player.setSpeed(speed);
+          }
+          if (pitch != null) {
+            _player.setPitch(1.0 + (pitch / 12.0));
+          }
+        }
+      }
+    }
+  }
+
+  /// Play a list of songs starting from an index
+  Future<void> playPlaylist(List<Song> songs, {int startIndex = 0}) async {
+    _playlist.clear();
+    _playlist.addAll(songs);
+    _currentIndex = startIndex;
+
+    if (songs.isNotEmpty && startIndex < songs.length) {
+      await playSong(songs[startIndex]);
+    }
+  }
+
+  /// Restore a previously saved queue WITHOUT starting playback. The current
+  /// song's stream is loaded lazily on the first play() so a cold start never
+  /// hits the network. [position] is where playback resumes from.
+  void restoreQueue(List<Song> songs, int index, Duration position) {
+    if (songs.isEmpty) return;
+    _playlist
+      ..clear()
+      ..addAll(songs);
+    _currentIndex = index.clamp(0, songs.length - 1);
+    _pendingRestoreSongId = _playlist[_currentIndex].videoId;
+    _pendingRestorePosition = position;
+    _updateMediaItem(_playlist[_currentIndex]);
+  }
+
+  /// Move a queue entry from [oldIndex] to [newIndex], keeping the playing
+  /// song's index pointer correct.
+  void reorderQueue(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _playlist.length) return;
+    if (newIndex < 0 || newIndex >= _playlist.length) return;
+    if (oldIndex == newIndex) return;
+
+    final song = _playlist.removeAt(oldIndex);
+    _playlist.insert(newIndex, song);
+
+    if (oldIndex == _currentIndex) {
+      _currentIndex = newIndex;
+    } else if (oldIndex < _currentIndex && newIndex >= _currentIndex) {
+      _currentIndex--;
+    } else if (oldIndex > _currentIndex && newIndex <= _currentIndex) {
+      _currentIndex++;
+    }
+  }
+
+  @override
+  Future<void> play() async {
+    // Lazy restore: queue was restored from disk but no source loaded yet.
+    if (_pendingRestoreSongId != null &&
+        _player.processingState == ProcessingState.idle &&
+        currentSong != null) {
+      await playSong(currentSong!);
+      return;
+    }
+    await _player.play();
+  }
+
+  @override
+  Future<void> pause() async {
+    await _player.pause();
+  }
+
+  @override
+  Future<void> stop() async {
+    _playGeneration++;
+    _prefetchTimer?.cancel();
+    // The queue is gone, so every pre-resolved URL is now dead weight. Without
+    // this the map only ever grew for the life of the process.
+    _prefetchedStreams.clear();
+    await _player.stop();
+    _currentIndex = -1;
+    _playlist.clear();
+    mediaItem.add(null);
+    await super.stop();
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    await _player.seek(position);
+  }
+
+  @override
+  Future<void> skipToNext() async {
+    if (_playlist.isEmpty) return;
+
+    if (_currentIndex < _playlist.length - 1) {
+      _currentIndex++;
+      _updateMediaItem(_playlist[_currentIndex]);
+      if (_currentIndex >= _playlist.length - 2) {
+        onQueueNearEnd?.call();
+      }
+      await playSong(_playlist[_currentIndex]);
+    } else if (_repeatMode == AudioServiceRepeatMode.all) {
+      _currentIndex = 0;
+      _updateMediaItem(_playlist[_currentIndex]);
+      await playSong(_playlist[_currentIndex]);
+    }
+  }
+
+  /// Jump straight to a queue entry by index (used by the queue sheet).
+  Future<void> skipToQueueIndex(int index) async {
+    if (index < 0 || index >= _playlist.length) return;
+    if (index == _currentIndex) return;
+    _currentIndex = index;
+    _updateMediaItem(_playlist[_currentIndex]);
+    if (_currentIndex >= _playlist.length - 2) {
+      onQueueNearEnd?.call();
+    }
+    await playSong(_playlist[_currentIndex]);
+  }
+
+  @override
+  Future<void> skipToPrevious() async {
+    if (_playlist.isEmpty) return;
+
+    // If we're more than 3 seconds into the song, restart it
+    if (_player.position.inSeconds > 3) {
+      await _player.seek(Duration.zero);
+      return;
+    }
+
+    if (_currentIndex > 0) {
+      _currentIndex--;
+      _updateMediaItem(_playlist[_currentIndex]);
+      await playSong(_playlist[_currentIndex]);
+    } else if (_repeatMode == AudioServiceRepeatMode.all) {
+      _currentIndex = _playlist.length - 1;
+      _updateMediaItem(_playlist[_currentIndex]);
+      await playSong(_playlist[_currentIndex]);
+    }
+  }
+
+  void toggleShuffle() {
+    _isShuffled = !_isShuffled;
+    if (_isShuffled && _playlist.length > 1) {
+      final current = currentSong;
+      _playlist.shuffle();
+      if (current != null) {
+        _playlist.remove(current);
+        _playlist.insert(0, current);
+        _currentIndex = 0;
+      }
+    }
+  }
+
+  void cycleRepeatMode() {
+    switch (_repeatMode) {
+      case AudioServiceRepeatMode.none:
+        _repeatMode = AudioServiceRepeatMode.all;
+        break;
+      case AudioServiceRepeatMode.all:
+        _repeatMode = AudioServiceRepeatMode.one;
+        break;
+      case AudioServiceRepeatMode.one:
+        _repeatMode = AudioServiceRepeatMode.none;
+        break;
+      default:
+        _repeatMode = AudioServiceRepeatMode.none;
+    }
+  }
+
+  void _handleSongCompletion() {
+    // Sleep timer "end of track": stop here instead of advancing.
+    if (stopAfterCurrentSong) {
+      stopAfterCurrentSong = false;
+      _player.pause();
+      _player.seek(Duration.zero);
+      onStopAfterCurrentFired?.call();
+      return;
+    }
+
+    switch (_repeatMode) {
+      case AudioServiceRepeatMode.one:
+        _player.seek(Duration.zero);
+        _player.play();
+        break;
+      case AudioServiceRepeatMode.all:
+        skipToNext();
+        break;
+      case AudioServiceRepeatMode.none:
+        if (_currentIndex < _playlist.length - 1) {
+          skipToNext();
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  void removeFromPlaylist(int index) {
+    if (index < 0 || index >= _playlist.length) return;
+    _playlist.removeAt(index);
+    if (index < _currentIndex) {
+      _currentIndex--;
+    } else if (index == _currentIndex) {
+      if (_playlist.isNotEmpty) {
+        _currentIndex = _currentIndex.clamp(0, _playlist.length - 1);
+        playSong(_playlist[_currentIndex]);
+      } else {
+        _currentIndex = -1;
+        stop();
+      }
+    }
+  }
+
+  void addSongToQueue(Song song) {
+    if (!_playlist.any((s) => s.videoId == song.videoId)) {
+      _playlist.add(song);
+      _updateMediaItem(song);
+    }
+  }
+
+  void insertSongNext(Song song) {
+    if (_playlist.isEmpty) {
+      _playlist.add(song);
+      _currentIndex = 0;
+      _updateMediaItem(song);
+      return;
+    }
+    
+    // Remove if already in playlist
+    final existingIndex = _playlist.indexWhere((s) => s.videoId == song.videoId);
+    if (existingIndex >= 0) {
+      if (existingIndex == _currentIndex) return; // Already playing
+      final existingSong = _playlist.removeAt(existingIndex);
+      if (existingIndex < _currentIndex) {
+        _currentIndex--;
+      }
+      _playlist.insert(_currentIndex + 1, existingSong);
+    } else {
+      _playlist.insert(_currentIndex + 1, song);
+      _updateMediaItem(song);
+    }
+  }
+
+  PlaybackState _transformEvent(PlaybackEvent event) {
+    return PlaybackState(
+      controls: [
+        MediaControl.skipToPrevious,
+        _player.playing ? MediaControl.pause : MediaControl.play,
+        MediaControl.skipToNext,
+      ],
+      systemActions: const {
+        MediaAction.seek,
+        MediaAction.seekForward,
+        MediaAction.seekBackward,
+      },
+      androidCompactActionIndices: const [0, 1, 2],
+      processingState: const {
+        ProcessingState.idle: AudioProcessingState.idle,
+        ProcessingState.loading: AudioProcessingState.loading,
+        ProcessingState.buffering: AudioProcessingState.buffering,
+        ProcessingState.ready: AudioProcessingState.ready,
+        ProcessingState.completed: AudioProcessingState.completed,
+      }[_player.processingState]!,
+      playing: _player.playing,
+      updatePosition: _player.position,
+      bufferedPosition: _player.bufferedPosition,
+      speed: _player.speed,
+      queueIndex: _currentIndex,
+    );
+  }
+
+  Future<void> _applyEqualizerPreset(SoundEnhancer mode, {bool smooth = false}) async {
+    if (_equalizer == null) return;
+    try {
+      await _equalizer!.setEnabled(true);
+      final parameters = await _equalizer!.parameters;
+      final bands = parameters.bands;
+      if (bands.isEmpty) return;
+
+      // Professional acoustic profiles mapping to 5 standard bands (typically 60Hz, 230Hz, 910Hz, 4kHz, 14kHz)
+      final Map<SoundEnhancer, List<double>> presets = {
+        SoundEnhancer.none: [0.0, 0.0, 0.0, 0.0, 0.0],
+        SoundEnhancer.bassBoost: [9.0, 5.0, -1.5, 0.0, 1.0],
+        SoundEnhancer.trebleBoost: [-2.0, -1.0, 1.0, 6.0, 10.0],
+        SoundEnhancer.vocal: [-4.0, 2.0, 7.0, 5.0, 2.0],
+        SoundEnhancer.ambient3d: [7.0, 3.0, -5.0, 3.0, 8.0],
+      };
+
+      final targetGains = presets[mode] ?? [0.0, 0.0, 0.0, 0.0, 0.0];
+      await _applyGains(bands, targetGains, parameters.minDecibels, parameters.maxDecibels, smooth);
+    } catch (e) {
+      // Fail silently
+    }
+  }
+
+  Future<void> _applyCustomEqualizerGains(List<double> gains, {bool smooth = false}) async {
+    if (_equalizer == null) return;
+    try {
+      await _equalizer!.setEnabled(true);
+      final parameters = await _equalizer!.parameters;
+      final bands = parameters.bands;
+      if (bands.isEmpty) return;
+
+      final double minLimit = parameters.minDecibels;
+      final double maxLimit = parameters.maxDecibels;
+
+      final List<double> mappedGains = [];
+      for (int i = 0; i < bands.length; i++) {
+        if (i < gains.length) {
+          final double rawGain = gains[i]; // slider value from -12 to 12
+          // Normalize rawGain from [-12, 12] to [minLimit, maxLimit] to leverage full hardware range
+          final double ratio = (rawGain + 12.0) / 24.0; // 0.0 to 1.0
+          final double mappedGain = minLimit + ratio * (maxLimit - minLimit);
+          mappedGains.add(mappedGain);
+        } else {
+          mappedGains.add(0.0);
+        }
+      }
+
+      await _applyGains(bands, mappedGains, minLimit, maxLimit, smooth);
+    } catch (e) {
+      // Fail silently
+    }
+  }
+
+  Future<void> _applyGains(
+    List<AndroidEqualizerBand> bands,
+    List<double> targets,
+    double minLimit,
+    double maxLimit,
+    bool smooth,
+  ) async {
+    final List<double> clampedTargets = [];
+    for (int i = 0; i < bands.length; i++) {
+      double target = 0.0;
+      if (i < targets.length) {
+        target = targets[i];
+      }
+
+      // Scoop vocals if Karaoke mode is enabled (mids/vocals are located in band 2 and 3)
+      if (_isKaraokeMode && (i == 2 || i == 3)) {
+        target = minLimit;
+      }
+
+      clampedTargets.add(target.clamp(minLimit, maxLimit));
+    }
+
+    // Ensure _currentGains is same length as bands
+    while (_currentGains.length < bands.length) {
+      _currentGains.add(0.0);
+    }
+
+    if (smooth) {
+      const int steps = 6;
+      for (int step = 1; step <= steps; step++) {
+        final List<Future<void>> futures = [];
+        for (int i = 0; i < bands.length; i++) {
+          final double start = _currentGains[i];
+          final double end = clampedTargets[i];
+          final double intermediate = start + (end - start) * (step / steps);
+          futures.add(bands[i].setGain(intermediate));
+        }
+        await Future.wait(futures);
+        await Future.delayed(const Duration(milliseconds: 30)); // 180ms total transition time
+      }
+    } else {
+      final List<Future<void>> futures = [];
+      for (int i = 0; i < bands.length; i++) {
+        futures.add(bands[i].setGain(clampedTargets[i]));
+      }
+      await Future.wait(futures);
+    }
+
+    _currentGains = List.from(clampedTargets);
+  }
+
+  @override
+  Future<void> onTaskRemoved() async {
+    await stop();
+    await super.onTaskRemoved();
+  }
+}
+
+/// A pre-resolved stream plus the moment it was resolved, so staleness can be
+/// judged before handing the URL to the player.
+class _PrefetchedStream {
+  final ResolvedStream stream;
+  final DateTime resolvedAt;
+
+  _PrefetchedStream(this.stream, this.resolvedAt);
+}
