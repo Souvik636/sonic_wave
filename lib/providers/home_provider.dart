@@ -44,13 +44,21 @@ class HomeProvider extends ChangeNotifier {
 
   /// Check connectivity status using direct DNS lookup
   Future<void> checkConnection() async {
+    bool newOfflineState = false;
     try {
-      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
-      _isOffline = result.isEmpty || result.first.rawAddress.isEmpty;
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 5));
+      newOfflineState = result.isEmpty || result.first.rawAddress.isEmpty;
+    } on TimeoutException {
+      // Fail OPEN on timeout — a slow DNS probe on weak mobile data is not a dead connection.
+      newOfflineState = false;
     } catch (_) {
-      _isOffline = true;
+      newOfflineState = true;
     }
-    notifyListeners();
+    if (_isOffline != newOfflineState) {
+      _isOffline = newOfflineState;
+      notifyListeners();
+    }
   }
 
   /// Start background connection check every 10s

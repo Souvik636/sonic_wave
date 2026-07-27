@@ -122,6 +122,8 @@ class RadioService {
               .timeout(const Duration(seconds: 5));
           data = jsonDecode(body) as List?;
           if (data != null && data.isNotEmpty) break;
+        } else {
+          await response.drain();
         }
       } catch (e) {
         debugPrint('[RadioService] search mirror $server failed: $e');
@@ -149,6 +151,8 @@ class RadioService {
                 .timeout(const Duration(seconds: 5));
             data = jsonDecode(body) as List?;
             if (data != null && data.isNotEmpty) break;
+          } else {
+            await response.drain();
           }
         } catch (e) {
           debugPrint('[RadioService] tag-search mirror $server failed: $e');
@@ -200,6 +204,8 @@ class RadioService {
               .timeout(const Duration(seconds: 5));
           data = jsonDecode(body) as List?;
           if (data != null && data.isNotEmpty) break;
+        } else {
+          await response.drain();
         }
       } catch (e) {
         debugPrint('[RadioService] mirror $server failed: $e');

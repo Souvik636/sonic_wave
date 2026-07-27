@@ -179,12 +179,10 @@ class GitHubReleaseClient implements UpdateClient {
         if (remParts[i] < instParts[i]) return false;
       }
 
-      // Check build numbers if present (e.g. 1.0.0+3 vs 1.0.0+4)
-      if (installedVersion.contains('+') && remoteTag.contains('+')) {
-        final instBuild = int.tryParse(installedVersion.split('+').last) ?? 0;
-        final remBuild = int.tryParse(remoteTag.split('+').last) ?? 0;
-        return remBuild > instBuild;
-      }
+      // Check build numbers (e.g. 1.0.0+3 vs 1.0.0+4, or 1.0.0 vs 1.0.0+1)
+      final instBuild = installedVersion.contains('+') ? (int.tryParse(installedVersion.split('+').last) ?? 0) : 0;
+      final remBuild = remoteTag.contains('+') ? (int.tryParse(remoteTag.split('+').last) ?? 0) : 0;
+      return remBuild > instBuild;
     } catch (e) {
       debugPrint('[GitHubUpdater] Version parsing exception: $e');
     }

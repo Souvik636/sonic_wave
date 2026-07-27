@@ -22,6 +22,15 @@ class JioSaavnService {
   final Map<String, _CachedResult> _cache = {};
   static const Duration _cacheExpiry = Duration(minutes: 10);
 
+  void _evictExpiredCache() {
+    _cache.removeWhere((_, v) => v.isExpired);
+  }
+
+  void _putCache(String key, String url) {
+    _evictExpiredCache();
+    _cache[key] = _CachedResult(url, DateTime.now());
+  }
+
   /// Search for songs on JioSaavn using direct official endpoints + song details resolution.
   Future<List<Song>> searchSongs(String query, {int maxResults = 12}) async {
     final cleanQuery = query.trim();
@@ -49,6 +58,8 @@ class JioSaavnService {
               }
             }
           }
+        } else {
+          await response.drain();
         }
       } catch (e) {
         debugPrint('[JioSaavn] album search failed: $e');
@@ -76,6 +87,8 @@ class JioSaavnService {
               }
             }
           }
+        } else {
+          await response.drain();
         }
       } catch (e) {
         debugPrint('[JioSaavn] autocomplete failed: $e');
@@ -105,6 +118,8 @@ class JioSaavnService {
                   }
                 }
               }
+            } else {
+              await response.drain();
             }
           } catch (_) {}
         }
@@ -209,7 +224,7 @@ class JioSaavnService {
             final link = dl['link']?.toString() ?? dl['url']?.toString() ?? '';
             if (link.isEmpty) continue;
             if (quality == '320kbps' || quality == '160kbps') {
-              _cache[cleanId] = _CachedResult(link, DateTime.now());
+              _putCache(cleanId, link);
               return link;
             }
             if (quality == '128kbps' || quality == '96kbps') {
@@ -217,13 +232,13 @@ class JioSaavnService {
             }
           }
           if (fallbackLink != null) {
-            _cache[cleanId] = _CachedResult(fallbackLink, DateTime.now());
+            _putCache(cleanId, fallbackLink);
             return fallbackLink;
           }
 
           final lastLink = downloadUrls.last['link']?.toString() ?? downloadUrls.last['url']?.toString();
           if (lastLink != null && lastLink.isNotEmpty) {
-            _cache[cleanId] = _CachedResult(lastLink, DateTime.now());
+            _putCache(cleanId, lastLink);
             return lastLink;
           }
         }
@@ -247,11 +262,11 @@ class JioSaavnService {
           final vlink = item['vlink']?.toString() ?? '';
 
           if (mediaPreviewUrl.isNotEmpty && mediaPreviewUrl.startsWith('http')) {
-            _cache[cleanId] = _CachedResult(mediaPreviewUrl, DateTime.now());
+            _putCache(cleanId, mediaPreviewUrl);
             return mediaPreviewUrl;
           }
           if (vlink.isNotEmpty && vlink.startsWith('http')) {
-            _cache[cleanId] = _CachedResult(vlink, DateTime.now());
+            _putCache(cleanId, vlink);
             return vlink;
           }
         }
@@ -277,7 +292,7 @@ class JioSaavnService {
     final song = songs.first;
     final url = await getStreamUrlById(song.videoId);
     if (url != null) {
-      _cache[query.toLowerCase()] = _CachedResult(url, DateTime.now());
+      _putCache(query.toLowerCase(), url);
     }
     return url;
   }

@@ -70,6 +70,7 @@ class JamendoService {
           await request.close().timeout(const Duration(seconds: 6));
       if (response.statusCode != 200) {
         debugPrint('[JamendoService] HTTP ${response.statusCode}');
+        await response.drain();
         return const [];
       }
 

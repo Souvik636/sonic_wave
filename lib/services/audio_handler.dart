@@ -164,8 +164,8 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       if (playerState.playing) {
         _cancelIdleTimer();
         _cancelPrefetchCleanupTimer();
-      } else if (playerState.processingState == ProcessingState.ready) {
-        // Paused while a track is loaded — arm the idle timer.
+      } else {
+        // Paused, stopped, or completed — arm the 8-minute idle timer and prefetch cleanup.
         _armIdleTimer();
         _armPrefetchCleanupTimer();
       }
@@ -668,9 +668,13 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
           tag: mediaItem,
         ),
       );
-    } else if (resolved.url.startsWith('file://')) {
-      final filePath = Uri.parse(resolved.url).toFilePath();
-      debugPrint('[AudioHandler] Playing local Seal cached file: $filePath');
+    } else if (resolved.url.startsWith('file://') ||
+        resolved.url.startsWith('/') ||
+        (resolved.url.length >= 3 && resolved.url[1] == ':' && (resolved.url[2] == '/' || resolved.url[2] == '\\'))) {
+      final filePath = resolved.url.startsWith('file://')
+          ? Uri.parse(resolved.url).toFilePath()
+          : resolved.url;
+      debugPrint('[AudioHandler] Playing local audio file: $filePath');
       await _player.setAudioSource(
         AudioSource.file(filePath, tag: mediaItem),
       );

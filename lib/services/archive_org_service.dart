@@ -22,6 +22,7 @@ class ArchiveOrgService {
       final response = await request.close().timeout(const Duration(seconds: 4));
       
       if (response.statusCode != 200) {
+        await response.drain();
         return [];
       }
       
@@ -81,6 +82,7 @@ class ArchiveOrgService {
       final response = await request.close().timeout(const Duration(seconds: 3));
       
       if (response.statusCode != 200) {
+        await response.drain();
         return null;
       }
       
