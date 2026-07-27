@@ -51,6 +51,7 @@ class RecommendationEngine {
     final favIds = favoriteSongs.map((s) => s.videoId).toSet();
     final currentArtistLower = currentSong.artist.trim().toLowerCase();
     final currentTitleLower = currentSong.title.trim().toLowerCase();
+    final rng = math.Random();
 
     // Score candidates based on metadata vector similarity
     final scoredCandidates = <_ScoredSong>[];
@@ -87,7 +88,7 @@ class RecommendationEngine {
       }
 
       // 5. Add subtle random noise to keep suggestions fresh across sessions
-      score += math.Random().nextDouble() * 10.0;
+      score += rng.nextDouble() * 10.0;
 
       scoredCandidates.add(_ScoredSong(song: song, score: score));
     }

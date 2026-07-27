@@ -32,6 +32,23 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   /// Called when the end-of-track sleep stop fires, so UI state can update.
   VoidCallback? onStopAfterCurrentFired;
 
+  /// Called when the 8-minute idle timeout fires so PlayerProvider can save
+  /// session state and refresh the UI before the notification is torn down.
+  VoidCallback? onIdleTimeout;
+
+  /// 8-minute idle timer: fires when playback has been paused continuously.
+  Timer? _idleTimer;
+
+  /// 2-minute timer to clear prefetched stream URLs after pause, freeing
+  /// stale network resources whose YouTube tokens are expiring anyway.
+  Timer? _prefetchCleanupTimer;
+
+  /// Duration after which a paused session auto-stops (notification dismissed).
+  static const Duration _idleTimeoutDuration = Duration(minutes: 8);
+
+  /// Duration after which prefetched stream cache is cleared on pause.
+  static const Duration _prefetchCleanupDelay = Duration(minutes: 2);
+
   /// Called when approaching the end of queue so PlayerProvider can auto-inject recommendations.
   VoidCallback? onQueueNearEnd;
 
@@ -82,17 +99,19 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   /// ExoPlayer's stock buffering is tuned for video: it withholds playback until
   /// ~2.5s is buffered, which is dead air at the start of every track. Music is
   /// a fraction of the bitrate of video, so a much smaller pre-roll is safe and
-  /// audio starts noticeably sooner. The back buffer keeps a short seek-back
-  /// window in memory so scrubbing backwards doesn't force a re-fetch.
+  /// audio starts noticeably sooner. The max buffer is set high (120s) so on
+  /// slow connections ExoPlayer will greedily cache up to 2 minutes ahead,
+  /// preventing rebuffers on spotty 2G/3G networks. The back buffer keeps a
+  /// seek-back window in memory so scrubbing backwards doesn't force a re-fetch.
   static AudioLoadConfiguration get _loadConfiguration => AudioLoadConfiguration(
         androidLoadControl: const AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 15),
-          maxBufferDuration: Duration(seconds: 50),
+          minBufferDuration: Duration(seconds: 30),
+          maxBufferDuration: Duration(seconds: 120),
           // Start playing as soon as this much is ready (default 2.5s).
           bufferForPlaybackDuration: Duration(milliseconds: 600),
           // After a rebuffer, resume this quickly (default 5s).
           bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
-          backBufferDuration: Duration(seconds: 20),
+          backBufferDuration: Duration(seconds: 30),
         ),
       );
 
@@ -140,6 +159,18 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       }
     });
 
+    // Sync idle timer with play/pause transitions.
+    _player.playerStateStream.listen((playerState) {
+      if (playerState.playing) {
+        _cancelIdleTimer();
+        _cancelPrefetchCleanupTimer();
+      } else if (playerState.processingState == ProcessingState.ready) {
+        // Paused while a track is loaded — arm the idle timer.
+        _armIdleTimer();
+        _armPrefetchCleanupTimer();
+      }
+    });
+
     // Listen for headphone unplug / Bluetooth disconnection events ("Becoming Noisy")
     AudioSession.instance.then((session) async {
       try {
@@ -158,6 +189,68 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       _applyVolumeModulation();
       _maybePrefetchNearEnd();
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Idle timer management
+  // ---------------------------------------------------------------------------
+
+  /// Start (or restart) the 8-minute idle countdown.
+  void _armIdleTimer() {
+    _idleTimer?.cancel();
+    _idleTimer = Timer(_idleTimeoutDuration, _onIdleTimeout);
+  }
+
+  /// Cancel the idle timer (user resumed playback).
+  void _cancelIdleTimer() {
+    _idleTimer?.cancel();
+    _idleTimer = null;
+  }
+
+  /// Start the 2-minute prefetch cleanup countdown.
+  void _armPrefetchCleanupTimer() {
+    _prefetchCleanupTimer?.cancel();
+    _prefetchCleanupTimer = Timer(_prefetchCleanupDelay, () {
+      if (!_player.playing) {
+        _prefetchedStreams.clear();
+        debugPrint('[AudioHandler] Prefetch cache cleared after idle');
+      }
+    });
+  }
+
+  /// Cancel the prefetch cleanup timer.
+  void _cancelPrefetchCleanupTimer() {
+    _prefetchCleanupTimer?.cancel();
+    _prefetchCleanupTimer = null;
+  }
+
+  /// Fires after 8 minutes of continuous pause. Stops the player, clears
+  /// all network resources, and tells audio_service to tear down the
+  /// foreground service — which dismisses the media notification.
+  void _onIdleTimeout() {
+    debugPrint('[AudioHandler] 8-minute idle timeout — stopping player and dismissing notification');
+
+    // Let the provider save session state BEFORE we wipe the queue.
+    onIdleTimeout?.call();
+
+    _prefetchedStreams.clear();
+    _prefetchTimer?.cancel();
+    _cancelPrefetchCleanupTimer();
+
+    _player.stop();
+    _playlist.clear();
+    _currentIndex = -1;
+    _playGeneration++;
+
+    // Clear the media item so audio_service removes the notification.
+    mediaItem.add(null);
+
+    // Emit a terminal playback state so the service can shut down.
+    playbackState.add(playbackState.value.copyWith(
+      controls: [],
+      processingState: AudioProcessingState.idle,
+      playing: false,
+    ));
   }
 
   double _userVolume = 1.0;
@@ -786,6 +879,8 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   Future<void> stop() async {
     _playGeneration++;
     _prefetchTimer?.cancel();
+    _cancelIdleTimer();
+    _cancelPrefetchCleanupTimer();
     // The queue is gone, so every pre-resolved URL is now dead weight. Without
     // this the map only ever grew for the life of the process.
     _prefetchedStreams.clear();
@@ -1090,6 +1185,8 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
   @override
   Future<void> onTaskRemoved() async {
+    _cancelIdleTimer();
+    _cancelPrefetchCleanupTimer();
     await stop();
     await super.onTaskRemoved();
   }

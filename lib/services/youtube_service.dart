@@ -20,11 +20,26 @@ class YouTubeService {
   //
   // The key includes the quality because a cached High URL must NOT be served
   // after the user switches to Low. Keying on videoId alone made a quality
-  // change appear to do nothing until the 5-minute TTL lapsed. Keying it here
-  // also handles the fact that YouTubeService is NOT a singleton — every
-  // instance has its own cache, so a static "clear" could not reach them all.
-  final Map<String, _CachedUrl> _streamCache = {};
+  // change appear to do nothing until the 5-minute TTL lapsed.
+  //
+  // STATIC, because YouTubeService is not a singleton and callers each build
+  // their own: the audio handler holds one, StreamResolverService holds a
+  // different one, and the providers hold three more. Per-instance this cache
+  // silently threw away the app's two prefetch paths — the near-end
+  // `prefetchStreamUrl` warmed the handler's map while playback resolved
+  // through the resolver's map, so the URL was ALWAYS re-resolved from scratch
+  // and every skip paid the full 10-30s yt-dlp extraction it had just paid to
+  // avoid. One shared map is what makes prefetching (and replaying a song)
+  // actually free. The quality is already in the key, so sharing cannot leak a
+  // stale-quality URL across instances.
+  static final Map<String, _CachedUrl> _streamCache = {};
   static const Duration _cacheExpiry = Duration(minutes: 5);
+
+  /// Evict expired entries so the cache doesn't grow unbounded during long
+  /// listening sessions. Called on every cache write (cheap: the map is small).
+  static void _evictExpiredCache() {
+    _streamCache.removeWhere((_, v) => v.isExpired);
+  }
 
   /// Cache key for [videoId] under the quality currently selected in Settings.
   static String _cacheKey(String videoId) =>
@@ -722,6 +737,7 @@ class YouTubeService {
 
     void completeWith(String url) {
       if (!completer.isCompleted) {
+        _evictExpiredCache();
         _streamCache[cacheKey] = _CachedUrl(url, DateTime.now());
         completer.complete(url);
       }
@@ -755,27 +771,38 @@ class YouTubeService {
 
     Future<void> runFastChain() async {
       try {
-        // 1. YouTube Explode clients in priority order
+        // 1. YouTube Explode clients — raced, not walked.
+        //
+        // These are plain HTTP calls to different player endpoints, so trying
+        // them one after another only bought a serial 2.5s penalty for each
+        // client that happens to be broken today: three dead clients cost 7.5s
+        // before the chain even reached Invidious. Racing them costs at most
+        // two extra requests and bounds the whole step at one timeout. That
+        // also makes a LONGER per-client timeout affordable, which is what a
+        // slow mobile connection actually needs — 2.5s was short enough to
+        // abandon a client that would have answered.
         final List<YoutubeApiClient> clients = List.from(_clientPriority);
-        for (final client in clients) {
+        await Future.wait(clients.map((client) async {
           if (completer.isCompleted) return;
           try {
             final manifest = await _yt.videos.streamsClient
                 .getManifest(videoId, ytClients: [client])
-                .timeout(const Duration(seconds: 2, milliseconds: 500));
+                .timeout(const Duration(seconds: 4));
+            if (completer.isCompleted) return;
             final url = _pickBestStream(manifest);
             if (url != null) {
-              if (_clientPriority.first != client) {
+              // Remember which client answered so the next song starts with it.
+              if (_clientPriority.isNotEmpty && _clientPriority.first != client) {
                 _clientPriority.remove(client);
                 _clientPriority.insert(0, client);
               }
               completeWith(url);
-              return;
             }
           } catch (e) {
             debugPrint('[YT] Client $client failed for $videoId: $e');
           }
-        }
+        }));
+        if (completer.isCompleted) return;
 
         // 2. Invidious direct stream resolution
         if (completer.isCompleted) return;
@@ -937,10 +964,11 @@ class YouTubeService {
         final info = await YoutubeDLFlutter.instance
             .getVideoInfoWithOptions(videoUrl, {
               '--no-update': '',
-              // Mobile network hardening: fail fast on a dead socket, retry once,
-              // and enforce IPv4 to bypass mobile carrier dual-stack DNS delays.
-              '--socket-timeout': '4',
-              '-R': '1',
+              // Low-internet hardening: generous socket timeout for slow 2G/3G
+              // connections, 2 retries before giving up, and IPv4 to bypass
+              // mobile carrier dual-stack DNS delays.
+              '--socket-timeout': '8',
+              '-R': '2',
               '--no-playlist': '',
               '--force-ipv4': '',
               // Audio-only selection honouring the user's quality setting. The
@@ -953,8 +981,10 @@ class YouTubeService {
               '--extractor-args':
                   'youtube:player_client=$client;skip=hls,dash,translated_subs,webpage',
             })
-            // Bounded: a hung native extraction must not stall the resolver.
-            .timeout(const Duration(seconds: 8));
+            // Bounded: a hung native extraction must not stall the resolver,
+            // but on slow 2G/3G connections the extraction can genuinely take
+            // 10+ seconds, so 15s gives real networks a fair chance.
+            .timeout(const Duration(seconds: 15));
 
         // With -f, yt-dlp already picked the best format: top-level url.
         String? url = info.url;
@@ -967,6 +997,7 @@ class YouTubeService {
           debugPrint('[YT] yt-dlp resolved via player_client=$client '
               'quality=${streamingQuality.name} '
               'ext=${info.ext ?? "?"} acodec=${info.acodec ?? "?"}');
+          _evictExpiredCache();
           _streamCache[_cacheKey(videoId)] = _CachedUrl(url, DateTime.now());
           return url;
         }

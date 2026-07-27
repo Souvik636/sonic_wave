@@ -21,7 +21,7 @@ class GitHubReleaseClient implements UpdateClient {
   final String currentVersion;
 
   GitHubReleaseClient({
-    this.owner = 'souvik',
+    this.owner = 'Souvik636',
     this.repo = 'sonic_wave',
     required this.currentVersion,
   });
@@ -30,36 +30,56 @@ class GitHubReleaseClient implements UpdateClient {
 
   @override
   Future<AppRelease?> checkForUpdate() async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
-    try {
-      final request = await client.getUrl(Uri.parse(_latestReleaseApiUrl));
-      request.headers.set('User-Agent', 'SonicWave-Updater/$currentVersion');
-      request.headers.set('Accept', 'application/vnd.github.v3+json');
+    // Try up to 2 times for transient network errors.
+    for (int attempt = 0; attempt < 2; attempt++) {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 10);
+      try {
+        final request = await client.getUrl(Uri.parse(_latestReleaseApiUrl));
+        request.headers.set('User-Agent', 'SonicWave-Updater/$currentVersion');
+        request.headers.set('Accept', 'application/vnd.github.v3+json');
 
-      final response = await request.close().timeout(const Duration(seconds: 6));
+        final response = await request.close().timeout(const Duration(seconds: 12));
 
-      if (response.statusCode == 403 || response.statusCode == 429) {
-        throw const GitHubRateLimitException('GitHub API rate limit exceeded. Please try again later.');
-      }
-
-      if (response.statusCode == 200) {
-        final body = await response.transform(utf8.decoder).join();
-        final data = json.decode(body) as Map<String, dynamic>;
-        final release = AppRelease.fromJson(data);
-
-        if (_isNewerVersion(currentVersion, release.tag)) {
-          debugPrint('[GitHubUpdater] Found newer Android 64-Bit release: ${release.tag} (Installed: $currentVersion)');
-          return release;
-        } else {
-          debugPrint('[GitHubUpdater] App is up to date (Installed: $currentVersion | Remote: ${release.tag})');
-          return null;
+        if (response.statusCode == 403 || response.statusCode == 429) {
+          // Drain the response body to release the connection.
+          await response.drain<void>();
+          throw const GitHubRateLimitException('GitHub API rate limit exceeded. Please try again later.');
         }
+
+        if (response.statusCode == 404) {
+          await response.drain<void>();
+          debugPrint('[GitHubUpdater] Repository not found: $owner/$repo');
+          throw Exception('Repository $owner/$repo not found on GitHub. Check your internet connection.');
+        }
+
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          final data = json.decode(body) as Map<String, dynamic>;
+          final release = AppRelease.fromJson(data);
+
+          if (_isNewerVersion(currentVersion, release.tag)) {
+            debugPrint('[GitHubUpdater] Found newer Android 64-Bit release: ${release.tag} (Installed: $currentVersion)');
+            return release;
+          } else {
+            debugPrint('[GitHubUpdater] App is up to date (Installed: $currentVersion | Remote: ${release.tag})');
+            return null;
+          }
+        }
+
+        // Unexpected status — drain and retry.
+        await response.drain<void>();
+        debugPrint('[GitHubUpdater] Unexpected HTTP ${response.statusCode}, attempt ${attempt + 1}');
+      } on GitHubRateLimitException {
+        rethrow;
+      } catch (e) {
+        debugPrint('[GitHubUpdater] Attempt ${attempt + 1} failed: $e');
+        if (attempt == 1) rethrow;
+        // Brief pause before retry.
+        await Future<void>.delayed(const Duration(seconds: 2));
+      } finally {
+        client.close();
       }
-    } catch (e) {
-      debugPrint('[GitHubUpdater] Error querying GitHub API: $e');
-      rethrow;
-    } finally {
-      client.close();
     }
     return null;
   }

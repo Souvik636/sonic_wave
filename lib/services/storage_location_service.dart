@@ -80,6 +80,24 @@ class StorageLocationService {
   /// as an album in the app.
   static const String metaFolderName = '.sonicwave';
 
+  /// Sub-folder of [metaFolderName] holding per-song cover images.
+  ///
+  /// Covers live here rather than beside the audio because on device storage or
+  /// an SD card the media scanner indexes any visible image, which put every
+  /// downloaded song's artwork in the user's Gallery. The art the user actually
+  /// needs travels EMBEDDED inside the audio file; this copy exists only so the
+  /// app's own lists have a cheap local image path to render.
+  static const String coverFolderName = 'covers';
+
+  /// Directory names an older build of the app may have left on a volume.
+  /// Matched case-insensitively, so `sonicWave`, `SonicWave` and `SONICWAVE`
+  /// all count.
+  static const List<String> legacyFolderNames = ['sonicwave', 'sonic wave'];
+
+  /// Sub-folders of a volume worth checking for a legacy library, alongside the
+  /// volume root itself.
+  static const List<String> _legacySearchSubdirs = ['Music', 'Download', 'Downloads'];
+
   StorageType _storageType = StorageType.appInternal;
   String? _customPath;
   bool _isInitialized = false;
@@ -177,8 +195,12 @@ class StorageLocationService {
   bool isFileInAppFolderSync(String filePath) {
     if (_resolvedRootPath == null) return false;
     final normalizedFilePath = filePath.replaceAll('\\', '/').toLowerCase();
-    final normalizedRootPath = _resolvedRootPath!.replaceAll('\\', '/').toLowerCase();
-    return normalizedFilePath.startsWith(normalizedRootPath);
+    var normalizedRootPath = _resolvedRootPath!.replaceAll('\\', '/').toLowerCase();
+    if (!normalizedRootPath.endsWith('/')) {
+      normalizedRootPath += '/';
+    }
+    return normalizedFilePath.startsWith(normalizedRootPath) ||
+        normalizedFilePath == _resolvedRootPath!.replaceAll('\\', '/').toLowerCase();
   }
 
   /// Get the app's root directory for the current storage type.
@@ -360,6 +382,107 @@ class StorageLocationService {
     }
   }
 
+  /// Get (create) the hidden cover-art directory, `<root>/.sonicwave/covers`.
+  ///
+  /// Nested inside the meta folder so it inherits both defences at once: the
+  /// dot prefix the media scanner skips, and the `.nomedia` marker
+  /// [getMetaDir] writes (which Android applies to sub-directories too). Falls
+  /// back to the meta dir itself if the subfolder can't be created.
+  Future<Directory> getCoverDir() async {
+    final meta = await getMetaDir();
+    final dir =
+        Directory('${meta.path}${Platform.pathSeparator}$coverFolderName');
+    try {
+      if (!await dir.exists()) await dir.create(recursive: true);
+      return dir;
+    } catch (e) {
+      debugPrint('StorageLocationService: cover dir create failed, using meta dir: $e');
+      return meta;
+    }
+  }
+
+  /// Absolute path of the cover image for [videoId].
+  ///
+  /// The one place this name is derived. Download, delete and the upgrade
+  /// migration all go through it so they cannot drift apart and strand a file.
+  Future<String> coverPathFor(String videoId) async {
+    final dir = await getCoverDir();
+    return '${dir.path}${Platform.pathSeparator}$videoId.jpg';
+  }
+
+  /// True when [folderName] is what an older build called its library folder.
+  static bool isLegacyLibraryFolderName(String folderName) =>
+      legacyFolderNames.contains(folderName.trim().toLowerCase());
+
+  /// Library folders left on the selected volume by an older version.
+  ///
+  /// Older builds wrote to a fixed `sonicWave` folder; the resolved root now
+  /// depends on the storage type and on whether "All files access" was granted,
+  /// so those downloads became invisible to the app even though the files are
+  /// right there. Everything found here is surfaced read-only as a folder-album
+  /// — nothing is moved or rewritten.
+  ///
+  /// Only meaningful for device/SD storage: app-internal storage is private, so
+  /// there is nothing to rediscover. Never throws.
+  Future<List<Directory>> findLegacyLibraryRoots() async {
+    if (!Platform.isAndroid) return const [];
+    if (_storageType == StorageType.appInternal) return const [];
+
+    final activePath = _resolvedRootPath?.replaceAll('\\', '/').toLowerCase();
+    final seen = <String>{};
+    final found = <Directory>[];
+
+    // Volume roots worth searching, in the order a user would expect them.
+    final bases = <String>[];
+    switch (_storageType) {
+      case StorageType.deviceInternal:
+        bases.add('/storage/emulated/0');
+        break;
+      case StorageType.sdCard:
+        if (_customPath != null && _customPath!.isNotEmpty) bases.add(_customPath!);
+        break;
+      case StorageType.appInternal:
+        break;
+    }
+    // App-specific external storage: where the app lands when the public folder
+    // is denied, so a previous run's library can genuinely be sitting there.
+    try {
+      final ext = await getExternalStorageDirectory();
+      if (ext != null) bases.add(ext.path);
+    } catch (_) {}
+
+    for (final base in bases) {
+      final searchDirs = <String>[
+        base,
+        for (final sub in _legacySearchSubdirs) '$base/$sub',
+      ];
+      for (final searchPath in searchDirs) {
+        try {
+          final searchDir = Directory(searchPath);
+          if (!await searchDir.exists()) continue;
+          await for (final entity in searchDir.list(followLinks: false)) {
+            if (entity is! Directory) continue;
+            final name = entity.path.split(RegExp(r'[/\\]')).last;
+            if (!isLegacyLibraryFolderName(name)) continue;
+
+            final norm = entity.path.replaceAll('\\', '/').toLowerCase();
+            if (norm == activePath) continue; // that's the live library
+            if (!seen.add(norm)) continue;
+            found.add(entity);
+          }
+        } catch (e) {
+          debugPrint('StorageLocationService: legacy probe failed ($searchPath): $e');
+        }
+      }
+    }
+
+    if (found.isNotEmpty) {
+      debugPrint('StorageLocationService: found ${found.length} legacy library '
+          'root(s): ${found.map((d) => d.path).join(', ')}');
+    }
+    return found;
+  }
+
   /// Get (or create) a subdirectory for a specific album within the app root.
   /// Falls back to the root directory if the subfolder can't be created.
   Future<Directory> getAlbumDir(String albumName) async {
@@ -389,8 +512,12 @@ class StorageLocationService {
     try {
       final root = await getAppRootDir();
       final normalizedFilePath = filePath.replaceAll('\\', '/').toLowerCase();
-      final normalizedRootPath = root.path.replaceAll('\\', '/').toLowerCase();
-      return normalizedFilePath.startsWith(normalizedRootPath);
+      var normalizedRootPath = root.path.replaceAll('\\', '/').toLowerCase();
+      if (!normalizedRootPath.endsWith('/')) {
+        normalizedRootPath += '/';
+      }
+      return normalizedFilePath.startsWith(normalizedRootPath) ||
+          normalizedFilePath == root.path.replaceAll('\\', '/').toLowerCase();
     } catch (e) {
       debugPrint('Error checking app folder membership: $e');
       return false;
@@ -493,43 +620,101 @@ class StorageLocationService {
     }
   }
 
-  /// Scan the app root directory for subdirectories that can be treated as albums.
+  /// Audio extensions a folder-album may contain.
+  static const Set<String> audioExtensions = {
+    'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus', 'wma',
+    'aiff', 'aif', 'alac', 'mka', 'amr', 'm4b'
+  };
+
+  /// Whether a directory found while scanning should become a folder-album.
   ///
-  /// Each subdirectory containing audio files becomes a folder-based album.
+  /// [folderPath] is skipped when it is hidden, or when it IS the live download
+  /// folder — those songs are already the Downloads hub and listing them again
+  /// as an album just duplicates the whole library. The check is by PATH, not
+  /// by name: a *legacy* `Download/` folder on another root is a real find and
+  /// must still qualify. (The old name-only test compared against `'Downloads'`
+  /// while the constant is `'Download'`, so it never actually matched and the
+  /// live folder was duplicated.)
+  static bool isFolderAlbumCandidate(String folderPath, {String? activeDownloadPath}) {
+    final name = folderPath.split(RegExp(r'[/\\]')).last;
+    if (name.isEmpty || name.startsWith('.')) return false;
+    if (activeDownloadPath != null) {
+      final a = folderPath.replaceAll('\\', '/').toLowerCase();
+      final b = activeDownloadPath.replaceAll('\\', '/').toLowerCase();
+      if (a == b) return false;
+    }
+    return true;
+  }
+
+  /// Scan for subdirectories that can be treated as albums.
+  ///
+  /// Covers the active app root AND any library folder an older version left on
+  /// the selected volume ([findLegacyLibraryRoots]). For a legacy root, the
+  /// folder itself also counts as an album when it holds audio directly, since
+  /// older builds downloaded straight into it.
   Future<List<FolderAlbumInfo>> scanFolderAlbums() async {
     final albums = <FolderAlbumInfo>[];
+    final seenPaths = <String>{};
+
+    Future<List<String>> audioFilesIn(Directory dir) async {
+      final files = <String>[];
+      try {
+        await for (final file in dir.list(followLinks: false)) {
+          if (file is File) {
+            final ext = file.path.split('.').last.toLowerCase();
+            if (audioExtensions.contains(ext)) files.add(file.path);
+          }
+        }
+      } catch (_) {}
+      return files;
+    }
+
+    void addAlbum(String name, String path, List<String> files) {
+      if (files.isEmpty) return;
+      if (!seenPaths.add(path.replaceAll('\\', '/').toLowerCase())) return;
+      albums.add(FolderAlbumInfo(
+        folderName: name,
+        folderPath: path,
+        audioFilePaths: files,
+      ));
+    }
+
     try {
       final root = await getAppRootDir();
-      final supportedExts = {
-        'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus', 'wma',
-        'aiff', 'aif', 'alac', 'mka', 'amr', 'm4b'
-      };
+      final activeDownloadPath =
+          '${root.path}${Platform.pathSeparator}$downloadFolderName';
 
-      await for (final entity in root.list(followLinks: false)) {
-        if (entity is Directory) {
-          final folderName = entity.path.split(RegExp(r'[/\\]')).last;
-          // Skip system / hidden folders
-          if (folderName.startsWith('.') || folderName == 'Downloads') continue;
+      // Roots to walk: the live one first, then anything an old build left.
+      final roots = <Directory>[root];
+      try {
+        roots.addAll(await findLegacyLibraryRoots());
+      } catch (e) {
+        debugPrint('Error finding legacy library roots: $e');
+      }
 
-          final audioFiles = <String>[];
-          try {
-            await for (final file in entity.list(followLinks: false)) {
-              if (file is File) {
-                final ext = file.path.split('.').last.toLowerCase();
-                if (supportedExts.contains(ext)) {
-                  audioFiles.add(file.path);
-                }
-              }
+      for (final scanRoot in roots) {
+        final isLegacy = scanRoot.path != root.path;
+
+        // An old build downloaded straight into its root, so the root itself is
+        // an album when it holds audio. The live root never is — its loose
+        // files are handled by the Downloads hub.
+        if (isLegacy) {
+          final rootName = scanRoot.path.split(RegExp(r'[/\\]')).last;
+          addAlbum(rootName, scanRoot.path, await audioFilesIn(scanRoot));
+        }
+
+        try {
+          await for (final entity in scanRoot.list(followLinks: false)) {
+            if (entity is! Directory) continue;
+            if (!isFolderAlbumCandidate(entity.path,
+                activeDownloadPath: activeDownloadPath)) {
+              continue;
             }
-          } catch (_) {}
-
-          if (audioFiles.isNotEmpty) {
-            albums.add(FolderAlbumInfo(
-              folderName: folderName,
-              folderPath: entity.path,
-              audioFilePaths: audioFiles,
-            ));
+            final folderName = entity.path.split(RegExp(r'[/\\]')).last;
+            addAlbum(folderName, entity.path, await audioFilesIn(entity));
           }
+        } catch (e) {
+          debugPrint('Error scanning ${scanRoot.path}: $e');
         }
       }
     } catch (e) {

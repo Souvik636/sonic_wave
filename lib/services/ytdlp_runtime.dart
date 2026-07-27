@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:extractor/extractor.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'ytdlp_downloader.dart';
 
 /// Single-flight guard + binary auto-update for YoutubeDLFlutter (yt-dlp).
 ///
@@ -65,6 +68,9 @@ class YtDlpRuntime {
         return false;
       }
       _scheduleUpdateCheck();
+      // Clean orphaned staging files from a previous crash/kill — fire and
+      // forget so init isn't delayed.
+      _cleanStagingDir();
       return true;
     } catch (e) {
       debugPrint('[yt-dlp] Initialization failed: $e');
@@ -121,6 +127,29 @@ class YtDlpRuntime {
       debugPrint('[yt-dlp] Update check failed: $e');
     } finally {
       _updateInFlight = null;
+    }
+  }
+
+  /// Remove orphaned files (partial downloads from a crash/kill) from the
+  /// yt-dlp staging directory. Runs once on cold init, fire-and-forget.
+  static Future<void> _cleanStagingDir() async {
+    try {
+      final dir = await YtDlpDownloader.stagingDir();
+      if (!await dir.exists()) return;
+      int removed = 0;
+      await for (final entity in dir.list()) {
+        if (entity is File) {
+          try {
+            await entity.delete();
+            removed++;
+          } catch (_) {}
+        }
+      }
+      if (removed > 0) {
+        debugPrint('[yt-dlp] Cleaned $removed orphaned staging file(s)');
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp] Staging cleanup failed: $e');
     }
   }
 }

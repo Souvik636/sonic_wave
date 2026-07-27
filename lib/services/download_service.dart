@@ -296,10 +296,32 @@ class DownloadService {
     return _storageService.getDownloadDir();
   }
 
-  /// Fallback: app-internal metadata file (for backward compatibility)
+  /// The downloads index, in the hidden meta folder.
+  ///
+  /// It used to sit in the visible `Download/` folder, where it was one more
+  /// piece of app clutter in a directory the user browses. [_migrateHiddenLayout]
+  /// moves any pre-existing copy here on first run.
   Future<File> get _metadataFile async {
-    final dir = await _downloadDir;
-    return File('${dir.path}/metadata.json');
+    final dir = await _storageService.getMetaDir();
+    return File('${dir.path}${Platform.pathSeparator}metadata.json');
+  }
+
+  /// Where this song's cover image belongs: the hidden cover folder, never
+  /// beside the audio. See [StorageLocationService.coverFolderName].
+  Future<File> _coverFileFor(String videoId) async =>
+      File(await _storageService.coverPathFor(videoId));
+
+  /// Forget everything derived from the current storage root.
+  ///
+  /// Must be called when the user switches storage location: the download-dir
+  /// path is cached inside [loadDownloads], which returns early once `_isLoaded`
+  /// is set, so without this the sync path probe
+  /// ([getCachedLocalPathSync]) keeps looking on the volume the library just
+  /// left and reports every downloaded song as missing.
+  void invalidateStorageCaches() {
+    _isLoaded = false;
+    _cachedDownloadDirPath = null;
+    _migrationChecked = false;
   }
 
   /// Get the local file path for a downloaded song's audio
@@ -391,7 +413,13 @@ class DownloadService {
   /// - true → "Delete Permanently" (red)
   /// - false → "Delete Memory" (yellow)
   Future<bool> isFileInAppFolder(Song song) async {
-    final path = song.filePath ?? await getLocalAudioPath(song.videoId);
+    String? path = song.filePath;
+    if (path == null || path.isEmpty || !File(path).existsSync()) {
+      path = getCachedLocalPathSync(song.videoId);
+    }
+    if (path == null || !File(path).existsSync()) {
+      return false;
+    }
     return _storageService.isFileInAppFolder(path);
   }
 
@@ -499,6 +527,10 @@ class DownloadService {
       final dir = await _downloadDir;
       _cachedDownloadDirPath = dir.path;
 
+      // Relocate a pre-update library before the index is read, so what we read
+      // is already pointing at the hidden layout.
+      await _migrateHiddenLayout(dir);
+
       final file = await _metadataFile;
       if (await file.exists()) {
         final content = await file.readAsString();
@@ -524,6 +556,91 @@ class DownloadService {
       await verifyStorageIntegrity();
     } catch (e) {
       debugPrint('Error loading downloads metadata: $e');
+    }
+  }
+
+  /// Set once per resolved root so the probe below runs at most once per launch
+  /// (and again after a storage switch, which is a different root).
+  bool _migrationChecked = false;
+
+  /// Move a pre-update library into the hidden layout: `metadata.json` and every
+  /// cover image out of the visible `Download/` folder.
+  ///
+  /// Before this, a download wrote `<Download>/<id>.jpg` next to the audio. On
+  /// device storage or an SD card the media scanner indexes any visible image,
+  /// so the user's Gallery filled up with album art from songs they downloaded.
+  /// Moving the files is only half the fix — MediaStore keeps the row until it
+  /// is told the path is gone, which is what the closing scan does.
+  ///
+  /// Deliberately best-effort per song: a cover that fails to move is left for
+  /// the next launch rather than aborting the whole migration or, worse, losing
+  /// the song's artwork reference.
+  Future<void> _migrateHiddenLayout(Directory downloadDir) async {
+    if (_migrationChecked) return;
+    _migrationChecked = true;
+    try {
+      final sep = Platform.pathSeparator;
+      final removedPaths = <String>[];
+
+      // 1. The index itself.
+      final newIndex = await _metadataFile;
+      final legacyIndex = File('${downloadDir.path}${sep}metadata.json');
+      if (!await newIndex.exists() && await legacyIndex.exists()) {
+        try {
+          await newIndex.writeAsString(await legacyIndex.readAsString(), flush: true);
+          await legacyIndex.delete();
+          debugPrint('[DownloadService] Moved metadata.json into the hidden meta folder');
+        } catch (e) {
+          debugPrint('[DownloadService] metadata.json migration failed: $e');
+        }
+      }
+
+      // 2. Cover images. Read the index directly — _downloadedSongs is not
+      //    populated yet at this point in loadDownloads().
+      if (!await newIndex.exists()) return;
+      final List<dynamic> raw = json.decode(await newIndex.readAsString());
+      final downloadPath = downloadDir.path.replaceAll('\\', '/').toLowerCase();
+      bool changed = false;
+
+      for (int i = 0; i < raw.length; i++) {
+        final map = raw[i] as Map<String, dynamic>;
+        final thumb = (map['thumbnailUrl'] as String?) ?? '';
+        if (thumb.isEmpty || thumb.startsWith('http')) continue;
+        // Only relocate covers that are actually sitting in the visible folder.
+        if (!thumb.replaceAll('\\', '/').toLowerCase().startsWith(downloadPath)) {
+          continue;
+        }
+
+        final videoId = (map['videoId'] as String?) ?? '';
+        if (videoId.isEmpty) continue;
+
+        try {
+          final source = File(thumb);
+          if (!await source.exists()) continue;
+          final target = await _coverFileFor(videoId);
+          if (!await target.parent.exists()) {
+            await target.parent.create(recursive: true);
+          }
+          await source.copy(target.path);
+          await source.delete();
+          map['thumbnailUrl'] = target.path;
+          map['highResThumbnailUrl'] = target.path;
+          removedPaths.add(source.path);
+          changed = true;
+        } catch (e) {
+          debugPrint('[DownloadService] Cover migration failed for $videoId: $e');
+        }
+      }
+
+      if (changed) {
+        await newIndex.writeAsString(json.encode(raw), flush: true);
+        debugPrint('[DownloadService] Moved ${removedPaths.length} cover(s) '
+            'into the hidden cover folder');
+      }
+      // Drop the stale MediaStore rows so the images leave the Gallery.
+      await MediaStoreScanner.scanAll(removedPaths);
+    } catch (e) {
+      debugPrint('[DownloadService] Hidden-layout migration failed: $e');
     }
   }
 
@@ -623,26 +740,40 @@ class DownloadService {
     return null;
   }
 
-  /// Check network connectivity
+  /// Check network connectivity.
+  ///
+  /// Fails OPEN: only a lookup that comes back with a definite "no such host"
+  /// counts as offline. A slow DNS answer does not — this gate used to give up
+  /// after 3 seconds and report "No network connection", which on a weak mobile
+  /// connection rejected downloads that would have worked, while playback
+  /// (which never consults this) kept streaming and made the refusal look
+  /// nonsensical. If the network really is down, the transfer itself reports it
+  /// with a far more accurate error than a DNS probe can.
   Future<bool> isNetworkAvailable() async {
     try {
       final result = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 8));
       return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
-    } catch (_) {
+    } on TimeoutException {
+      debugPrint('[DownloadService] DNS probe timed out — assuming online');
+      return true;
+    } catch (e) {
+      debugPrint('[DownloadService] Network probe failed: $e');
       return false;
     }
   }
 
-  /// Calculate total storage used by downloads
+  /// Calculate total storage used by downloads and metadata
   Future<int> getStorageUsed() async {
     try {
-      final dir = await _downloadDir;
-      if (!await dir.exists()) return 0;
+      final root = await _storageService.getAppRootDir();
+      if (!await root.exists()) return 0;
       int total = 0;
-      await for (final entity in dir.list()) {
+      await for (final entity in root.list(recursive: true)) {
         if (entity is File) {
-          total += await entity.length();
+          try {
+            total += await entity.length();
+          } catch (_) {}
         }
       }
       return total;
@@ -695,7 +826,7 @@ class DownloadService {
       // Create a placeholder task so UI shows queued state
       final dir = await _downloadDir;
       final audioFile = File('${dir.path}/${song.videoId}.mp3');
-      final thumbFile = File('${dir.path}/${song.videoId}.jpg');
+      final thumbFile = await _coverFileFor(song.videoId);
       final task = DownloadTask(
         song: song,
         audioFile: audioFile,
@@ -793,11 +924,12 @@ class DownloadService {
     final dir = await _downloadDir;
 
     // Register a task up front so the existing UI (progress bar, speed, cancel)
-    // works exactly as it does for the HTTP path.
+    // works exactly as it does for the HTTP path. thumbFile points at the
+    // hidden cover location because DownloadTask.cancel() deletes it.
     final task = DownloadTask(
       song: song,
       audioFile: File('${dir.path}/${song.videoId}.m4a'),
-      thumbFile: File('${dir.path}/${song.videoId}.jpg'),
+      thumbFile: await _coverFileFor(song.videoId),
       onStateChanged: () {
         if (onProgress != null && _activeTasks.containsKey(song.videoId)) {
           onProgress(_activeTasks[song.videoId]!.progress);
@@ -809,6 +941,34 @@ class DownloadService {
     task.isNative = true;
     _activeTasks[song.videoId] = task;
     if (onStateChanged != null) onStateChanged();
+
+    // Speed tracker for the native download — derives bytes/sec from the
+    // progress fraction reported by yt-dlp. Updated every second.
+    double lastFraction = 0.0;
+    DateTime lastSpeedSample = DateTime.now();
+    Timer? speedTimer;
+    speedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (task.isCancelled || task.status != DownloadStatus.downloading) {
+        task.speedBytesPerSec = 0;
+        return;
+      }
+      final now = DateTime.now();
+      final dtSec = now.difference(lastSpeedSample).inMilliseconds / 1000.0;
+      if (dtSec <= 0) return;
+      final dFraction = task.progress - lastFraction;
+      lastFraction = task.progress;
+      lastSpeedSample = now;
+      // Estimate total size as ~5MB for speed display (yt-dlp doesn't report
+      // total bytes for stream copies). The fraction itself is accurate.
+      const estimatedTotalBytes = 5 * 1024 * 1024;
+      final bytesThisSec = (dFraction * estimatedTotalBytes) / dtSec;
+      if (task.speedBytesPerSec <= 0) {
+        task.speedBytesPerSec = bytesThisSec;
+      } else {
+        task.speedBytesPerSec = task.speedBytesPerSec * 0.7 + bytesThisSec * 0.3;
+      }
+      task.onStateChanged?.call();
+    });
 
     try {
       final result = await YtDlpDownloader.download(
@@ -835,20 +995,34 @@ class DownloadService {
         throw Exception('Could not move downloaded audio into $dir');
       }
 
+      // The artwork the USER gets is the copy embedded inside the audio file by
+      // yt-dlp (--embed-thumbnail), so the file is self-contained wherever it
+      // ends up. This second copy is only the app's render cache, and it goes
+      // into the hidden cover folder — beside the audio it would land in the
+      // device Gallery.
+      final coverDir = await _storageService.getCoverDir();
       String? movedThumb;
       if (result.thumbnailPath != null) {
         movedThumb =
-            await _storageService.moveFile(result.thumbnailPath!, dir);
+            await _storageService.moveFile(result.thumbnailPath!, coverDir);
       }
 
-      // The artwork is embedded in the file itself; the sidecar is what the
-      // in-app UI renders. If yt-dlp produced neither, fetch the cover
-      // separately so the library screen still has something to show.
-      if (movedThumb == null) {
-        movedThumb = await _fetchSidecarThumbnail(song, dir);
-        if (!result.thumbnailEmbedded) {
-          debugPrint('[DownloadService] No embedded art for ${song.title}; '
-              'using separate thumbnail file');
+      movedThumb ??= await _fetchSidecarThumbnail(song, coverDir);
+
+      if (!result.thumbnailEmbedded && movedThumb != null && File(movedThumb).existsSync()) {
+        try {
+          final thumbFile = File(movedThumb);
+          final bytes = await thumbFile.readAsBytes();
+          final mime = movedThumb.toLowerCase().contains('.png') ? 'image/png' : 'image/jpeg';
+          await ID3TagWriter.embedCoverArt(
+            audioFile: File(movedAudio),
+            imageBytes: bytes,
+            mimeType: mime,
+            title: song.title,
+            artist: song.artist,
+          );
+        } catch (e) {
+          debugPrint('[DownloadService] Cover embedding fallback error: $e');
         }
       }
 
@@ -871,12 +1045,11 @@ class DownloadService {
       ));
       await _saveMetadata();
 
-      // Make the file visible to other music apps / file managers when it
-      // landed somewhere the media scanner indexes.
+      // Make the AUDIO visible to other music apps / file managers when it
+      // landed somewhere the media scanner indexes. The cover is deliberately
+      // NOT scanned: it lives in the hidden folder precisely so it stays out of
+      // the user's Gallery, and other players read the art embedded in the file.
       await MediaStoreScanner.scanIfPublic(movedAudio);
-      if (movedThumb != null) {
-        await MediaStoreScanner.scanIfPublic(movedThumb);
-      }
 
       return true;
     } catch (e) {
@@ -885,11 +1058,14 @@ class DownloadService {
       // Clear partial staging output so a retry starts clean.
       await YtDlpDownloader.cancel(song.videoId);
       rethrow;
+    } finally {
+      speedTimer.cancel();
     }
   }
 
   /// Download the cover art on its own, for when yt-dlp produced no image.
   ///
+  /// [dir] must be the hidden cover directory — never the download folder.
   /// Returns the local path, or null if the fetch failed.
   Future<String?> _fetchSidecarThumbnail(Song song, Directory dir) async {
     if (song.thumbnailUrl.isEmpty || !song.thumbnailUrl.startsWith('http')) {
@@ -917,7 +1093,9 @@ class DownloadService {
   Future<void> _executeDownload(Song song, ValueChanged<double>? onProgress, {VoidCallback? onStateChanged, int attempt = 0, AudioQuality quality = AudioQuality.high}) async {
     final dir = await _downloadDir;
     final audioFile = File('${dir.path}/${song.videoId}.mp3');
-    final thumbFile = File('${dir.path}/${song.videoId}.jpg');
+    // The cover cache goes in the hidden folder, NEVER beside the audio — a
+    // visible .jpg in the download folder ends up in the device Gallery.
+    final thumbFile = await _coverFileFor(song.videoId);
 
     // Preferred path for YouTube: let yt-dlp + FFmpeg do the download, the
     // container conversion and the artwork embedding natively. Falls through to
@@ -989,7 +1167,10 @@ class DownloadService {
       // Clean up task from active list
       _activeTasks.remove(song.videoId);
 
-      // 3. Download and cache thumbnail locally using HttpClient & embed ID3 APIC frame
+      // 3. Cover art. Try to EMBED it into the audio file first (ID3/APIC —
+      // only possible for real MP3 containers); the on-disk copy is the app's
+      // render cache and lives in the hidden cover folder so it never appears
+      // in the device Gallery.
       final thumbHttpClient = HttpClient();
       try {
         final request = await thumbHttpClient.getUrl(Uri.parse(song.thumbnailUrl));
@@ -1040,8 +1221,9 @@ class DownloadService {
 
       // Same MediaStore refresh the yt-dlp path does. This path writes the
       // file with dart:io, so without a scan it stays invisible to every other
-      // app on the device.
-      await MediaStoreScanner.scanAll([validFilePath, thumbFile.path]);
+      // app on the device. Only the AUDIO is scanned — the cover lives in the
+      // hidden folder precisely so it stays out of the user's Gallery.
+      await MediaStoreScanner.scanIfPublic(validFilePath);
     } catch (e) {
       // Retry logic
       if (attempt < maxRetries - 1) {
@@ -1139,15 +1321,25 @@ class DownloadService {
       }
 
       final dir = await _downloadDir;
-      final defaultAudio = File('${dir.path}/$videoId.mp3');
+      final defaultAudioMp3 = File('${dir.path}/$videoId.mp3');
+      final defaultAudioM4a = File('${dir.path}/$videoId.m4a');
       final defaultThumb = File('${dir.path}/$videoId.jpg');
-      if (await defaultAudio.exists()) {
-        await defaultAudio.delete();
-        removed.add(defaultAudio.path);
+      final sidecarCover = await _coverFileFor(videoId);
+
+      if (await defaultAudioMp3.exists()) {
+        await defaultAudioMp3.delete();
+        removed.add(defaultAudioMp3.path);
+      }
+      if (await defaultAudioM4a.exists()) {
+        await defaultAudioM4a.delete();
+        removed.add(defaultAudioM4a.path);
       }
       if (await defaultThumb.exists()) {
         await defaultThumb.delete();
         removed.add(defaultThumb.path);
+      }
+      if (await sidecarCover.exists()) {
+        await sidecarCover.delete();
       }
 
       await _saveMetadata();
@@ -1160,16 +1352,48 @@ class DownloadService {
   /// Delete all downloaded songs
   Future<void> deleteAllDownloads() async {
     try {
-      final dir = await _downloadDir;
+      await loadDownloads();
       final removed = <String>[];
-      if (await dir.exists()) {
-        await for (final entity in dir.list()) {
-          if (entity is File && !entity.path.endsWith('metadata.json')) {
-            await entity.delete();
-            removed.add(entity.path);
+
+      for (final song in List<Song>.from(_downloadedSongs)) {
+        if (song.filePath != null && song.filePath!.isNotEmpty) {
+          final file = File(song.filePath!);
+          if (await file.exists()) {
+            await file.delete();
+            removed.add(file.path);
+          }
+        }
+        if (song.thumbnailUrl.isNotEmpty && !song.thumbnailUrl.startsWith('http')) {
+          final thumb = File(song.thumbnailUrl);
+          if (await thumb.exists()) {
+            await thumb.delete();
           }
         }
       }
+
+      final coverDir = await _storageService.getCoverDir();
+      if (await coverDir.exists()) {
+        await for (final entity in coverDir.list(recursive: true)) {
+          if (entity is File) {
+            try {
+              await entity.delete();
+            } catch (_) {}
+          }
+        }
+      }
+
+      final dir = await _downloadDir;
+      if (await dir.exists()) {
+        await for (final entity in dir.list(recursive: true)) {
+          if (entity is File && !entity.path.endsWith('metadata.json')) {
+            try {
+              await entity.delete();
+              removed.add(entity.path);
+            } catch (_) {}
+          }
+        }
+      }
+
       _downloadedSongs.clear();
       await _saveMetadata();
       await MediaStoreScanner.scanAll(removed);
@@ -1236,9 +1460,10 @@ class DownloadService {
 
   Future<void> saveNewSongCopy(Song originalSong, Song newSong, String sourceFilePath) async {
     await loadDownloads();
-    // Copy the actual audio file to the new destination path
-    final newPath = await getLocalAudioPath(newSong.videoId);
     final sourceFile = File(sourceFilePath);
+    final ext = sourceFilePath.contains('.') ? sourceFilePath.split('.').last.toLowerCase() : 'mp3';
+    final dir = await _downloadDir;
+    final newPath = '${dir.path}${Platform.pathSeparator}${newSong.videoId}.$ext';
     if (await sourceFile.exists()) {
       await sourceFile.copy(newPath);
     }

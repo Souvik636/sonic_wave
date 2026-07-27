@@ -130,10 +130,13 @@ class YtDlpDownloader {
         format: YouTubeService.ytDlpFormatChain(quality),
         customOptions: {
           '--no-update': '',
-          // Mirror the streaming path's mobile-network hardening.
+          // Low-internet resilience: generous timeout, 5 retries with
+          // exponential backoff, and IPv4 to avoid dual-stack DNS stalls.
           '--force-ipv4': '',
-          '--socket-timeout': '10',
-          '-R': '3',
+          '--socket-timeout': '15',
+          '-R': '5',
+          '--retry-sleep': 'linear=1::2',
+          '--fragment-retries': '5',
           // Don't stamp the file with YouTube's upload date — it makes
           // "recently added" sorting in other players nonsense.
           '--no-mtime': '',

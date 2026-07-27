@@ -56,6 +56,11 @@ class PlayerProvider extends ChangeNotifier {
   bool _isKaraokeMode = false;
   String? _playbackError;
 
+  // Stream subscriptions — cancelled in dispose().
+  StreamSubscription<PlaybackState>? _playbackStateSub;
+  StreamSubscription<MediaItem?>? _mediaItemSub;
+  StreamSubscription<ProcessingState>? _processingStateSub;
+
   bool get useCustomEqualizer => _useCustomEqualizer;
   List<double> get customEqualizerGains => _customEqualizerGains;
   bool get offlineModeOnly => _offlineModeOnly;
@@ -78,13 +83,23 @@ class PlayerProvider extends ChangeNotifier {
       checkAutoRecommendation();
     };
 
+    // When the 8-minute idle timer fires, save session state and refresh UI
+    // BEFORE the audio handler tears down the notification and queue.
+    _audioHandler.onIdleTimeout = () {
+      debugPrint('[PlayerProvider] Idle timeout — saving session and refreshing UI');
+      _saveSessionState();
+      _loadingSong = null;
+      _playbackError = null;
+      notifyListeners();
+    };
+
     // Listen to playback state changes
-    _audioHandler.playbackState.listen((_) {
+    _playbackStateSub = _audioHandler.playbackState.listen((_) {
       notifyListeners();
     });
 
     // Listen to media item changes
-    _audioHandler.mediaItem.listen((_) {
+    _mediaItemSub = _audioHandler.mediaItem.listen((_) {
       _saveSessionState();
       notifyListeners();
     });
@@ -92,7 +107,7 @@ class PlayerProvider extends ChangeNotifier {
     restoreLastSession();
 
     // Listen to processing state changes (buffering/loading)
-    _audioHandler.player.processingStateStream.listen((state) {
+    _processingStateSub = _audioHandler.player.processingStateStream.listen((state) {
       // "Stop after this song" sleep mode: pause once the track completes.
       if (state == ProcessingState.completed && _sleepAfterCurrentTrack) {
         _sleepAfterCurrentTrack = false;
@@ -1794,6 +1809,11 @@ class PlayerProvider extends ChangeNotifier {
       // 2. Permanently update StorageLocationService configuration
       await storageService.setStorageType(targetType, sdCardPath: sdCardPath);
 
+      // DownloadService caches the download-dir path and an `_isLoaded` flag;
+      // after the root just moved both point at the volume the library left.
+      // Without this reset every downloaded song "disappears" until restart.
+      DownloadService().invalidateStorageCaches();
+
       // Helper to update file paths
       String updatePath(String originalPath) {
         final normOriginal = originalPath.replaceAll('\\', '/');
@@ -2076,6 +2096,9 @@ class PlayerProvider extends ChangeNotifier {
   void dispose() {
     _sleepTimer?.cancel();
     _countdownTimer?.cancel();
+    _playbackStateSub?.cancel();
+    _mediaItemSub?.cancel();
+    _processingStateSub?.cancel();
     super.dispose();
   }
 }

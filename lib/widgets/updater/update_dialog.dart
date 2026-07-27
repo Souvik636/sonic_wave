@@ -86,6 +86,15 @@ class _UpdateDialogState extends State<UpdateDialog> with SingleTickerProviderSt
 
     try {
       final tempDir = await getTemporaryDirectory();
+      // Clean up any old APK files from previous update attempts to prevent
+      // cache bloat (each APK is ~30-80MB).
+      try {
+        await for (final entity in tempDir.list()) {
+          if (entity is File && entity.path.toLowerCase().endsWith('.apk')) {
+            await entity.delete();
+          }
+        }
+      } catch (_) {}
       final destFile = File('${tempDir.path}/${asset.name}');
 
       _downloadSub = widget.updateClient.downloadAsset(asset, destFile).listen(

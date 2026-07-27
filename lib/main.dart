@@ -38,7 +38,7 @@ Future<void> main() async {
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.sonicwave.sonic_wave.audio',
         androidNotificationChannelName: 'SonicWave Audio',
-        androidNotificationOngoing: true,
+        androidNotificationOngoing: false,
         androidStopForegroundOnPause: true,
         androidNotificationIcon: 'mipmap/ic_launcher',
       ),

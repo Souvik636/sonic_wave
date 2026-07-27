@@ -1582,6 +1582,9 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildAndroidAutoUpdaterCard(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    // Read version from pubspec (1.0.0+3). The version name is the part before
+    // '+', the build number is after it. Both are baked in at compile time.
+    const appVersion = '1.0.0+3';
 
     return GlassmorphicCard(
       child: Padding(
@@ -1613,7 +1616,7 @@ class SettingsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       const Text(
-                        'SonicWave v1.0.0+3 (Android arm64-v8a Release)',
+                        'SonicWave v$appVersion (Android arm64-v8a Release)',
                         style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
                       ),
                     ],
@@ -1627,7 +1630,7 @@ class SettingsScreen extends StatelessWidget {
               child: ElevatedButton.icon(
                 onPressed: () async {
                   AppToast.show(context, 'Checking GitHub for latest 64-bit APK release...', type: ToastType.info);
-                  final client = GitHubReleaseClient(currentVersion: '1.0.0+3');
+                  final client = GitHubReleaseClient(currentVersion: appVersion);
                   try {
                     final release = await client.checkForUpdate();
                     if (!context.mounted) return;
@@ -1641,9 +1644,15 @@ class SettingsScreen extends StatelessWidget {
                     } else {
                       AppToast.show(context, 'You are running the latest 64-bit Android release!', type: ToastType.success);
                     }
+                  } on GitHubRateLimitException {
+                    if (!context.mounted) return;
+                    AppToast.show(context, 'GitHub rate limit hit. Try again in a minute.', type: ToastType.warning);
                   } catch (e) {
                     if (!context.mounted) return;
-                    AppToast.show(context, 'Could not check for updates: $e', type: ToastType.warning);
+                    final msg = e.toString().contains('SocketException')
+                        ? 'No internet connection. Please check your network.'
+                        : 'Could not check for updates. Please try again later.';
+                    AppToast.show(context, msg, type: ToastType.warning);
                   }
                 },
                 style: ElevatedButton.styleFrom(
