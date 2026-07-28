@@ -193,66 +193,59 @@ class SongTile extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              // Source tag pill
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: _getTagBgColor(sourceTag ?? song.source),
-                                  borderRadius: BorderRadius.circular(5),
-                                ),
-                                child: Text(
-                                  (sourceTag ?? song.source).toUpperCase(),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
+                              // Single concise short badge (NEW > DL > LOCAL > Source)
+                              Builder(
+                                builder: (_) {
+                                  final isNew = playerProvider.isNewInSession(song);
+                                  final rawTag = (sourceTag ?? song.source).toLowerCase();
+                                  final isLocal = song.isLocalFile || rawTag == 'local' || rawTag.startsWith('local_');
+
+                                  String tagText = 'YT';
+                                  Color bgColor = Colors.redAccent.withValues(alpha: 0.6);
+
+                                  if (isNew) {
+                                    tagText = 'NEW';
+                                    bgColor = Colors.deepOrange;
+                                  } else if (isDownloaded) {
+                                    tagText = 'DL';
+                                    bgColor = Colors.cyan.shade800;
+                                  } else if (isLocal) {
+                                    tagText = 'LOCAL';
+                                    bgColor = Colors.blue.withValues(alpha: 0.6);
+                                  } else if (rawTag.contains('jiosaavn') || rawTag.contains('saavn')) {
+                                    tagText = 'SAAVN';
+                                    bgColor = const Color(0xFF00D4B2).withValues(alpha: 0.6);
+                                  } else if (rawTag.contains('radio')) {
+                                    tagText = 'RADIO';
+                                    bgColor = Colors.pinkAccent.withValues(alpha: 0.6);
+                                  } else if (rawTag.contains('archive')) {
+                                    tagText = 'ARCHIVE';
+                                    bgColor = Colors.purple.withValues(alpha: 0.6);
+                                  } else if (rawTag.contains('jamendo')) {
+                                    tagText = 'JAM';
+                                    bgColor = Colors.amber.withValues(alpha: 0.6);
+                                  } else if (rawTag.contains('audius')) {
+                                    tagText = 'AUD';
+                                    bgColor = Colors.teal.withValues(alpha: 0.6);
+                                  }
+
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: bgColor,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      tagText,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                              if (isDownloaded) ...[
-                                const SizedBox(width: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.cyan.shade800,
-                                    borderRadius: BorderRadius.circular(5),
-                                  ),
-                                  child: const Text(
-                                    'OFFLINE',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              if (playerProvider.isNewInSession(song)) ...[
-                                const SizedBox(width: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [Colors.deepOrange, Colors.orangeAccent],
-                                    ),
-                                    borderRadius: BorderRadius.circular(5),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.deepOrange.withValues(alpha: 0.4),
-                                        blurRadius: 4,
-                                      )
-                                    ],
-                                  ),
-                                  child: const Text(
-                                    'NEW',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                              ],
                                if (song.isRecovered) ...[
                                 const SizedBox(width: 4),
                                 Container(
@@ -622,32 +615,7 @@ class SongTile extends StatelessWidget {
       },
     );
   }
-  Color _getTagBgColor(String tag) {
-    switch (tag.toLowerCase()) {
-      case 'favorite':
-        return Colors.pink.withValues(alpha: 0.6);
-      case 'downloaded':
-        return Colors.green.withValues(alpha: 0.6);
-      case 'local':
-        return Colors.blue.withValues(alpha: 0.6);
-      case 'archive':
-        return Colors.purple.withValues(alpha: 0.6);
-      case 'jiosaavn':
-        return const Color(0xFF00D4B2).withValues(alpha: 0.6);
-      case 'youtube':
-        return Colors.redAccent.withValues(alpha: 0.6);
-      case 'audius':
-        return Colors.teal.withValues(alpha: 0.6);
-      case 'jamendo':
-        return Colors.amber.withValues(alpha: 0.6);
-      case 'radio':
-        return Colors.pinkAccent.withValues(alpha: 0.6);
-      case 'recent':
-        return Colors.orange.withValues(alpha: 0.6);
-      default:
-        return Colors.grey.withValues(alpha: 0.6);
-    }
-  }
+
 
   Future<Map<String, dynamic>> _getSongFileInfo() async {
     final info = <String, dynamic>{

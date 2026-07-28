@@ -77,6 +77,7 @@ class PlayerProvider extends ChangeNotifier {
     _loadFavorites();
     loadDownloads();
     _loadAlbums();
+    _loadLocalDeviceSongs();
     _initFileIntentListener();
 
     _audioHandler.onQueueNearEnd = () {
@@ -1766,6 +1767,9 @@ class PlayerProvider extends ChangeNotifier {
       // Incremental enrich & cached metadata lookup
       _localDeviceSongs = await LocalMetadataService().enrichSongs(foundSongs);
 
+      // Save scanned local device songs so they persist across app restarts
+      await _saveLocalDeviceSongs();
+
       // Auto-detect folder-based albums in the app's root directory
       await _syncFolderAlbums();
       await verifyAndSyncAllStores();
@@ -1774,6 +1778,45 @@ class PlayerProvider extends ChangeNotifier {
     } finally {
       _isScanningLocal = false;
       notifyListeners();
+    }
+  }
+
+  Future<File> get _localSongsIndexFile async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}${Platform.pathSeparator}local_songs.json');
+  }
+
+  Future<void> _saveLocalDeviceSongs() async {
+    try {
+      final file = await _localSongsIndexFile;
+      final jsonList = _localDeviceSongs.map((s) => s.toJson()).toList();
+      await file.writeAsString(json.encode(jsonList), flush: true);
+    } catch (e) {
+      debugPrint('Error saving local songs index: $e');
+    }
+  }
+
+  Future<void> _loadLocalDeviceSongs() async {
+    try {
+      final file = await _localSongsIndexFile;
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final List<dynamic> jsonList = json.decode(content);
+        final List<Song> loaded = [];
+        for (final item in jsonList) {
+          if (item is Map<String, dynamic>) {
+            final song = Song.fromJson(item);
+            final path = song.filePath ?? song.videoId;
+            if (path.isNotEmpty && File(path).existsSync()) {
+              loaded.add(song);
+            }
+          }
+        }
+        _localDeviceSongs = loaded;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading local songs index: $e');
     }
   }
 
@@ -2014,6 +2057,7 @@ class PlayerProvider extends ChangeNotifier {
   Future<void> deleteSongMemory(Song song) async {
     await _removeSongFromAllStores(song.videoId);
     _localDeviceSongs.removeWhere((s) => s.videoId == song.videoId);
+    await _saveLocalDeviceSongs();
     notifyListeners();
   }
 

@@ -143,6 +143,11 @@ void showSongOptionsSheet(BuildContext context, Song song) {
 
                 final isDownloaded = provider.downloadedSongs
                     .any((s) => s.videoId == song.videoId);
+                final isLocalFile = song.isLocalFile ||
+                    (song.filePath != null && song.filePath!.isNotEmpty && File(song.filePath!).existsSync()) ||
+                    song.videoId.startsWith('/') ||
+                    song.videoId.startsWith('file://') ||
+                    song.videoId.startsWith('content://');
                 final downloadProgress = provider.downloadProgress[song.videoId];
                 final downloadStatus = provider.getDownloadStatus(song.videoId);
                 final isDownloading =
@@ -177,10 +182,25 @@ void showSongOptionsSheet(BuildContext context, Song song) {
                   return _buildOptionTile(
                     icon: Icons.delete_outline_rounded,
                     title: 'Remove Download',
-                    subtitle: 'Delete from local storage',
+                    subtitle: 'Delete from app storage',
                     onTap: () {
                       Navigator.pop(context);
                       provider.deleteDownload(song.videoId);
+                    },
+                  );
+                } else if (isLocalFile) {
+                  return _buildOptionTile(
+                    icon: Icons.folder_special_rounded,
+                    title: 'Local Device Audio',
+                    subtitle: 'Stored locally on your device',
+                    onTap: () {
+                      Navigator.pop(context);
+                      AppToast.show(
+                        context,
+                        'This track is stored locally on your device',
+                        type: ToastType.info,
+                        icon: Icons.folder_rounded,
+                      );
                     },
                   );
                 } else {

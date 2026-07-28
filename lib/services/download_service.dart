@@ -177,6 +177,7 @@ class DownloadTask {
 
     final response = await request.close();
     if (response.statusCode != HttpStatus.ok && response.statusCode != HttpStatus.partialContent) {
+      await response.drain();
       _httpClient!.close();
       throw Exception('Server returned status ${response.statusCode}');
     }
@@ -335,7 +336,7 @@ class DownloadService {
       }
     }
     final dir = await _downloadDir;
-    final exts = ['mp3', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'wav'];
+    final exts = ['mp3', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'wav', 'webm'];
     for (final ext in exts) {
       final candidate = '${dir.path}/$videoId.$ext';
       if (File(candidate).existsSync()) {
@@ -718,7 +719,7 @@ class DownloadService {
           return s.filePath;
         }
         if (_cachedDownloadDirPath != null) {
-          final exts = ['mp3', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'wav'];
+          final exts = ['mp3', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'wav', 'webm'];
           for (final ext in exts) {
             final candidate = '$_cachedDownloadDirPath/$videoId.$ext';
             if (File(candidate).existsSync()) {
@@ -857,35 +858,41 @@ class DownloadService {
     }
   }
 
-  /// Select the best audio stream based on user's quality preference
+  /// Select the best audio stream based on user's quality preference.
+  /// Strongly prefers M4A/AAC streams over WebM/Opus to avoid WebM output
+  /// and enable native cover art embedding.
   AudioOnlyStreamInfo _pickStreamByQuality(StreamManifest manifest, AudioQuality quality) {
     final streams = manifest.audioOnly.toList();
     if (streams.isEmpty) throw Exception('No audio streams available');
 
+    // Separate M4A/AAC streams from WebM/Opus
+    final m4aStreams = streams.where((s) =>
+        s.container.name.toLowerCase() == 'm4a' ||
+        s.audioCodec.toLowerCase().contains('mp4a') ||
+        s.audioCodec.toLowerCase().contains('aac')).toList();
+    final candidates = m4aStreams.isNotEmpty ? m4aStreams : streams;
+
     // Sort by bitrate ascending
-    streams.sort((a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond));
+    candidates.sort((a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond));
 
     switch (quality) {
       case AudioQuality.low:
-        // Pick lowest bitrate (~48-64kbps) — smallest file size
-        return streams.first;
+        return candidates.first;
 
       case AudioQuality.medium:
-        // Pick stream closest to 128kbps — good quality/size balance
         AudioOnlyStreamInfo? best;
         int bestDiff = 999999;
-        for (final s in streams) {
+        for (final s in candidates) {
           final diff = (s.bitrate.bitsPerSecond - 128000).abs();
           if (diff < bestDiff) {
             bestDiff = diff;
             best = s;
           }
         }
-        return best ?? streams[streams.length ~/ 2];
+        return best ?? candidates[candidates.length ~/ 2];
 
       case AudioQuality.high:
-        // Pick highest bitrate — best quality
-        return streams.last;
+        return candidates.last;
     }
   }
 

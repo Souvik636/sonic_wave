@@ -270,6 +270,8 @@ class JioSaavnService {
             return vlink;
           }
         }
+      } else {
+        await response.drain();
       }
     } catch (e) {
       debugPrint('[JioSaavn] official getStreamUrlById failed: $e');

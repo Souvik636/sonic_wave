@@ -42,6 +42,7 @@ class ReleaseAsset {
     return arm64Pattern.hasMatch(lowerName) ||
         lowerName.contains('arm64') ||
         lowerName.contains('v8a') ||
+        lowerName == 'app-release.apk' ||
         lowerName.startsWith('sonicwave') ||
         lowerName.startsWith('sonic_wave') ||
         lowerName.startsWith('sonic-wave');

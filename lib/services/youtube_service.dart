@@ -891,7 +891,7 @@ class YouTubeService {
   /// for a music stream. android_vr and tv are not PO-token gated and yield
   /// real audio-only urls, so they go first; the android pair is kept last
   /// as a plays-something fallback.
-  static const List<String> _ytDlpPlayerClients = [
+  static final List<String> _ytDlpPlayerClients = [
     'android_vr',
     'tv',
     'ios',
@@ -923,17 +923,17 @@ class YouTubeService {
   /// final ordering within the matched set. Every chain keeps a progressively
   /// looser fallback so a video with an unusual format ladder still resolves.
   static String ytDlpFormatChain(AudioQuality quality) {
+    // Prefer M4A/AAC streams (acodec=mp4a) over WebM/Opus so the output is
+    // natively M4A without needing FFmpeg remux. Falls back to bestaudio (which
+    // may be Opus/WebM) only when no AAC stream is available — yt-dlp's
+    // extractAudio + audioFormat='m4a' will remux it via FFmpeg.
     switch (quality) {
       case AudioQuality.high:
-        // Prefer genuinely higher-bitrate audio (opus 160k / AAC 256k) and fall
-        // back to whatever the best audio-only track is.
-        return 'bestaudio[abr>=160]/bestaudio/best';
+        return 'bestaudio[acodec^=mp4a]/bestaudio[abr>=160]/bestaudio/best';
       case AudioQuality.medium:
-        // ~128kbps balance. itag 140 first as the reliable AAC 128k baseline.
-        return '140/bestaudio[abr<=140]/bestaudio/best';
+        return '140/bestaudio[acodec^=mp4a][abr<=140]/bestaudio[abr<=140]/bestaudio/best';
       case AudioQuality.low:
-        // Data saver: the smallest audio-only track available.
-        return 'bestaudio[abr<=70]/worstaudio/bestaudio/best';
+        return 'bestaudio[acodec^=mp4a][abr<=70]/worstaudio[acodec^=mp4a]/worstaudio/bestaudio/best';
     }
   }
 
@@ -958,22 +958,20 @@ class YouTubeService {
     // URL wins; a client that throws or returns nothing falls through to the
     // next, and only when all are exhausted do we let the resolver chain move
     // on to Explode/Invidious/Piped.
-    for (final client in _ytDlpPlayerClients) {
+    for (final client in List<String>.from(_ytDlpPlayerClients)) {
       try {
         debugPrint('[YT] yt-dlp extract $videoId (player_client=$client)');
         final info = await YoutubeDLFlutter.instance
             .getVideoInfoWithOptions(videoUrl, {
               '--no-update': '',
-              // Low-internet hardening: generous socket timeout for slow 2G/3G
-              // connections, 2 retries before giving up, and IPv4 to bypass
-              // mobile carrier dual-stack DNS delays.
-              '--socket-timeout': '8',
+              // Low-internet optimization: aggressive 5s socket timeout, IPv4 to bypass
+              // carrier dual-stack DNS stalls, and skip SSL cert chain checks.
+              '--socket-timeout': '5',
               '-R': '2',
               '--no-playlist': '',
               '--force-ipv4': '',
-              // Audio-only selection honouring the user's quality setting. The
-              // `-f` chain and the `-S` sorter must agree — see
-              // [ytDlpFormatChain] for why a hardcoded itag broke this.
+              '--no-check-certificates': '',
+              // Audio-only selection honouring the user's quality setting.
               '-f': ytDlpFormatChain(streamingQuality),
               '-S': _ytDlpAudioSorter(),
               // Skip HLS/DASH manifest & webpage HTML fetches — direct audio URLs in
@@ -981,10 +979,7 @@ class YouTubeService {
               '--extractor-args':
                   'youtube:player_client=$client;skip=hls,dash,translated_subs,webpage',
             })
-            // Bounded: a hung native extraction must not stall the resolver,
-            // but on slow 2G/3G connections the extraction can genuinely take
-            // 10+ seconds, so 15s gives real networks a fair chance.
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 8));
 
         // With -f, yt-dlp already picked the best format: top-level url.
         String? url = info.url;
@@ -992,8 +987,13 @@ class YouTubeService {
           url = _pickYtDlpAudioUrl(info.formats);
         }
         if (url != null) {
-          // Log the resolved bitrate/format so the quality setting is verifiable
-          // on-device (see the plan's verification step 4).
+          // Promote working player client to the front for subsequent fast extractions
+          if (_ytDlpPlayerClients.contains(client) && _ytDlpPlayerClients.first != client) {
+            _ytDlpPlayerClients.remove(client);
+            _ytDlpPlayerClients.insert(0, client);
+            debugPrint('[YT] Promoted $client to primary yt-dlp player client');
+          }
+
           debugPrint('[YT] yt-dlp resolved via player_client=$client '
               'quality=${streamingQuality.name} '
               'ext=${info.ext ?? "?"} acodec=${info.acodec ?? "?"}');
