@@ -30,6 +30,7 @@ import '../widgets/download_widgets.dart';
 import '../widgets/offline_hub.dart';
 import '../services/updater/github_release_client.dart';
 import '../widgets/updater/update_dialog.dart';
+import '../constants/app_version.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -79,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final shouldCheck = await GitHubReleaseClient.shouldAutoCheck();
       if (!shouldCheck) return;
 
-      const appVersion = '1.0.0+3';
+      final appVersion = AppVersion.current;
       final client = GitHubReleaseClient(currentVersion: appVersion);
       final release = await client.checkForUpdate();
 

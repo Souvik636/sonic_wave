@@ -11,6 +11,7 @@ import '../services/storage_location_service.dart';
 import '../services/updater/github_release_client.dart';
 import '../widgets/updater/update_dialog.dart';
 import '../widgets/app_toast.dart';
+import '../constants/app_version.dart';
 import 'sound_studio_screen.dart';
 
 /// Premium settings screen: staggered card entrances, accent-tinted background,
@@ -1582,9 +1583,7 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildAndroidAutoUpdaterCard(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    // Read version from pubspec (1.0.0+3). The version name is the part before
-    // '+', the build number is after it. Both are baked in at compile time.
-    const appVersion = '1.0.0+3';
+    final appVersion = AppVersion.current;
 
     return GlassmorphicCard(
       child: Padding(
@@ -1615,9 +1614,9 @@ class SettingsScreen extends StatelessWidget {
                             ),
                       ),
                       const SizedBox(height: 2),
-                      const Text(
+                      Text(
                         'SonicWave v$appVersion (Android arm64-v8a Release)',
-                        style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
                       ),
                     ],
                   ),
