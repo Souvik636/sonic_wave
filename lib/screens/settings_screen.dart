@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../providers/settings_provider.dart';
 import '../providers/player_provider.dart';
 import '../theme/app_colors.dart';
@@ -11,6 +10,7 @@ import '../services/storage_location_service.dart';
 import '../services/updater/github_release_client.dart';
 import '../widgets/updater/update_dialog.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/storage_management_card.dart';
 import '../constants/app_version.dart';
 import 'sound_studio_screen.dart';
 
@@ -1214,134 +1214,7 @@ class SettingsScreen extends StatelessWidget {
   // ══════════════════════════════════════════════════════════════════════
 
   Widget _buildStorageCard(BuildContext context) {
-    return GlassmorphicCard(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.cleaning_services_rounded, color: AppColors.textSecondary, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Clear Image Cache',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Removes all cached cover art images from disk',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              OutlinedButton(
-                onPressed: () async {
-                  imageCache.clear();
-                  imageCache.clearLiveImages();
-                  try {
-                    await DefaultCacheManager().emptyCache();
-                  } catch (e) {
-                    debugPrint('Error clearing disk cache: $e');
-                  }
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Cover art cache cleared successfully'),
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                },
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-                child: Text(
-                  'Clear',
-                  style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 24, color: AppColors.divider),
-          Row(
-            children: [
-              const Icon(Icons.history_rounded, color: AppColors.textSecondary, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Clear History',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Resets recently played history in your library',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              OutlinedButton(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (dialogCtx) => AlertDialog(
-                      backgroundColor: AppColors.surface,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      title: const Text('Wipe Playback History?', style: TextStyle(color: Colors.white)),
-                      content: const Text(
-                        'This will clear all recently played tracks from your Library screen. This cannot be undone.',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogCtx),
-                          child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-                        ),
-                        TextButton(
-                          onPressed: () async {
-                            await context.read<PlayerProvider>().clearHistory();
-                            if (context.mounted) {
-                              Navigator.pop(dialogCtx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: const Text('Playback history cleared successfully'),
-                                  backgroundColor: Theme.of(context).colorScheme.primary,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
-                          },
-                          child: const Text('Confirm', style: TextStyle(color: Colors.redAccent)),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.redAccent, width: 1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-                child: const Text(
-                  'Wipe',
-                  style: TextStyle(color: Colors.redAccent, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+    return const StorageManagementCard();
   }
 
   Widget _buildStorageLocationCard(BuildContext context) {
