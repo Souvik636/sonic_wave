@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/player_provider.dart';
+import '../providers/settings_provider.dart';
+import '../services/download_service.dart';
 import '../services/storage_analyzer.dart';
+import '../services/storage_location_service.dart';
+import '../services/stream_cache_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/glassmorphic_card.dart';
 
@@ -22,6 +26,8 @@ class _StorageManagementCardState extends State<StorageManagementCard>
   StorageBreakdown? _breakdown;
   bool _loading = true;
   String? _clearingCategory; // null = idle, 'all' | 'stream' | 'image' | 'cover' | 'history'
+  bool _scanning = false;
+  String? _scanResult;
 
   late final AnimationController _ringController;
   late final Animation<double> _ringAnimation;
@@ -234,8 +240,25 @@ class _StorageManagementCardState extends State<StorageManagementCard>
             const Divider(height: 1, color: AppColors.divider),
             const SizedBox(height: 16),
 
-            // ── Clear All ──────────────────────────────────────────
+            // ── Clear All ──────────────────────────────────────────────────
             _buildClearAllButton(),
+
+            const SizedBox(height: 16),
+            const Divider(height: 1, color: AppColors.divider),
+            const SizedBox(height: 16),
+
+            // ── Stream Cache Limit ────────────────────────────────────────
+            _buildStreamCacheLimitPicker(context),
+
+            const SizedBox(height: 16),
+            const Divider(height: 1, color: AppColors.divider),
+            const SizedBox(height: 16),
+
+            // ── Scan & Repair ────────────────────────────────────────────
+            _buildScanRepairButton(context),
+
+            // ── Fallback Location Warning ───────────────────────────────
+            _buildFallbackWarning(),
           ],
         ],
       ),
@@ -526,6 +549,300 @@ class _StorageManagementCardState extends State<StorageManagementCard>
           ),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  // ── Stream Cache Limit Picker ─────────────────────────────────────
+
+  Widget _buildStreamCacheLimitPicker(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final currentMB = settings.streamCacheMaxMB;
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.speed_rounded, color: _colStream, size: 18),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Stream Cache Limit',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Text(
+              '$currentMB MB',
+              style: TextStyle(
+                color: _colStream,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Streamed songs are cached for offline replay. Lower limits free space sooner.',
+          style: TextStyle(color: AppColors.textTertiary, fontSize: 10),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: StreamCacheService.limitOptionsMB.map((mb) {
+            final isSelected = mb == currentMB;
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: mb != StreamCacheService.limitOptionsMB.last ? 6 : 0,
+                ),
+                child: GestureDetector(
+                  onTap: () => settings.setStreamCacheMaxMB(mb),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? primary.withValues(alpha: 0.15)
+                          : AppColors.surfaceVariant.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected
+                            ? primary.withValues(alpha: 0.5)
+                            : AppColors.glassBorder.withValues(alpha: 0.1),
+                        width: isSelected ? 1.5 : 0.5,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        mb >= 1024 ? '${mb ~/ 1024} GB' : '$mb MB',
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : AppColors.textSecondary,
+                          fontSize: 11,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── Scan & Repair Button ─────────────────────────────────────────
+
+  Widget _buildScanRepairButton(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.healing_rounded, color: primary, size: 18),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Scan & Repair',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Finds broken downloads, orphaned files, and fixes container mismatches',
+                    style: TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 32,
+              child: OutlinedButton.icon(
+                onPressed: _scanning ? null : _runScanRepair,
+                icon: _scanning
+                    ? SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: primary,
+                        ),
+                      )
+                    : Icon(Icons.search_rounded, size: 14, color: primary),
+                label: Text(
+                  _scanning ? 'Scanning...' : 'Scan',
+                  style: TextStyle(
+                    color: _scanning ? AppColors.textTertiary : primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: Size.zero,
+                  side: BorderSide(color: primary.withValues(alpha: 0.4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_scanResult != null) ...[
+          const SizedBox(height: 10),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _scanResult!.contains('✓')
+                  ? const Color(0xFF00E676).withValues(alpha: 0.08)
+                  : const Color(0xFFFFB74D).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _scanResult!.contains('✓')
+                    ? const Color(0xFF00E676).withValues(alpha: 0.2)
+                    : const Color(0xFFFFB74D).withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _scanResult!.contains('✓')
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.build_circle_rounded,
+                  size: 16,
+                  color: _scanResult!.contains('✓')
+                      ? const Color(0xFF00E676)
+                      : const Color(0xFFFFB74D),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _scanResult!,
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _runScanRepair() async {
+    setState(() {
+      _scanning = true;
+      _scanResult = null;
+    });
+
+    int repaired = 0;
+    int pruned = 0;
+
+    try {
+      // 1. Repair container mismatches (e.g., .mp3 file that's really .m4a)
+      await DownloadService().repairCorruptedDownloads();
+
+      // 2. Verify integrity & prune ghost entries
+      final hadGhosts = await DownloadService().verifyStorageIntegrity();
+      if (hadGhosts) pruned++;
+
+      // 3. Full sync through player provider
+      if (mounted) {
+        await context.read<PlayerProvider>().verifyAndSyncAllStores();
+      }
+    } catch (e) {
+      debugPrint('[StorageCard] scan & repair failed: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _scanning = false;
+        if (pruned > 0 || repaired > 0) {
+          _scanResult = '🔧 Fixed ${repaired + pruned} issue(s). Library synced.';
+        } else {
+          _scanResult = '✓ Everything looks good. No issues found.';
+        }
+      });
+      _analyze(); // refresh sizes after repairs
+    }
+  }
+
+  // ── Fallback Location Warning ─────────────────────────────────────
+
+  Widget _buildFallbackWarning() {
+    final storage = StorageLocationService();
+    if (!storage.isUsingFallbackLocation) return const SizedBox.shrink();
+
+    final reason = storage.fallbackReason ?? 'Using fallback storage location.';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFB74D).withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: const Color(0xFFFFB74D).withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              size: 18,
+              color: Color(0xFFFFB74D),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Storage Fallback Active',
+                    style: TextStyle(
+                      color: Color(0xFFFFB74D),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    reason,
+                    style: const TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// On-disk cache for audio that has been streamed.
 ///
@@ -24,10 +25,41 @@ class StreamCacheService {
   factory StreamCacheService() => _instance;
   StreamCacheService._internal();
 
-  /// Ceiling on the cache. Roughly 100–150 songs at typical streamed bitrates —
-  /// enough to cover the tracks someone actually replays, small enough to be an
-  /// unremarkable line in the app's storage figure.
-  static const int maxBytes = 512 * 1024 * 1024;
+  static const String _prefKey = 'stream_cache_max_mb';
+
+  /// Default ceiling on the cache (512 MB). Roughly 100–150 songs at typical
+  /// streamed bitrates — enough to cover the tracks someone actually replays,
+  /// small enough to be an unremarkable line in the app's storage figure.
+  static const int defaultMaxMB = 512;
+
+  /// Available options the user can pick from.
+  static const List<int> limitOptionsMB = [128, 256, 512, 1024];
+
+  /// Active ceiling in bytes. Updated by [setMaxMB].
+  int _maxBytes = defaultMaxMB * 1024 * 1024;
+  int get maxBytes => _maxBytes;
+
+  /// Current limit in MB (for UI display).
+  int get maxMB => _maxBytes ~/ (1024 * 1024);
+
+  /// Load the persisted limit. Call once at app start.
+  Future<void> initialize() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final mb = prefs.getInt(_prefKey) ?? defaultMaxMB;
+      _maxBytes = mb * 1024 * 1024;
+    } catch (_) {}
+  }
+
+  /// Update the ceiling and persist it. Triggers a trim if needed.
+  Future<void> setMaxMB(int mb) async {
+    _maxBytes = mb * 1024 * 1024;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_prefKey, mb);
+    } catch (_) {}
+    unawaited(trim());
+  }
 
   /// Only trim once this much has been written since the last sweep. Listing
   /// and stat-ing the directory on every song would be pointless work for a
@@ -121,11 +153,11 @@ class StreamCacheService {
           }
         } catch (_) {}
       }
-      if (total <= maxBytes) return;
+      if (total <= _maxBytes) return;
 
       entries.sort((a, b) => a.modified.compareTo(b.modified));
       for (final entry in entries) {
-        if (total <= maxBytes) break;
+        if (total <= _maxBytes) break;
         try {
           await entry.file.delete();
           total -= entry.size;

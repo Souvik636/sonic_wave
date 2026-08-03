@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/storage_location_service.dart';
+import '../services/stream_cache_service.dart';
 
 enum AudioQuality {
   high,
@@ -99,6 +100,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   StorageType get storageType => _storageType;
   StorageLocationService get storageService => _storageService;
+  int get streamCacheMaxMB => StreamCacheService().maxMB;
 
   Color get accentColor {
     return accentColorOf(_themeAccent);
@@ -297,6 +299,9 @@ class SettingsProvider extends ChangeNotifier {
       await _storageService.initialize();
       _storageType = _storageService.storageType;
 
+      // Initialize stream cache service (loads persisted size limit)
+      await StreamCacheService().initialize();
+
       _isInitialized = true;
       notifyListeners();
     } catch (e) {
@@ -437,6 +442,12 @@ class SettingsProvider extends ChangeNotifier {
   /// Get available storage volumes for the picker UI
   Future<List<StorageVolume>> getAvailableStorageVolumes() async {
     return _storageService.getAvailableStorageVolumes();
+  }
+
+  /// Set the stream cache size limit (in MB) and persist it.
+  Future<void> setStreamCacheMaxMB(int mb) async {
+    await StreamCacheService().setMaxMB(mb);
+    notifyListeners();
   }
 
   void _startConnectionTracker() {
