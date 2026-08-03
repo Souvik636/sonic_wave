@@ -5,6 +5,7 @@ import 'dart:isolate';
 
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/song.dart';
@@ -114,6 +115,7 @@ class LocalMetadataService {
 
     final result = List<Song>.of(songs);
     final toParse = <int, String>{}; // result index -> file path
+    final cacheNeedNative = <int, String>{}; // result index -> path
 
     for (int i = 0; i < result.length; i++) {
       final s = result[i];
@@ -132,9 +134,53 @@ class LocalMetadataService {
           hit.sizeBytes == stat.size &&
           hit.mtimeMs == stat.modified.millisecondsSinceEpoch) {
         result[i] = _apply(s, hit);
+        // Check if the cached result still has garbled CJK
+        final applied = result[i];
+        if (EncodingSanitizer.hasMojibakeCjk(applied.title) ||
+            (applied.artist != 'Local Audio' && EncodingSanitizer.hasMojibakeCjk(applied.artist)) ||
+            (applied.thumbnailUrl.isEmpty && applied.highResThumbnailUrl.isEmpty)) {
+          cacheNeedNative[i] = path;
+        }
       } else {
         toParse[i] = path;
       }
+    }
+
+    // Apply native fallback for cache hits that still have garbled data
+    if (cacheNeedNative.isNotEmpty) {
+      for (final entry in cacheNeedNative.entries) {
+        final idx = entry.key;
+        final path = entry.value;
+        final song = result[idx];
+        try {
+          final nativeMeta = await _readNativeMetadata(path);
+          if (nativeMeta != null) {
+            final nTitle = nativeMeta['title'] as String?;
+            final nArtist = nativeMeta['artist'] as String?;
+            final nDurMs = (nativeMeta['durationMs'] as num?)?.toInt() ?? 0;
+            final nArtPath = nativeMeta['artPath'] as String?;
+
+            final updatedMeta = _CachedMeta(
+              title: nTitle ?? cache[path]?.title,
+              artist: nArtist ?? cache[path]?.artist,
+              durationMs: nDurMs > 0 ? nDurMs : (cache[path]?.durationMs ?? 0),
+              artPath: nArtPath ?? cache[path]?.artPath,
+              sizeBytes: cache[path]?.sizeBytes ?? 0,
+              mtimeMs: cache[path]?.mtimeMs ?? 0,
+            );
+            cache[path] = updatedMeta;
+            result[idx] = _applyNative(song, updatedMeta,
+                titleGarbled: EncodingSanitizer.hasMojibakeCjk(song.title),
+                artistGarbled: song.artist != 'Local Audio' && EncodingSanitizer.hasMojibakeCjk(song.artist),
+                missingArt: song.thumbnailUrl.isEmpty && song.highResThumbnailUrl.isEmpty);
+            _dirty = true;
+            debugPrint('[LocalMeta] Native fallback (cache) applied for: $path');
+          }
+        } catch (e) {
+          debugPrint('[LocalMeta] Native fallback (cache) failed for $path: $e');
+        }
+      }
+      if (_dirty) _scheduleSave();
     }
 
     if (toParse.isEmpty) return result;
@@ -155,6 +201,51 @@ class LocalMetadataService {
       cache[paths[j]] = meta;
       result[indices[j]] = _apply(result[indices[j]], meta);
     }
+
+    // Second pass: for songs whose Dart-parsed metadata is still garbled CJK
+    // mojibake, fall back to Android's native MediaMetadataRetriever via
+    // MethodChannel. This is the same API that other Android music players
+    // use, which is why they display correct titles.
+    for (int j = 0; j < parsed.length && j < indices.length; j++) {
+      final idx = indices[j];
+      final song = result[idx];
+      final titleGarbled = EncodingSanitizer.hasMojibakeCjk(song.title);
+      final artistGarbled = song.artist != 'Local Audio' &&
+          EncodingSanitizer.hasMojibakeCjk(song.artist);
+      final missingArt = song.thumbnailUrl.isEmpty &&
+          song.highResThumbnailUrl.isEmpty;
+
+      if (titleGarbled || artistGarbled || missingArt) {
+        try {
+          final nativeMeta = await _readNativeMetadata(paths[j]);
+          if (nativeMeta != null) {
+            final nTitle = nativeMeta['title'] as String?;
+            final nArtist = nativeMeta['artist'] as String?;
+            final nDurMs = (nativeMeta['durationMs'] as num?)?.toInt() ?? 0;
+            final nArtPath = nativeMeta['artPath'] as String?;
+
+            // Update cache with native results
+            final updatedMeta = _CachedMeta(
+              title: nTitle ?? cache[paths[j]]?.title,
+              artist: nArtist ?? cache[paths[j]]?.artist,
+              durationMs: nDurMs > 0 ? nDurMs : (cache[paths[j]]?.durationMs ?? 0),
+              artPath: nArtPath ?? cache[paths[j]]?.artPath,
+              sizeBytes: cache[paths[j]]?.sizeBytes ?? 0,
+              mtimeMs: cache[paths[j]]?.mtimeMs ?? 0,
+            );
+            cache[paths[j]] = updatedMeta;
+            result[idx] = _applyNative(result[idx], updatedMeta,
+                titleGarbled: titleGarbled,
+                artistGarbled: artistGarbled,
+                missingArt: missingArt);
+            debugPrint('[LocalMeta] Native fallback applied for: ${paths[j]}');
+          }
+        } catch (e) {
+          debugPrint('[LocalMeta] Native fallback failed for ${paths[j]}: $e');
+        }
+      }
+    }
+
     _scheduleSave();
     return result;
   }
@@ -179,6 +270,47 @@ class LocalMetadataService {
       thumbnailUrl: hasArt ? meta.artPath! : song.thumbnailUrl,
       highResThumbnailUrl: hasArt ? meta.artPath! : song.highResThumbnailUrl,
     );
+  }
+
+  /// Apply native metadata selectively — only override fields that were
+  /// garbled or missing from the Dart parser.
+  Song _applyNative(Song song, _CachedMeta meta, {
+    required bool titleGarbled,
+    required bool artistGarbled,
+    required bool missingArt,
+  }) {
+    final hasNativeArt = meta.artPath != null &&
+        meta.artPath!.isNotEmpty &&
+        File(meta.artPath!).existsSync();
+
+    return song.copyWith(
+      title: (titleGarbled && meta.title != null && meta.title!.trim().isNotEmpty)
+          ? meta.title!.trim()
+          : song.title,
+      artist: (artistGarbled && meta.artist != null && meta.artist!.trim().isNotEmpty)
+          ? meta.artist!.trim()
+          : song.artist,
+      duration: meta.durationMs > 0
+          ? Duration(milliseconds: meta.durationMs)
+          : song.duration,
+      thumbnailUrl: (missingArt && hasNativeArt) ? meta.artPath! : song.thumbnailUrl,
+      highResThumbnailUrl: (missingArt && hasNativeArt) ? meta.artPath! : song.highResThumbnailUrl,
+    );
+  }
+
+  /// Call Android's native MediaMetadataRetriever via MethodChannel.
+  /// Returns null on non-Android platforms or if the call fails.
+  static Future<Map<String, dynamic>?> _readNativeMetadata(String path) async {
+    try {
+      if (!Platform.isAndroid) return null;
+      const channel = MethodChannel('com.sonicwave.sonic_wave/media');
+      final result = await channel.invokeMethod<Map>('readNativeMetadata', {'path': path});
+      if (result == null) return null;
+      return Map<String, dynamic>.from(result);
+    } catch (e) {
+      debugPrint('[LocalMeta] Native metadata call failed: $e');
+      return null;
+    }
   }
 
   /// Runs inside a background isolate (also used inline as fallback).

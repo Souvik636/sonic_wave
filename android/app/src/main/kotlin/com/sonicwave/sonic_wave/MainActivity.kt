@@ -143,11 +143,6 @@ class MainActivity : AudioServiceActivity() {
                         result.success(0)
                         return@setMethodCallHandler
                     }
-                    // The scanner calls back once per path, on a binder thread
-                    // and in no particular order. Reply after the last one so
-                    // the Dart side knows the database is really current — and
-                    // guard the reply, since a MethodChannel result may only be
-                    // submitted once.
                     val remaining = AtomicInteger(paths.size)
                     val replied = AtomicBoolean(false)
                     MediaScannerConnection.scanFile(applicationContext, paths, null) { _, _ ->
@@ -155,6 +150,61 @@ class MainActivity : AudioServiceActivity() {
                             runOnUiThread { result.success(paths.size) }
                         }
                     }
+                }
+                // Native metadata reader fallback using Android's
+                // MediaMetadataRetriever, which correctly handles all ID3v2
+                // text encoding variants (Latin-1, UTF-16 LE/BE with BOM,
+                // UTF-8). This is what other Android players use, which is
+                // why they display correct titles while the Dart-only parser
+                // can produce CJK mojibake from mis-encoded tags.
+                "readNativeMetadata" -> {
+                    val filePath = call.argument<String>("path")
+                    if (filePath == null) {
+                        result.success(null)
+                        return@setMethodCallHandler
+                    }
+                    Thread {
+                        val meta: HashMap<String, Any?>? = try {
+                            val retriever = android.media.MediaMetadataRetriever()
+                            retriever.setDataSource(filePath)
+                            val title = retriever.extractMetadata(
+                                android.media.MediaMetadataRetriever.METADATA_KEY_TITLE
+                            )
+                            val artist = retriever.extractMetadata(
+                                android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST
+                            )
+                            val album = retriever.extractMetadata(
+                                android.media.MediaMetadataRetriever.METADATA_KEY_ALBUM
+                            )
+                            val durationStr = retriever.extractMetadata(
+                                android.media.MediaMetadataRetriever.METADATA_KEY_DURATION
+                            )
+                            val art = retriever.embeddedPicture
+                            retriever.release()
+
+                            // Write embedded art to a temp file if present
+                            var artPath: String? = null
+                            if (art != null && art.isNotEmpty()) {
+                                val hash = filePath.hashCode().toUInt().toString(16)
+                                val artFile = File(cacheDir, "native_art_${hash}.jpg")
+                                if (!artFile.exists() || artFile.length() != art.size.toLong()) {
+                                    artFile.writeBytes(art)
+                                }
+                                artPath = artFile.absolutePath
+                            }
+
+                            hashMapOf(
+                                "title" to title,
+                                "artist" to artist,
+                                "album" to album,
+                                "durationMs" to (durationStr?.toLongOrNull() ?: 0L),
+                                "artPath" to artPath,
+                            )
+                        } catch (e: Exception) {
+                            null
+                        }
+                        runOnUiThread { result.success(meta) }
+                    }.start()
                 }
                 else -> result.notImplemented()
             }
