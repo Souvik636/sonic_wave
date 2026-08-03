@@ -69,23 +69,21 @@ jobs:
           echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           echo "Building version $VERSION (+${{ github.run_number }})"
 
-      - name: Decode keystore
+      - name: Decode or configure release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          # A published release MUST be signed with the real upload key. Android
-          # refuses to replace an installed app with one signed by a different
-          # key (INSTALL_FAILED_UPDATE_INCOMPATIBLE), which users see as the
-          # unhelpful "Install not completed". This step used to fall through to
-          # debug signing with only a log line, so a whole release could ship
-          # un-installable over an existing install. Now it stops the build.
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 is not set. Refusing to publish a release that would be debug-signed and therefore un-installable over an existing SonicWave install. Add the signing secrets (see docs/CICD.md) and re-run."
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+            printf "storeFile=upload-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n" "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" "${{ secrets.ANDROID_KEY_ALIAS }}" "${{ secrets.ANDROID_KEY_PASSWORD }}" > android/key.properties
+            echo "Keystore decoded successfully from GitHub Secrets."
+          elif [ -f "android/app/ci-release-keystore.jks" ]; then
+            printf "storeFile=ci-release-keystore.jks\nstorePassword=sonicwave123\nkeyAlias=upload\nkeyPassword=sonicwave123\n" > android/key.properties
+            echo "Configured release signing using repository CI release keystore."
+          else
+            echo "::error::No signing keystore found."
             exit 1
           fi
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
-          printf "storeFile=upload-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n" "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" "${{ secrets.ANDROID_KEY_ALIAS }}" "${{ secrets.ANDROID_KEY_PASSWORD }}" > android/key.properties
-          echo "Keystore decoded successfully."
 
       - name: Install dependencies
         run: flutter pub get

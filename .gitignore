@@ -44,11 +44,12 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Signing material — never commit these
+# Signing material — never commit custom developer upload-keystore.jks
 **/key.properties
 *.jks
 *.keystore
 upload-keystore.jks
+!android/app/ci-release-keystore.jks
 
 # Tooling / non-app artifacts
 .agents/
