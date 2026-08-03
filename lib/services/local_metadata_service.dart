@@ -167,10 +167,10 @@ class LocalMetadataService {
     final cleanArtist = meta.artist != null ? EncodingSanitizer.sanitize(meta.artist!) : null;
 
     return song.copyWith(
-      title: (cleanTitle != null && cleanTitle.trim().isNotEmpty)
+      title: (cleanTitle != null && cleanTitle.trim().isNotEmpty && !EncodingSanitizer.hasMojibakeCjk(cleanTitle))
           ? cleanTitle.trim()
           : song.title,
-      artist: (cleanArtist != null && cleanArtist.trim().isNotEmpty)
+      artist: (cleanArtist != null && cleanArtist.trim().isNotEmpty && !EncodingSanitizer.hasMojibakeCjk(cleanArtist))
           ? cleanArtist.trim()
           : song.artist,
       duration: meta.durationMs > 0

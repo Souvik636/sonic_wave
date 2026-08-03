@@ -2089,12 +2089,23 @@ class PlayerProvider extends ChangeNotifier {
           final supportedExts = {'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac', 'mka', 'amr', 'm4b', 'mpeg', 'mp2'};
           if (supportedExts.contains(ext)) {
             final filename = entity.uri.pathSegments.last;
-            final nameWithoutExt = filename.contains('.')
+            var nameWithoutExt = filename.contains('.')
                 ? filename.substring(0, filename.lastIndexOf('.'))
                 : filename;
+
+            // Clean common downloader suffixes: (MP3_160K), (MP3_320K), _160k, etc.
+            nameWithoutExt = nameWithoutExt
+                .replaceAll(RegExp(r'\([mM][pP]3[_\s]*\d+[kK]?\)'), '')
+                .replaceAll(RegExp(r'_\d+[kK]$'), '')
+                .trim();
+
             String title = nameWithoutExt;
             String artist = 'Local Audio';
-            if (nameWithoutExt.contains('-')) {
+            if (nameWithoutExt.contains(' - ')) {
+              final parts = nameWithoutExt.split(' - ');
+              artist = parts[0].trim();
+              title = parts.sublist(1).join(' - ').trim();
+            } else if (nameWithoutExt.contains('-')) {
               final parts = nameWithoutExt.split('-');
               artist = parts[0].trim();
               title = parts.sublist(1).join('-').trim();
