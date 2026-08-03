@@ -63,13 +63,6 @@ class EncodingSanitizer {
       }
     }
 
-    // If the input is still garbled CJK mojibake after all repair attempts,
-    // return an empty string to force caller to fall back to clean filename.
-    if (hasMojibakeCjk(trimmed)) {
-      debugPrint('[EncodingSanitizer] Discarding unrepairable CJK mojibake tag: "$trimmed"');
-      return '';
-    }
-
     return trimmed;
   }
 
