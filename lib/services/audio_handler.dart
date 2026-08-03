@@ -8,6 +8,7 @@ import '../models/song.dart';
 import '../providers/settings_provider.dart';
 import 'youtube_service.dart';
 import 'download_service.dart';
+import 'stream_cache_service.dart';
 import 'stream_resolver_service.dart';
 
 class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHandler {
@@ -23,6 +24,31 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
   // Generation counter to cancel stale play requests
   int _playGeneration = 0;
+
+  /// Serializes every mutation of [_player] in the play path.
+  ///
+  /// The generation counter alone is NOT enough: it is only read *between*
+  /// awaits, and `setAudioSource` is a multi-second network probe. Tapping song
+  /// B while song A sat inside that await left two calls mutating the same
+  /// ExoPlayer instance, and whichever finished LAST won — so the screen and
+  /// the notification showed B while A was audible. Chaining the operations
+  /// means B waits for A's call to land, then the generation re-check inside
+  /// [_withPlayerLock] discards A's result before it can be heard.
+  Future<void> _playerOp = Future<void>.value();
+
+  /// Run [body] with exclusive access to [_player], skipping it entirely if a
+  /// newer play request arrived while this one was queued.
+  Future<void> _withPlayerLock(int generation, Future<void> Function() body) {
+    final run = _playerOp.then((_) async {
+      if (_playGeneration != generation) return;
+      await body();
+    });
+    // Swallow errors on the chain itself so one failed load can't poison every
+    // subsequent operation; the awaiting caller still sees the exception.
+    _playerOp = run.catchError((_) {});
+    return run;
+  }
+
   Timer? _prefetchTimer;
 
   /// Sleep-timer "end of track": when true, playback stops after the current
@@ -405,15 +431,18 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
           duration: song.duration,
         );
 
-        if (localPath.startsWith('content://') || localPath.startsWith('file://')) {
-          await _player.setAudioSource(
-            AudioSource.uri(Uri.parse(localPath), tag: mediaItem),
-          );
-        } else {
-          await _player.setAudioSource(
-            AudioSource.file(localPath, tag: mediaItem),
-          );
-        }
+        await _withPlayerLock(thisGeneration, () async {
+          if (localPath!.startsWith('content://') ||
+              localPath.startsWith('file://')) {
+            await _player.setAudioSource(
+              AudioSource.uri(Uri.parse(localPath), tag: mediaItem),
+            );
+          } else {
+            await _player.setAudioSource(
+              AudioSource.file(localPath, tag: mediaItem),
+            );
+          }
+        });
       } else {
         // Online stream, or a late local lookup when the index isn't ready yet.
         //
@@ -434,23 +463,25 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         }
 
         if (resolvedLocalPath != null) {
-          await _player.setAudioSource(
-            AudioSource.file(
-              resolvedLocalPath,
-              tag: MediaItem(
-                id: song.videoId,
-                album: song.albumFolderName ?? 'Downloads',
-                title: song.title,
-                artist: song.artist,
-                artUri: song.thumbnailUrl.isNotEmpty
-                    ? (song.thumbnailUrl.startsWith('http')
-                        ? Uri.parse(song.thumbnailUrl)
-                        : Uri.file(song.thumbnailUrl))
-                    : null,
-                duration: song.duration,
+          await _withPlayerLock(thisGeneration, () async {
+            await _player.setAudioSource(
+              AudioSource.file(
+                resolvedLocalPath!,
+                tag: MediaItem(
+                  id: song.videoId,
+                  album: song.albumFolderName ?? 'Downloads',
+                  title: song.title,
+                  artist: song.artist,
+                  artUri: song.thumbnailUrl.isNotEmpty
+                      ? (song.thumbnailUrl.startsWith('http')
+                          ? Uri.parse(song.thumbnailUrl)
+                          : Uri.file(song.thumbnailUrl))
+                      : null,
+                  duration: song.duration,
+                ),
               ),
-            ),
-          );
+            );
+          });
         } else {
           await _resolveAndLoadStream(song, thisGeneration);
         }
@@ -459,9 +490,70 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       // Final check before starting playback
       if (_playGeneration != thisGeneration) return;
 
-      // Re-apply speed and pitch (setting new source resets them in just_audio)
-      await _player.setSpeed(song.speed);
-      await _player.setPitch(1.0 + (song.pitch / 12.0));
+      // Everything from here is ordered around ONE goal: make sound come out as
+      // soon as ExoPlayer has the first bytes, and do the rest behind it.
+      // AndroidLoadControl already releases playback at 600ms buffered and keeps
+      // filling to 120s in the background, so the only thing that can delay
+      // first audio now is work we insist on awaiting before play().
+
+      // Speed/pitch DO have to precede play() — starting at the wrong rate and
+      // correcting is audible. But they only matter when the song actually
+      // carries a non-default value, which is the rare case, so the normal path
+      // pays nothing. (just_audio resets both when the source changes, hence the
+      // re-apply.)
+      if (song.speed != 1.0) {
+        await _player.setSpeed(song.speed);
+      }
+      if (song.pitch != 0) {
+        await _player.setPitch(1.0 + (song.pitch / 12.0));
+      }
+
+      // Session restore: resume where the user left off (one-shot). Also before
+      // play(), otherwise playback starts at 0:00 and audibly jumps.
+      if (_pendingRestoreSongId == song.videoId &&
+          _pendingRestorePosition != null) {
+        final restorePos = _pendingRestorePosition!;
+        _pendingRestoreSongId = null;
+        _pendingRestorePosition = null;
+        try {
+          await _player.seek(restorePos);
+        } catch (_) {}
+      }
+
+      // Re-check: the awaits above can each yield to a newer request.
+      if (_playGeneration != thisGeneration) return;
+
+      _nearEndPrefetchedIndex = -1;
+      _player.play();
+
+      // The equalizer is a pure effect on an already-running stream, so it does
+      // NOT gate first audio — applying it used to cost several awaits ahead of
+      // play(). Unawaited, it settles a frame or two in.
+      unawaited(_applyPlaybackEffects(song, thisGeneration));
+
+      // Prefetch next song's stream URL in background for instant skip
+      _prefetchNext();
+    } catch (e) {
+      // Only touch the player if this request is still the active one. A
+      // superseded request that fails must stay silent: it used to call stop()
+      // unconditionally, so song A failing to resolve tore down song B — the
+      // one the user had actually tapped and which was already playing.
+      if (_playGeneration != thisGeneration) return;
+
+      // Clean player reset on failure so player engine doesn't freeze or lock up
+      try {
+        await _player.stop();
+      } catch (_) {}
+      throw Exception(_friendlyErrorMessage(e));
+    }
+  }
+
+  /// Apply the equalizer / isolation-mode effect for [song] once playback has
+  /// already started. Runs off the critical path — a wrong EQ curve for a
+  /// fraction of a second is invisible next to delaying the first note.
+  Future<void> _applyPlaybackEffects(Song song, int thisGeneration) async {
+    if (_playGeneration != thisGeneration) return;
+    try {
       if (song.isolationMode == 'vocal') {
         _isKaraokeMode = false;
         await _applyCustomEqualizerGains(const [-12.0, -12.0, 12.0, 12.0, -12.0]);
@@ -475,41 +567,23 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         _isKaraokeMode = false;
         await _applyEqualizerPreset(_lastAppliedEnhancerMode);
       }
-
-      // Session restore: resume where the user left off (one-shot).
-      if (_pendingRestoreSongId == song.videoId &&
-          _pendingRestorePosition != null) {
-        final restorePos = _pendingRestorePosition!;
-        _pendingRestoreSongId = null;
-        _pendingRestorePosition = null;
-        try {
-          await _player.seek(restorePos);
-        } catch (_) {}
-      }
-
-      _nearEndPrefetchedIndex = -1;
-      _player.play();
-
-      // Prefetch next song's stream URL in background for instant skip
-      _prefetchNext();
     } catch (e) {
-      // Clean player reset on failure so player engine doesn't freeze or lock up
-      try {
-        await _player.stop();
-      } catch (_) {}
-      // Only throw if this is still the active request
-      if (_playGeneration == thisGeneration) {
-        throw Exception(_friendlyErrorMessage(e));
-      }
+      debugPrint('[AudioHandler] Failed to apply playback effects: $e');
     }
   }
 
   final Map<String, _PrefetchedStream> _prefetchedStreams = {};
 
-  /// How long a pre-resolved stream stays usable. Kept below the 5-minute
-  /// expiry YouTube puts on its stream URLs so we never hand ExoPlayer a URL
-  /// that has already died.
-  static const Duration _prefetchTtl = Duration(minutes: 4);
+  /// How long a pre-resolved stream stays usable.
+  ///
+  /// This tracked an assumed 5-minute expiry on YouTube stream URLs, which is
+  /// not what they actually carry — the signed links are good for hours, which
+  /// is why [YouTubeService] now caches them for 90 minutes. 30 minutes covers
+  /// any realistic queue lookahead without pretending a prefetch is good
+  /// forever, and an entry that does go stale is not a failure: the load falls
+  /// into the same fallback ladder as any other, which re-resolves with
+  /// `forceRefresh`.
+  static const Duration _prefetchTtl = Duration(minutes: 30);
 
   /// Drop every pre-resolved stream. Called when the audio-quality setting
   /// changes — entries are keyed by videoId only, so without this a queued song
@@ -548,9 +622,16 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     if (_playGeneration != thisGeneration) return;
 
     try {
-      await _loadResolvedSource(resolved, song);
+      await _loadResolvedSource(resolved, song, thisGeneration);
     } catch (playerError) {
       debugPrint('[AudioHandler] Primary source failed (${resolved.source}): $playerError');
+
+      // The url just proved unplayable, so it must not be served again from the
+      // 90-minute cache. Resolution cannot detect this — the url resolved fine;
+      // it was the *fetch* that failed (403, IP rebinding, a format ExoPlayer
+      // rejects). Dropping it here is what stops the rest of this ladder, and
+      // every later attempt in this session, from retrying the same dead link.
+      YouTubeService.invalidateStreamUrl(song.videoId);
 
       if (resolved.source == 'jiosaavn') {
         // JioSaavn failed → try YouTube primary
@@ -558,10 +639,11 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         try {
           final ytUrl = await _youtubeService.getAudioStreamUrl(song.videoId);
           if (_playGeneration != thisGeneration) return;
-          await _loadResolvedSource(ResolvedStream(ytUrl, source: 'youtube', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song);
+          await _loadResolvedSource(ResolvedStream(ytUrl, source: 'youtube', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song, thisGeneration);
           return;
         } catch (ytError) {
           debugPrint('[AudioHandler] YouTube primary also failed: $ytError');
+          YouTubeService.invalidateStreamUrl(song.videoId);
         }
       }
 
@@ -573,24 +655,34 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
           throw Exception('No proxy stream available');
         }
         if (_playGeneration != thisGeneration) return;
-        await _loadResolvedSource(ResolvedStream(fallbackUrl, source: 'youtube_fallback', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song);
+        await _loadResolvedSource(ResolvedStream(fallbackUrl, source: 'youtube_fallback', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song, thisGeneration);
         return;
       } catch (fbError) {
         debugPrint('[AudioHandler] Proxy fallback also failed: $fbError');
+        // getFallbackStreamUrl caches whatever yt-dlp hands it, so a failure
+        // here leaves another poisoned entry to clear before the final retry.
+        YouTubeService.invalidateStreamUrl(song.videoId);
       }
 
       // All fallbacks exhausted — retry once with extended timeouts for slow connections
       if (_playGeneration != thisGeneration) return;
       debugPrint('[AudioHandler] All primary sources failed. Retrying with extended timeout...');
       try {
+        // forceRefresh is what makes this a real retry. The URL that just
+        // failed to load is very likely still in the 90-minute cache, so
+        // without the bypass this step re-fetched the same dead link and could
+        // only reproduce the same failure more slowly.
         final retryUrl = await _youtubeService
-            .getAudioStreamUrl(song.videoId)
+            .getAudioStreamUrl(song.videoId, forceRefresh: true)
             .timeout(const Duration(seconds: 12));
         if (_playGeneration != thisGeneration) return;
-        await _loadResolvedSource(ResolvedStream(retryUrl, source: 'youtube', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song);
+        await _loadResolvedSource(ResolvedStream(retryUrl, source: 'youtube', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song, thisGeneration);
         return;
       } catch (retryError) {
         debugPrint('[AudioHandler] Extended retry failed: $retryError');
+        // Leave nothing behind. The user's next tap on this song should start
+        // from a clean resolution, not inherit whatever this attempt cached.
+        YouTubeService.invalidateStreamUrl(song.videoId);
         throw Exception(
           'Unable to play this song. Your internet connection may be too slow or the song is temporarily unavailable. Please try again later.'
         );
@@ -631,7 +723,8 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     return 'Something went wrong. Please try again.';
   }
 
-  Future<void> _loadResolvedSource(ResolvedStream resolved, Song song) async {
+  Future<void> _loadResolvedSource(
+      ResolvedStream resolved, Song song, int thisGeneration) async {
     final isLocal = song.isLocalFile || song.filePath != null || resolved.source == 'local';
     final defaultAlbum = isLocal
         ? 'Local Storage'
@@ -656,42 +749,111 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       duration: song.duration,
     );
 
-    if (resolved.isLive) {
-      final headers = resolved.headers ?? const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-      };
-      await _player.setAudioSource(
-        AudioSource.uri(
-          Uri.parse(resolved.url),
-          headers: headers,
-          tag: mediaItem,
-        ),
-      );
-    } else if (resolved.url.startsWith('file://') ||
-        resolved.url.startsWith('/') ||
-        (resolved.url.length >= 3 && resolved.url[1] == ':' && (resolved.url[2] == '/' || resolved.url[2] == '\\'))) {
-      final filePath = resolved.url.startsWith('file://')
-          ? Uri.parse(resolved.url).toFilePath()
-          : resolved.url;
-      debugPrint('[AudioHandler] Playing local audio file: $filePath');
-      await _player.setAudioSource(
-        AudioSource.file(filePath, tag: mediaItem),
-      );
-    } else {
-      debugPrint('[AudioHandler] Playing HTTP stream URL: ${resolved.url}');
-      final headers = resolved.headers ?? const {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': '*/*',
-      };
-      await _player.setAudioSource(
-        AudioSource.uri(
-          Uri.parse(resolved.url),
-          headers: headers,
-          tag: mediaItem,
-        ),
-      );
+    await _withPlayerLock(thisGeneration, () async {
+      if (resolved.isLive) {
+        final headers = resolved.headers ?? const {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': '*/*',
+        };
+        await _player.setAudioSource(
+          AudioSource.uri(
+            Uri.parse(resolved.url),
+            headers: headers,
+            tag: mediaItem,
+          ),
+        );
+      } else if (resolved.url.startsWith('file://') ||
+          resolved.url.startsWith('/') ||
+          (resolved.url.length >= 3 && resolved.url[1] == ':' && (resolved.url[2] == '/' || resolved.url[2] == '\\'))) {
+        final filePath = resolved.url.startsWith('file://')
+            ? Uri.parse(resolved.url).toFilePath()
+            : resolved.url;
+        debugPrint('[AudioHandler] Playing local audio file: $filePath');
+        await _player.setAudioSource(
+          AudioSource.file(filePath, tag: mediaItem),
+        );
+      } else {
+        debugPrint('[AudioHandler] Playing HTTP stream URL: ${resolved.url}');
+        final headers = resolved.headers ?? const {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': '*/*',
+        };
+        await _player.setAudioSource(
+          await _cachingSourceFor(resolved, song, mediaItem, headers),
+        );
+      }
+    });
+  }
+
+  /// Build the audio source for a streamed song, caching it to disk on the way
+  /// through when that is safe.
+  ///
+  /// A plain `AudioSource.uri` re-downloads the entire song every time it is
+  /// played, so replaying a track — or scrubbing back into one — costs the full
+  /// transfer again, on mobile data, and stalls if the connection has since got
+  /// worse. just_audio's caching source serves the player and writes the bytes
+  /// to disk simultaneously, so the second play is a local file read.
+  ///
+  /// Cached only when the source is one whose bytes are stable and worth
+  /// keeping: skipped for live radio (no end, and caching a broadcast is
+  /// meaningless) and for anything without a usable id to key on. The cache
+  /// file is keyed by videoId + quality rather than by URL — see
+  /// [StreamCacheService] for why the default naming cannot work here.
+  ///
+  /// `LockCachingAudioSource` is marked experimental upstream. It has been in
+  /// just_audio for years and is what every caching client in this space uses,
+  /// and the catch below means the worst case of it changing under us is that
+  /// a song streams uncached — so the annotation is acknowledged rather than
+  /// avoided.
+  Future<AudioSource> _cachingSourceFor(
+    ResolvedStream resolved,
+    Song song,
+    MediaItem mediaItem,
+    Map<String, String> headers,
+  ) async {
+    final cacheable = !resolved.isLive &&
+        song.videoId.isNotEmpty &&
+        resolved.url.startsWith('http');
+    if (!cacheable) {
+      return AudioSource.uri(Uri.parse(resolved.url),
+          headers: headers, tag: mediaItem);
     }
+
+    try {
+      final cache = StreamCacheService();
+      final file = await cache.fileFor(
+          song.videoId, YouTubeService.streamingQuality.name);
+      final alreadyCached = await file.exists();
+      if (alreadyCached) {
+        // Play the file directly. Handing a cached LockCachingAudioSource back
+        // works too, but going straight to the file skips its HTTP setup
+        // entirely — and means a fully cached song plays with no network at all.
+        debugPrint('[AudioHandler] Stream cache hit: ${song.title}');
+        return AudioSource.file(file.path, tag: mediaItem);
+      }
+
+      cache.noteWrite(_estimatedSize(song));
+      // ignore: experimental_member_use
+      return LockCachingAudioSource(
+        Uri.parse(resolved.url),
+        headers: headers,
+        cacheFile: file,
+        tag: mediaItem,
+      );
+    } catch (e) {
+      // Caching is an optimisation, never a reason a song fails to play.
+      debugPrint('[AudioHandler] Stream cache unavailable, streaming direct: $e');
+      return AudioSource.uri(Uri.parse(resolved.url),
+          headers: headers, tag: mediaItem);
+    }
+  }
+
+  /// Rough byte size of [song], used only to decide when the cache is due a
+  /// trim. ~48 KB/s is a fair average across the bitrates served here; a song
+  /// with no known duration is assumed to be an ordinary ~4-minute track.
+  static int _estimatedSize(Song song) {
+    final seconds = song.duration.inSeconds;
+    return (seconds > 0 ? seconds : 240) * 48 * 1024;
   }
 
   /// Prefetch the next 2 songs' stream URLs so skipping is instant
@@ -724,7 +886,15 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     // and restarted on every playSong, so skipping faster than the 2s delay
     // meant prefetch never fired at all — exactly when it is most useful.
     if (_prefetchTimer?.isActive ?? false) return;
-    _prefetchTimer = Timer(const Duration(seconds: 2), () async {
+    // The delay exists only to keep the prefetch resolves off the same event
+    // loop turn as the current song's setAudioSource, so they can't compete
+    // with first audio. 2s was far longer than that needs: resolution itself
+    // takes several seconds, so a user skipping in the first ~5s of a track —
+    // the common way people move through a queue — arrived before the prefetch
+    // had even started and paid the full price anyway. 300ms clears the
+    // critical path and still has the +1 song resolving while the current one
+    // is barely into its first bar.
+    _prefetchTimer = Timer(const Duration(milliseconds: 300), () async {
       // Snapshot the index: by the time these resolves finish the user may have
       // skipped again, and we don't want to write prefetches for a stale queue.
       final baseIndex = _currentIndex;
@@ -900,21 +1070,44 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     await _player.seek(position);
   }
 
+  /// Move the queue pointer to [index] and play it, restoring the pointer if
+  /// the song fails to load.
+  ///
+  /// The pointer has to move BEFORE playback so the UI reacts instantly, but
+  /// leaving it moved after a failure desynced the app from what was audible:
+  /// the player screen, queue sheet and notification all advanced past a track
+  /// that never started, and the next skip then jumped two songs ahead.
+  Future<void> _moveToIndexAndPlay(int index,
+      {bool announceNearEnd = false}) async {
+    final previousIndex = _currentIndex;
+    _currentIndex = index;
+    _updateMediaItem(_playlist[_currentIndex]);
+    if (announceNearEnd && _currentIndex >= _playlist.length - 2) {
+      onQueueNearEnd?.call();
+    }
+    try {
+      await playSong(_playlist[_currentIndex]);
+    } catch (e) {
+      // Only roll back if nothing newer has claimed the pointer meanwhile.
+      if (_currentIndex == index &&
+          previousIndex >= 0 &&
+          previousIndex < _playlist.length) {
+        _currentIndex = previousIndex;
+        _updateMediaItem(_playlist[_currentIndex]);
+      }
+      // Rethrow so PlayerProvider's self-healing auto-skip still runs.
+      rethrow;
+    }
+  }
+
   @override
   Future<void> skipToNext() async {
     if (_playlist.isEmpty) return;
 
     if (_currentIndex < _playlist.length - 1) {
-      _currentIndex++;
-      _updateMediaItem(_playlist[_currentIndex]);
-      if (_currentIndex >= _playlist.length - 2) {
-        onQueueNearEnd?.call();
-      }
-      await playSong(_playlist[_currentIndex]);
+      await _moveToIndexAndPlay(_currentIndex + 1, announceNearEnd: true);
     } else if (_repeatMode == AudioServiceRepeatMode.all) {
-      _currentIndex = 0;
-      _updateMediaItem(_playlist[_currentIndex]);
-      await playSong(_playlist[_currentIndex]);
+      await _moveToIndexAndPlay(0);
     }
   }
 
@@ -922,12 +1115,7 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   Future<void> skipToQueueIndex(int index) async {
     if (index < 0 || index >= _playlist.length) return;
     if (index == _currentIndex) return;
-    _currentIndex = index;
-    _updateMediaItem(_playlist[_currentIndex]);
-    if (_currentIndex >= _playlist.length - 2) {
-      onQueueNearEnd?.call();
-    }
-    await playSong(_playlist[_currentIndex]);
+    await _moveToIndexAndPlay(index, announceNearEnd: true);
   }
 
   @override
@@ -941,13 +1129,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     }
 
     if (_currentIndex > 0) {
-      _currentIndex--;
-      _updateMediaItem(_playlist[_currentIndex]);
-      await playSong(_playlist[_currentIndex]);
+      await _moveToIndexAndPlay(_currentIndex - 1);
     } else if (_repeatMode == AudioServiceRepeatMode.all) {
-      _currentIndex = _playlist.length - 1;
-      _updateMediaItem(_playlist[_currentIndex]);
-      await playSong(_playlist[_currentIndex]);
+      await _moveToIndexAndPlay(_playlist.length - 1);
     }
   }
 

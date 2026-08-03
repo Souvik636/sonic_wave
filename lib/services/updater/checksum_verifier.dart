@@ -31,8 +31,12 @@ class ChecksumVerifier {
     debugPrint('[Checksum] Expected: $cleanExpected | Actual: $cleanActual');
 
     if (cleanExpected.isEmpty) {
-      debugPrint('[Checksum] Warning: Expected hash format invalid or empty, skipping check.');
-      return true;
+      debugPrint('[Checksum] Error: Expected hash format invalid or empty — refusing to pass.');
+      throw ChecksumMismatchException(
+        'The checksum file could not be parsed. The update integrity cannot be verified.',
+        expectedHash: '(unparseable)',
+        actualHash: cleanActual,
+      );
     }
 
     if (cleanExpected != cleanActual) {

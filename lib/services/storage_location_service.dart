@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -410,6 +411,64 @@ class StorageLocationService {
     return '${dir.path}${Platform.pathSeparator}$videoId.jpg';
   }
 
+  /// Longest file NAME (stem + extension) we will produce, in UTF-8 bytes.
+  ///
+  /// ext4, exFAT and FAT32 all cap a single path component at 255 *bytes*, not
+  /// characters — a 200-character Devanagari or CJK title is well past that
+  /// limit, and the write fails with ENAMETOOLONG rather than truncating. 200
+  /// leaves room for a ` (12)` disambiguator and a `.m4a` tail.
+  static const int maxFileNameBytes = 200;
+
+  /// Names MS-DOS reserved as devices. Windows still refuses to create a file
+  /// with one of these stems, whatever the extension.
+  static final RegExp _reservedStems =
+      RegExp(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$', caseSensitive: false);
+
+  /// Turn a song title into a safe file name stem (no directory, no extension).
+  ///
+  /// Downloads are named after the TITLE rather than the source's internal id:
+  /// a folder full of `dQw4w9WgXcQ.m4a` is unreadable the moment the user opens
+  /// it in a file manager or copies the tracks to a computer. That means the
+  /// title has to survive contact with a real filesystem, so this strips path
+  /// separators and the characters Windows/FAT reject, flattens whitespace,
+  /// removes leading dots (which would hide the file on Android and make the
+  /// media scanner skip it) and trailing dots/spaces (which Windows silently
+  /// drops, renaming the file behind our back), sidesteps the reserved device
+  /// names, and fits the result inside [maxFileNameBytes].
+  ///
+  /// Returns [fallback] when nothing usable is left — a title made entirely of
+  /// emoji or punctuation must still produce a writable name.
+  static String sanitizeFileName(String raw, {String fallback = 'audio'}) {
+    // Path separators, the Windows-illegal set, and C0 control characters.
+    var name = raw.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F\x7F]'), ' ');
+    // Titles routinely carry runs of spaces once the illegal chars are gone.
+    name = name.replaceAll(RegExp(r'\s+'), ' ').trim();
+    name = name.replaceAll(RegExp(r'^\.+'), '').trim();
+    name = name.replaceAll(RegExp(r'[. ]+$'), '');
+    if (name.isEmpty) return sanitizeFileName(fallback, fallback: 'audio');
+
+    name = _truncateUtf8(name, maxFileNameBytes);
+    // Truncation can re-expose a trailing dot/space.
+    name = name.replaceAll(RegExp(r'[. ]+$'), '');
+    if (name.isEmpty) return sanitizeFileName(fallback, fallback: 'audio');
+
+    // `NUL.m4a` is unopenable on Windows; `_NUL.m4a` is ordinary everywhere.
+    if (_reservedStems.hasMatch(name)) name = '_$name';
+    return name;
+  }
+
+  /// Cut [s] to at most [maxBytes] UTF-8 bytes without splitting a code point.
+  static String _truncateUtf8(String s, int maxBytes) {
+    final bytes = utf8.encode(s);
+    if (bytes.length <= maxBytes) return s;
+    var end = maxBytes;
+    // 10xxxxxx is a continuation byte — walk back to the sequence's start.
+    while (end > 0 && (bytes[end] & 0xC0) == 0x80) {
+      end--;
+    }
+    return utf8.decode(bytes.sublist(0, end), allowMalformed: true).trimRight();
+  }
+
   /// True when [folderName] is what an older build called its library folder.
   static bool isLegacyLibraryFolderName(String folderName) =>
       legacyFolderNames.contains(folderName.trim().toLowerCase());
@@ -723,7 +782,13 @@ class StorageLocationService {
     return albums;
   }
 
-  /// Move a file to a target directory securely, preserving the filename.
+  /// Move a file to a target directory securely.
+  ///
+  /// The source's filename is preserved unless [fileName] is given, which lets
+  /// a caller rename in the same step — downloads stage under the source's
+  /// internal id and land under the song's title, and doing it here keeps the
+  /// rename inside the verified move instead of adding a second, unverified
+  /// one afterwards.
   ///
   /// Returns the new file path, or null on failure.
   /// Guarantees that:
@@ -733,7 +798,8 @@ class StorageLocationService {
   ///    exists AND its byte size matches the source file byte size 100%.
   /// 4. If any error occurs or size verification fails, the target file is safely
   ///    cleaned up (rolled back) and original source file is preserved intact.
-  Future<String?> moveFile(String sourcePath, Directory targetDir) async {
+  Future<String?> moveFile(String sourcePath, Directory targetDir,
+      {String? fileName}) async {
     try {
       final sourceFile = File(sourcePath);
       if (!await sourceFile.exists()) return null;
@@ -742,8 +808,10 @@ class StorageLocationService {
         await targetDir.create(recursive: true);
       }
 
-      final fileName = sourcePath.split(RegExp(r'[/\\]')).last;
-      final targetPath = '${targetDir.path}${Platform.pathSeparator}$fileName';
+      final name = (fileName != null && fileName.isNotEmpty)
+          ? fileName
+          : sourcePath.split(RegExp(r'[/\\]')).last;
+      final targetPath = '${targetDir.path}${Platform.pathSeparator}$name';
 
       // No-op if source and target are the exact same physical path.
       if (sourcePath == targetPath) return targetPath;

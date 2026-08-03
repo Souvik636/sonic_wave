@@ -28,6 +28,8 @@ import '../services/storage_location_service.dart';
 import '../services/download_service.dart';
 import '../widgets/download_widgets.dart';
 import '../widgets/offline_hub.dart';
+import '../services/updater/github_release_client.dart';
+import '../widgets/updater/update_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -64,7 +66,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Initialize home data
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HomeProvider>().initialize();
+      _autoCheckForUpdate();
     });
+  }
+
+  /// Silent background update check, throttled to once per 24 hours.
+  /// Does not block the UI or show errors — only surfaces a dialog when
+  /// a newer release is genuinely available.
+  Future<void> _autoCheckForUpdate() async {
+    try {
+      if (!Platform.isAndroid) return;
+      final shouldCheck = await GitHubReleaseClient.shouldAutoCheck();
+      if (!shouldCheck) return;
+
+      const appVersion = '1.0.0+3';
+      final client = GitHubReleaseClient(currentVersion: appVersion);
+      final release = await client.checkForUpdate();
+
+      if (release != null && release.targetAsset != null && mounted) {
+        // Small delay so the home screen is fully rendered before showing.
+        await Future<void>.delayed(const Duration(seconds: 2));
+        if (mounted) {
+          UpdateDialog.show(
+            context,
+            updateClient: client,
+            release: release,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[AutoUpdate] Background check failed (silent): $e');
+    }
   }
 
   @override

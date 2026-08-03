@@ -16,7 +16,6 @@ class YouTubeService {
   static AudioQuality streamingQuality = AudioQuality.high;
 
   // Stream URL cache: '<videoId>@<quality>' → (url, timestamp)
-  // URLs expire after 5 minutes (YouTube stream URLs are temporary).
   //
   // The key includes the quality because a cached High URL must NOT be served
   // after the user switches to Low. Keying on videoId alone made a quality
@@ -33,7 +32,18 @@ class YouTubeService {
   // actually free. The quality is already in the key, so sharing cannot leak a
   // stale-quality URL across instances.
   static final Map<String, _CachedUrl> _streamCache = {};
-  static const Duration _cacheExpiry = Duration(minutes: 5);
+
+  /// How long a resolved URL stays usable.
+  ///
+  /// This was 5 minutes, which threw away perfectly good URLs: YouTube's signed
+  /// stream links are typically valid for hours, so replaying a song from six
+  /// minutes ago paid a full re-resolution — the single most expensive thing in
+  /// the playback path — for no reason. 90 minutes keeps replays and
+  /// back-navigation instant while staying well inside the real expiry, and a
+  /// URL that does go stale early is not a failure: the caller falls through to
+  /// the existing Explode/Invidious/Piped/yt-dlp ladder, and retries force a
+  /// refresh explicitly (see [getAudioStreamUrl]'s `forceRefresh`).
+  static const Duration _cacheExpiry = Duration(minutes: 90);
 
   /// Evict expired entries so the cache doesn't grow unbounded during long
   /// listening sessions. Called on every cache write (cheap: the map is small).
@@ -44,6 +54,34 @@ class YouTubeService {
   /// Cache key for [videoId] under the quality currently selected in Settings.
   static String _cacheKey(String videoId) =>
       '$videoId@${streamingQuality.name}';
+
+  /// Forget the cached URL for [videoId], across every quality.
+  ///
+  /// Resolution succeeding and playback succeeding are different things. A URL
+  /// can resolve cleanly and still be unplayable: it is IP-bound and the carrier
+  /// NAT moved, YouTube 403s it on fetch, or the format is one ExoPlayer refuses.
+  /// Nothing in the resolver can see that — only the player finds out.
+  ///
+  /// Without this the failure is *sticky*. The cache is static and now holds
+  /// entries for 90 minutes, so a dead URL was handed back to every retry until
+  /// the process itself died — which is exactly why force-closing the app and
+  /// reopening it made a "permanently broken" song play again on the first try.
+  /// Called whenever a load fails, so the next attempt genuinely re-resolves.
+  ///
+  /// Every quality variant is dropped, not just the current one: the entry was
+  /// keyed by the quality active when it was written, and the user may have
+  /// changed it between the failure and the retry.
+  static void invalidateStreamUrl(String videoId) {
+    final removed = <String>[];
+    for (final quality in AudioQuality.values) {
+      final key = '$videoId@${quality.name}';
+      if (_streamCache.remove(key) != null) removed.add(quality.name);
+    }
+    if (removed.isNotEmpty) {
+      debugPrint('[YT] Dropped cached stream url for $videoId '
+          '(${removed.join(", ")}) after a playback failure');
+    }
+  }
 
   // Pool of Invidious instances (pruned to verified-working ones)
   static List<String> _invidiousInstances = [
@@ -59,8 +97,43 @@ class YouTubeService {
   ];
 
   static bool _instancesLoaded = false;
-  static final Set<String> _failedInstances = {};
-  static final Set<String> _failedPipedInstances = {};
+
+  /// Instances that just failed, and when.
+  ///
+  /// These used to be permanent `Set<String>` blacklists for the life of the
+  /// process, which is why resolution got progressively worse the longer the app
+  /// stayed open: on mobile a timeout means "this cell handed over" far more
+  /// often than "this host is dead", and with only a handful of seeded instances
+  /// a few transient failures emptied the entire fallback pool. Every later
+  /// share then had nothing but Explode and yt-dlp to fall back on, and a bad
+  /// minute became a bad session.
+  ///
+  /// A cooldown keeps the useful half of the behaviour — don't re-dial a host
+  /// that just timed out, within one resolution — without the permanence.
+  static final Map<String, DateTime> _instanceCooldown = {};
+  static final Map<String, DateTime> _pipedCooldown = {};
+
+  /// How long a failed instance is skipped for.
+  static const Duration _instanceCooldownPeriod = Duration(minutes: 3);
+
+  /// Most instances one resolution will try before giving up on a mirror pool.
+  ///
+  /// The pool is walked in order and each attempt costs up to its own timeout,
+  /// so an unbounded walk of a stale list can outlive the entire resolution
+  /// deadline — and it is racing Explode and yt-dlp, which have very likely
+  /// answered already. Three is enough for the pool to be a real fallback
+  /// without it becoming the reason a song takes twenty seconds to start.
+  static const int _maxInstanceAttempts = 3;
+
+  static bool _isCoolingDown(Map<String, DateTime> book, String key) {
+    final failedAt = book[key];
+    if (failedAt == null) return false;
+    if (DateTime.now().difference(failedAt) >= _instanceCooldownPeriod) {
+      book.remove(key);
+      return false;
+    }
+    return true;
+  }
 
   static final List<YoutubeApiClient> _clientPriority = [
     YoutubeApiClient.ios,
@@ -450,7 +523,12 @@ class YouTubeService {
         .where((i) => !invidiousToTest.contains(i))
         .toList();
     _invidiousInstances = [...workingInvidious, ...untestedInvidious, ...failedInvidious];
-    _failedInstances.addAll(failedInvidious);
+    // Ordering already demotes these; the cooldown keeps them out of the next
+    // few resolutions without exiling them for the life of the process.
+    final now = DateTime.now();
+    for (final instance in failedInvidious) {
+      _instanceCooldown[instance] = now;
+    }
 
     // 3. Test Piped instances
     final scoredPiped = <MapEntry<String, int>>[];
@@ -489,7 +567,10 @@ class YouTubeService {
         .where((p) => !_pipedInstances.take(3).contains(p))
         .toList();
     _pipedInstances = [...workingPiped, ...untestedPiped, ...failedPiped];
-    _failedPipedInstances.addAll(failedPiped);
+    final pipedFailedAt = DateTime.now();
+    for (final apiUrl in failedPiped) {
+      _pipedCooldown[apiUrl] = pipedFailedAt;
+    }
     
     httpClient.close();
     
@@ -507,10 +588,10 @@ class YouTubeService {
     _loadWorkingInstances();
     final client = HttpClient();
     
-    // Scan instances that have not failed
+    // Scan instances that are not cooling down after a recent failure
     for (final instance in _invidiousInstances) {
-      if (_failedInstances.contains(instance)) continue;
-      
+      if (_isCoolingDown(_instanceCooldown, instance)) continue;
+
       try {
         final uri = Uri.https(instance, '/api/v1/search', {
           'q': query,
@@ -565,7 +646,7 @@ class YouTubeService {
           }
         }
       } catch (e) {
-        _failedInstances.add(instance);
+        _instanceCooldown[instance] = DateTime.now();
         debugPrint('Invidious search failed for instance $instance: $e');
       }
     }
@@ -573,13 +654,24 @@ class YouTubeService {
     return null;
   }
 
-  Future<String?> _fetchInvidiousStreamUrl(String videoId) async {
+  /// Resolve a stream URL from the Invidious mirror pool.
+  ///
+  /// [shouldAbort] is polled between instances so the walk stops the moment the
+  /// resolution it belongs to has been won elsewhere — without it, a losing
+  /// branch of the race kept dialling mirrors for another dozen seconds after
+  /// the user's song had already started playing.
+  Future<String?> _fetchInvidiousStreamUrl(String videoId,
+      {bool Function()? shouldAbort}) async {
     _loadWorkingInstances();
     final client = HttpClient();
-    
+    var attempts = 0;
+
     for (final instance in _invidiousInstances) {
-      if (_failedInstances.contains(instance)) continue;
-      
+      if (shouldAbort?.call() ?? false) break;
+      if (_isCoolingDown(_instanceCooldown, instance)) continue;
+      if (attempts >= _maxInstanceAttempts) break;
+      attempts++;
+
       try {
         final uri = Uri.https(instance, '/api/v1/videos/$videoId', {'local': 'true'});
         final request = await client.getUrl(uri).timeout(const Duration(seconds: 4));
@@ -612,7 +704,7 @@ class YouTubeService {
           }
         }
       } catch (e) {
-        _failedInstances.add(instance);
+        _instanceCooldown[instance] = DateTime.now();
         debugPrint('Invidious instance $instance failed for $videoId: $e');
       }
     }
@@ -622,12 +714,17 @@ class YouTubeService {
 
   /// Fetch stream URL from Piped API instances.
   /// Piped uses a different API format: /streams/{videoId} → audioStreams[].url
-  Future<String?> _fetchPipedStreamUrl(String videoId) async {
+  Future<String?> _fetchPipedStreamUrl(String videoId,
+      {bool Function()? shouldAbort}) async {
     _loadWorkingInstances();
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    var attempts = 0;
 
     for (final apiUrl in _pipedInstances) {
-      if (_failedPipedInstances.contains(apiUrl)) continue;
+      if (shouldAbort?.call() ?? false) break;
+      if (_isCoolingDown(_pipedCooldown, apiUrl)) continue;
+      if (attempts >= _maxInstanceAttempts) break;
+      attempts++;
 
       try {
         final uri = Uri.parse('$apiUrl/streams/$videoId');
@@ -657,7 +754,7 @@ class YouTubeService {
           await response.drain();
         }
       } catch (e) {
-        _failedPipedInstances.add(apiUrl);
+        _pipedCooldown[apiUrl] = DateTime.now();
         debugPrint('[YT] Piped instance $apiUrl failed for $videoId: $e');
       }
     }
@@ -722,11 +819,23 @@ class YouTubeService {
   /// YouTube Explode clients → Invidious → Piped on one track, native yt-dlp
   /// (JunkFood02/Seal) on the other. No artificial delay: the first source to
   /// produce a playable URL wins; the loser is ignored.
-  Future<String> getAudioStreamUrl(String videoId) async {
+  ///
+  /// [forceRefresh] bypasses the cache AND drops the entry, which is what a
+  /// retry needs: resolved URLs are time-limited and IP-bound, so the most
+  /// likely reason a transfer just died is that this exact URL stopped working.
+  /// Handing the same one back made every retry fail identically — with the
+  /// 90-minute TTL that is a much longer window than the old 5-minute one, so
+  /// the bypass is what keeps the longer TTL safe.
+  Future<String> getAudioStreamUrl(String videoId,
+      {bool forceRefresh = false}) async {
     final cacheKey = _cacheKey(videoId);
-    final cached = _streamCache[cacheKey];
-    if (cached != null && !cached.isExpired) {
-      return cached.url;
+    if (forceRefresh) {
+      _streamCache.remove(cacheKey);
+    } else {
+      final cached = _streamCache[cacheKey];
+      if (cached != null && !cached.isExpired) {
+        return cached.url;
+      }
     }
 
     final completer = Completer<String>();
@@ -771,18 +880,18 @@ class YouTubeService {
 
     Future<void> runFastChain() async {
       try {
-        // 1. YouTube Explode clients — raced, not walked.
+        // Explode clients, Invidious and Piped ALL race from the first moment.
         //
-        // These are plain HTTP calls to different player endpoints, so trying
-        // them one after another only bought a serial 2.5s penalty for each
-        // client that happens to be broken today: three dead clients cost 7.5s
-        // before the chain even reached Invidious. Racing them costs at most
-        // two extra requests and bounds the whole step at one timeout. That
-        // also makes a LONGER per-client timeout affordable, which is what a
-        // slow mobile connection actually needs — 2.5s was short enough to
-        // abandon a client that would have answered.
+        // These are independent HTTP endpoints, so running them one stage after
+        // another only stacked their latencies: three dead Explode clients had
+        // to time out in full before Invidious was even asked, and Invidious
+        // before Piped. Since the first playable URL wins and the losers are
+        // discarded, there is nothing to gain by holding the later stages back
+        // — the cost is two extra in-flight requests, the saving is the entire
+        // sequential tail.
         final List<YoutubeApiClient> clients = List.from(_clientPriority);
-        await Future.wait(clients.map((client) async {
+
+        Future<void> tryExplode(YoutubeApiClient client) async {
           if (completer.isCompleted) return;
           try {
             final manifest = await _yt.videos.streamsClient
@@ -791,42 +900,54 @@ class YouTubeService {
             if (completer.isCompleted) return;
             final url = _pickBestStream(manifest);
             if (url != null) {
+              // completeWith is a no-op once someone has won, so the promotion
+              // has to be gated on the same check — otherwise a client that
+              // merely finished *near* the winner still reordered the list, and
+              // the order stopped reflecting which client actually works.
+              if (completer.isCompleted) return;
+              completeWith(url);
               // Remember which client answered so the next song starts with it.
               if (_clientPriority.isNotEmpty && _clientPriority.first != client) {
                 _clientPriority.remove(client);
                 _clientPriority.insert(0, client);
               }
-              completeWith(url);
             }
           } catch (e) {
             debugPrint('[YT] Client $client failed for $videoId: $e');
           }
-        }));
-        if (completer.isCompleted) return;
-
-        // 2. Invidious direct stream resolution
-        if (completer.isCompleted) return;
-        try {
-          final invidiousUrl = await _fetchInvidiousStreamUrl(videoId);
-          if (invidiousUrl != null) {
-            completeWith(invidiousUrl);
-            return;
-          }
-        } catch (e) {
-          debugPrint('[YT] Invidious stream fallback failed for $videoId: $e');
         }
 
-        // 3. Piped API stream resolution
-        if (completer.isCompleted) return;
-        try {
-          final pipedUrl = await _fetchPipedStreamUrl(videoId);
-          if (pipedUrl != null) {
-            completeWith(pipedUrl);
-            return;
+        Future<void> tryInvidious() async {
+          if (completer.isCompleted) return;
+          try {
+            final invidiousUrl = await _fetchInvidiousStreamUrl(
+              videoId,
+              shouldAbort: () => completer.isCompleted,
+            );
+            if (invidiousUrl != null) completeWith(invidiousUrl);
+          } catch (e) {
+            debugPrint('[YT] Invidious stream fallback failed for $videoId: $e');
           }
-        } catch (e) {
-          debugPrint('[YT] Piped stream fallback failed for $videoId: $e');
         }
+
+        Future<void> tryPiped() async {
+          if (completer.isCompleted) return;
+          try {
+            final pipedUrl = await _fetchPipedStreamUrl(
+              videoId,
+              shouldAbort: () => completer.isCompleted,
+            );
+            if (pipedUrl != null) completeWith(pipedUrl);
+          } catch (e) {
+            debugPrint('[YT] Piped stream fallback failed for $videoId: $e');
+          }
+        }
+
+        await Future.wait<void>([
+          ...clients.map(tryExplode),
+          tryInvidious(),
+          tryPiped(),
+        ]);
       } catch (e) {
         fastError = e;
       } finally {
@@ -842,8 +963,20 @@ class YouTubeService {
     runFastChain();
     runYtDlp();
 
-    return completer.future;
+    // Hard ceiling on the whole resolution. Without it a pathological network
+    // could leave the UI spinning indefinitely; 18s keeps the worst case inside
+    // the 20s start-time budget, and the timeout message is mapped to a
+    // friendly "connection is slow" string by the audio handler.
+    return completer.future.timeout(
+      _resolveDeadline,
+      onTimeout: () => throw TimeoutException(
+          'Stream resolution timed out after ${_resolveDeadline.inSeconds}s',
+          _resolveDeadline),
+    );
   }
+
+  /// Ceiling on a full [getAudioStreamUrl] resolution across every source.
+  static const Duration _resolveDeadline = Duration(seconds: 18);
 
   /// Pick a stream honouring the user's streaming-quality setting.
   String? _pickBestStream(StreamManifest manifest) {
@@ -937,28 +1070,63 @@ class YouTubeService {
     }
   }
 
+  /// Format chain used for STREAMING, as opposed to [ytDlpFormatChain] which
+  /// downloads use.
+  ///
+  /// Same quality-matched head, but every chain ends in an unconstrained
+  /// `bestaudio/best` with no codec filter, so whatever format the player client
+  /// hands back is accepted on the spot. The download chain's preference for
+  /// `mp4a` exists to avoid an FFmpeg remux on the way to a file on disk — for
+  /// streaming there is no file and no remux, and ExoPlayer decodes Opus/WebM
+  /// just as happily as AAC/M4A. Insisting on a container there only bought
+  /// another extraction round-trip on videos whose client returns Opus.
+  ///
+  /// `-S` (see [ytDlpAudioSorter]) still orders within the matched set, so the
+  /// Low/Medium/High setting keeps its effect.
+  static String ytDlpStreamFormatChain(AudioQuality quality) {
+    switch (quality) {
+      case AudioQuality.high:
+        return 'bestaudio[abr>=160]/bestaudio/best';
+      case AudioQuality.medium:
+        return 'bestaudio[abr<=140]/bestaudio/best';
+      case AudioQuality.low:
+        return 'bestaudio[abr<=70]/worstaudio/bestaudio/best';
+    }
+  }
+
   String _ytDlpAudioSorter() => ytDlpAudioSorter(streamingQuality);
 
-  /// Resolve stream URL specifically using native yt-dlp binary (JunkFood02/Seal implementation)
+  /// Per-player-client extraction timeout in the yt-dlp race.
+  static const Duration _ytDlpClientTimeout = Duration(seconds: 7);
+
+  /// Ceiling on the whole yt-dlp track, however many clients are in flight.
+  static const Duration _ytDlpOverallTimeout = Duration(seconds: 10);
+
+  /// Resolve stream URL specifically using the native yt-dlp binary
+  /// (JunkFood02/Seal implementation).
+  ///
+  /// The player clients are RACED, not walked. Walking them cost up to 4 x 8s =
+  /// 32s before the caller ever saw an answer, which is what blew past the
+  /// 10-20s start-time budget whenever the first client of the day was broken.
+  /// Racing costs at most three extra extractions — all local process work
+  /// against different YouTube endpoints — and bounds the whole track at
+  /// [_ytDlpOverallTimeout].
   Future<String?> getYtDlpStreamUrl(String videoId) async {
-    try {
-      // Single-flight init guard — awaits the startup init instead of racing
-      // it with a second initialize() call (which broke yt-dlp entirely).
-      if (!await YtDlpRuntime.ensureInitialized()) {
-        debugPrint('[YT] yt-dlp unavailable (init failed) for $videoId');
-        return null;
-      }
-    } catch (e) {
-      debugPrint('[YT] YtDlpRuntime init failed with exception: $e');
+    // Non-blocking readiness check. On a cold start the binary + FFmpeg unpack
+    // is still running; waiting for it here would put the entire init on the
+    // critical path of the first song. The fast chain (Explode/Invidious/Piped)
+    // resolves song #1 and yt-dlp joins the race from song #2.
+    if (!YtDlpRuntime.isReady) {
+      debugPrint('[YT] yt-dlp not warm yet — skipping it for $videoId');
       return null;
     }
-    final videoUrl = 'https://www.youtube.com/watch?v=$videoId';
 
-    // Try each player client in turn. The first that yields a playable audio
-    // URL wins; a client that throws or returns nothing falls through to the
-    // next, and only when all are exhausted do we let the resolver chain move
-    // on to Explode/Invidious/Piped.
-    for (final client in List<String>.from(_ytDlpPlayerClients)) {
+    final videoUrl = 'https://www.youtube.com/watch?v=$videoId';
+    final clients = List<String>.from(_ytDlpPlayerClients);
+    final completer = Completer<String?>();
+    int pending = clients.length;
+
+    Future<void> attempt(String client) async {
       try {
         debugPrint('[YT] yt-dlp extract $videoId (player_client=$client)');
         final info = await YoutubeDLFlutter.instance
@@ -971,15 +1139,18 @@ class YouTubeService {
               '--no-playlist': '',
               '--force-ipv4': '',
               '--no-check-certificates': '',
-              // Audio-only selection honouring the user's quality setting.
-              '-f': ytDlpFormatChain(streamingQuality),
+              // Audio selection honouring the user's quality setting, but ending
+              // in an unconstrained fallback so ANY container is accepted.
+              '-f': ytDlpStreamFormatChain(streamingQuality),
               '-S': _ytDlpAudioSorter(),
               // Skip HLS/DASH manifest & webpage HTML fetches — direct audio URLs in
               // the player response are enough for streaming, cutting 2-3 network round-trips.
               '--extractor-args':
                   'youtube:player_client=$client;skip=hls,dash,translated_subs,webpage',
             })
-            .timeout(const Duration(seconds: 8));
+            .timeout(_ytDlpClientTimeout);
+
+        if (completer.isCompleted) return;
 
         // With -f, yt-dlp already picked the best format: top-level url.
         String? url = info.url;
@@ -987,8 +1158,22 @@ class YouTubeService {
           url = _pickYtDlpAudioUrl(info.formats);
         }
         if (url != null) {
-          // Promote working player client to the front for subsequent fast extractions
-          if (_ytDlpPlayerClients.contains(client) && _ytDlpPlayerClients.first != client) {
+          // Only the client that actually WINS the race may publish anything.
+          //
+          // Several clients can pass the isCompleted check above and reach this
+          // point, so this used to be two unsynchronized side effects: each
+          // winner-ish client wrote its own url into _streamCache and promoted
+          // itself to the front of the list. The cached entry could therefore be
+          // client B's url while the caller was handed client A's — meaning the
+          // url left behind for the next 90 minutes was never the one playback
+          // validated. Claiming the completer first makes both effects belong to
+          // exactly one client.
+          if (completer.isCompleted) return;
+          completer.complete(url);
+
+          // Promote the winning player client so the NEXT song starts with it.
+          if (_ytDlpPlayerClients.contains(client) &&
+              _ytDlpPlayerClients.first != client) {
             _ytDlpPlayerClients.remove(client);
             _ytDlpPlayerClients.insert(0, client);
             debugPrint('[YT] Promoted $client to primary yt-dlp player client');
@@ -997,22 +1182,54 @@ class YouTubeService {
           debugPrint('[YT] yt-dlp resolved via player_client=$client '
               'quality=${streamingQuality.name} '
               'ext=${info.ext ?? "?"} acodec=${info.acodec ?? "?"}');
+          // The runtime demonstrably works — clear any accumulated failure
+          // streak so a few unavailable videos never trip the health check.
+          YtDlpRuntime.markHealthy();
           _evictExpiredCache();
           _streamCache[_cacheKey(videoId)] = _CachedUrl(url, DateTime.now());
-          return url;
+          return;
         }
         debugPrint('[YT] yt-dlp client=$client returned no playable audio');
       } on TimeoutException {
         debugPrint('[YT] yt-dlp client=$client timed out');
       } catch (e) {
         debugPrint('[YT] yt-dlp client=$client failed: $e');
+      } finally {
+        pending--;
+        if (pending == 0 && !completer.isCompleted) {
+          // All clients finished and none produced a url. Same signal as the
+          // overall timeout: nothing distinguishes "runtime is broken" from
+          // "video is unavailable" at this level, which is why the health check
+          // needs a streak rather than a single data point.
+          YtDlpRuntime.markExtractionFailed();
+          completer.complete(null);
+        }
       }
     }
-    return null;
+
+    for (final client in clients) {
+      attempt(client);
+    }
+
+    try {
+      return await completer.future.timeout(_ytDlpOverallTimeout);
+    } on TimeoutException {
+      debugPrint('[YT] yt-dlp race exceeded ${_ytDlpOverallTimeout.inSeconds}s '
+          'for $videoId');
+      // EVERY client timed out. That is the signature of a sick runtime rather
+      // than an unavailable video, so it counts toward the health check.
+      YtDlpRuntime.markExtractionFailed();
+      return null;
+    }
   }
 
   /// Pick the best audio-only stream URL from a yt-dlp format list, preferring
   /// audio-only tracks by bitrate, then any track carrying an audio codec.
+  ///
+  /// Deliberately container-agnostic: selection is by the presence of an audio
+  /// codec and by bitrate, never by extension. Opus/WebM, AAC/M4A and a muxed
+  /// MP4 are all acceptable to stream — ExoPlayer decodes them all, and
+  /// rejecting one here would just cost another extraction attempt.
   String? _pickYtDlpAudioUrl(List<VideoFormat?>? formats) {
     if (formats == null || formats.isEmpty) return null;
 
@@ -1106,6 +1323,18 @@ class YouTubeService {
     }
   }
 
+  /// Ceiling on the Explode metadata call.
+  ///
+  /// `videos.get` has no internal timeout, so on a stalled mobile socket it can
+  /// hang for the OS-level TCP timeout — minutes — with the shared-link card
+  /// stuck on "Reading video details…" the whole time. Explode is the *fast*
+  /// path here; if it has not answered in six seconds it has lost its purpose
+  /// and yt-dlp should be given the remaining budget.
+  static const Duration _metadataExplodeTimeout = Duration(seconds: 6);
+
+  /// Ceiling on the whole yt-dlp metadata fallback, across every player client.
+  static const Duration _metadataYtDlpDeadline = Duration(seconds: 22);
+
   /// Get video details by ID.
   ///
   /// Explode is tried first (one cheap HTTP call), but it is the same client
@@ -1114,9 +1343,15 @@ class YouTubeService {
   /// there kills a download the yt-dlp pipeline could have completed on its
   /// own. So a failure here drops to yt-dlp, which is the extractor the app
   /// actually trusts.
+  ///
+  /// Both legs are time-boxed. Unbounded, this was the single worst offender in
+  /// the shared-link flow: an untimed Explode call followed by four yt-dlp
+  /// clients at 20s each, behind a 25s runtime init, could leave the card
+  /// "resolving" for well over a minute before anything was even downloaded.
   Future<Song> getVideoDetails(String videoId) async {
     try {
-      final video = await _yt.videos.get(videoId);
+      final video =
+          await _yt.videos.get(videoId).timeout(_metadataExplodeTimeout);
       return Song(
         id: video.id.value,
         title: video.title,
@@ -1134,6 +1369,40 @@ class YouTubeService {
       final viaYtDlp = await getVideoDetailsViaYtDlp(videoId);
       if (viaYtDlp != null) return viaYtDlp;
       throw Exception('Failed to get video details: $e');
+    }
+  }
+
+  /// Stand-in metadata for a video whose details could not be read.
+  ///
+  /// Deliberately obvious rather than a guess, and the canonical `i.ytimg.com`
+  /// thumbnail always exists for a valid id, so the card still has artwork while
+  /// the download runs. yt-dlp overwrites all of this with the real tags when it
+  /// writes the file.
+  static Song placeholderSong(String videoId) => Song(
+        id: videoId,
+        videoId: videoId,
+        title: 'YouTube video',
+        artist: 'Unknown artist',
+        thumbnailUrl: 'https://i.ytimg.com/vi/$videoId/mqdefault.jpg',
+        highResThumbnailUrl: 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+        duration: Duration.zero,
+      );
+
+  /// Metadata for [videoId] that ALWAYS returns something usable.
+  ///
+  /// A shared link is a download request, not a metadata request. The id alone
+  /// is enough for yt-dlp to fetch the audio — and yt-dlp writes the real title,
+  /// artist and artwork into the file itself — so letting a failed *metadata*
+  /// lookup abort the whole share throws away a download that would have
+  /// succeeded. That was a large share of the "shared link failed" reports:
+  /// the transfer never even started.
+  Future<Song> getVideoDetailsResilient(String videoId) async {
+    try {
+      return await getVideoDetails(videoId);
+    } catch (e) {
+      debugPrint('[YT] Metadata unavailable for $videoId ($e) — proceeding with '
+          'a placeholder so the download can still run');
+      return placeholderSong(videoId);
     }
   }
 
@@ -1155,7 +1424,15 @@ class YouTubeService {
     }
 
     final videoUrl = 'https://www.youtube.com/watch?v=$videoId';
+    // One budget for the whole walk, not per client. Four clients at 20s each
+    // was a 80-second worst case for a step the user is watching a spinner for.
+    final deadline = DateTime.now().add(_metadataYtDlpDeadline);
     for (final client in _ytDlpPlayerClients) {
+      final remaining = deadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) {
+        debugPrint('[YT] yt-dlp metadata budget exhausted for $videoId');
+        break;
+      }
       try {
         final info = await YoutubeDLFlutter.instance
             .getVideoInfoWithOptions(videoUrl, {
@@ -1168,7 +1445,11 @@ class YouTubeService {
               '--extractor-args':
                   'youtube:player_client=$client;skip=hls,dash,translated_subs',
             })
-            .timeout(const Duration(seconds: 20));
+            // Whichever is shorter: this client's own slice, or what is left of
+            // the overall budget.
+            .timeout(remaining < const Duration(seconds: 10)
+                ? remaining
+                : const Duration(seconds: 10));
 
         final title = info.title?.trim();
         if (title == null || title.isEmpty) continue;

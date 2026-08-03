@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
+import '../../services/updater/android_installer_runner.dart';
 import '../../services/updater/update_client.dart';
 import '../../services/updater/update_models.dart';
 
@@ -44,6 +45,15 @@ class _UpdateDialogState extends State<UpdateDialog> with SingleTickerProviderSt
   UpdateProgress? _progress;
   String? _errorMessage;
   File? _downloadedFile;
+
+  /// Set when the install was refused only because the user has not granted
+  /// "Install unknown apps" — the footer then offers to open that screen
+  /// instead of a Retry that would fail identically.
+  bool _needsInstallPermission = false;
+
+  /// True when no .sha256 checksum asset was available in the release, so
+  /// integrity verification was skipped. Shown as a warning badge.
+  bool _checksumSkipped = false;
   StreamSubscription<UpdateProgress>? _downloadSub;
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
@@ -82,20 +92,26 @@ class _UpdateDialogState extends State<UpdateDialog> with SingleTickerProviderSt
     setState(() {
       _status = UpdateStatus.downloading;
       _errorMessage = null;
+      _needsInstallPermission = false;
     });
 
     try {
-      final tempDir = await getTemporaryDirectory();
-      // Clean up any old APK files from previous update attempts to prevent
-      // cache bloat (each APK is ~30-80MB).
+      // Application support, NOT the cache dir: Android is free to evict cache
+      // contents under storage pressure, and a 100+ MB APK is exactly what it
+      // reaches for first. Losing bytes between "download complete" and the
+      // user tapping Install produced an invalid package and, once again, a
+      // bare "Install not completed".
+      final downloadDir = await getApplicationSupportDirectory();
+      // Clean up any old APK files from previous update attempts so they don't
+      // accumulate (each APK is ~30-120MB).
       try {
-        await for (final entity in tempDir.list()) {
+        await for (final entity in downloadDir.list()) {
           if (entity is File && entity.path.toLowerCase().endsWith('.apk')) {
             await entity.delete();
           }
         }
       } catch (_) {}
-      final destFile = File('${tempDir.path}/${asset.name}');
+      final destFile = File('${downloadDir.path}/${asset.name}');
 
       _downloadSub = widget.updateClient.downloadAsset(asset, destFile).listen(
         (progress) {
@@ -128,16 +144,19 @@ class _UpdateDialogState extends State<UpdateDialog> with SingleTickerProviderSt
     });
 
     try {
-      final valid = await widget.updateClient.verifyChecksum(
+      final verified = await widget.updateClient.verifyChecksum(
         widget.release.checksumAsset,
         file,
       );
 
-      if (valid) {
-        setState(() {
-          _status = UpdateStatus.readyToInstall;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        // verified == true  → hash matched, fully verified
+        // verified == false → no .sha256 asset in release, skipped
+        // (exception path handles actual mismatches)
+        _checksumSkipped = !verified;
+        _status = UpdateStatus.readyToInstall;
+      });
     } catch (e) {
       setState(() {
         _status = UpdateStatus.error;
@@ -156,14 +175,63 @@ class _UpdateDialogState extends State<UpdateDialog> with SingleTickerProviderSt
       return;
     }
 
-    try {
-      await widget.updateClient.applyUpdate(file);
-    } catch (e) {
+    // Ask the OS what it thinks of this APK BEFORE handing it over. Android's
+    // own failure message is "Install not completed" and nothing else, so the
+    // reasons it will refuse — different signing key, wrong CPU architecture,
+    // corrupted download, missing install permission — have to be found here or
+    // they are never explained at all.
+    final preflight = await AndroidInstallerRunner.inspect(file);
+    if (!mounted) return;
+
+    if (preflight != null && !preflight.isInstallable) {
       setState(() {
         _status = UpdateStatus.error;
-        _errorMessage = 'PackageInstaller launch failed: $e';
+        _errorMessage = preflight.blockingReason;
+      });
+      return;
+    }
+
+    if (preflight != null && !preflight.canRequestInstall) {
+      setState(() {
+        _needsInstallPermission = true;
+        _status = UpdateStatus.error;
+        _errorMessage =
+            'SonicWave needs permission to install apps before it can apply '
+            'this update. Grant "Install unknown apps", then tap Install again.';
+      });
+      return;
+    }
+
+    setState(() {
+      _status = UpdateStatus.installing;
+      _errorMessage = null;
+    });
+
+    try {
+      await widget.updateClient.applyUpdate(file);
+      // A successful self-update kills the process, so reaching this line
+      // usually means the user backed out of the system confirmation sheet.
+      if (!mounted) return;
+      setState(() {
+        _status = UpdateStatus.readyToInstall;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _status = UpdateStatus.error;
+        _errorMessage = e.toString().replaceAll('InstallerExecutionException:', '').trim();
       });
     }
+  }
+
+  Future<void> _grantInstallPermission() async {
+    await AndroidInstallerRunner.openInstallPermissionSettings();
+    if (!mounted) return;
+    setState(() {
+      _needsInstallPermission = false;
+      _status = UpdateStatus.readyToInstall;
+      _errorMessage = null;
+    });
   }
 
   void _cancelDownload() {
@@ -421,30 +489,72 @@ class _UpdateDialogState extends State<UpdateDialog> with SingleTickerProviderSt
           ),
         );
 
+      case UpdateStatus.installing:
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.green.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+          ),
+          child: const Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.greenAccent),
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  'Installing… confirm the Android prompt to finish.',
+                  style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        );
+
       case UpdateStatus.readyToInstall:
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.green.withValues(alpha: 0.12),
+            color: _checksumSkipped
+                ? Colors.amber.withValues(alpha: 0.12)
+                : Colors.green.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.green.withValues(alpha: 0.35)),
+            border: Border.all(
+              color: _checksumSkipped
+                  ? Colors.amber.withValues(alpha: 0.35)
+                  : Colors.green.withValues(alpha: 0.35),
+            ),
           ),
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 22),
-              SizedBox(width: 12),
+              Icon(
+                _checksumSkipped
+                    ? Icons.warning_amber_rounded
+                    : Icons.check_circle_rounded,
+                color: _checksumSkipped ? Colors.amber : Colors.greenAccent,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'APK Download Verified & Ready!',
-                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      _checksumSkipped
+                          ? 'APK Downloaded — Unverified'
+                          : 'APK Download Verified & Ready!',
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
-                      'Tap below to open Android PackageInstaller.',
-                      style: TextStyle(color: Colors.white70, fontSize: 11),
+                      _checksumSkipped
+                          ? 'No checksum file in release. Integrity not verified.'
+                          : 'Tap below to open Android PackageInstaller.',
+                      style: const TextStyle(color: Colors.white70, fontSize: 11),
                     ),
                   ],
                 ),
@@ -543,6 +653,9 @@ class _UpdateDialogState extends State<UpdateDialog> with SingleTickerProviderSt
     }
 
     if (_status == UpdateStatus.error) {
+      // A missing install permission is not a download problem — offering
+      // "Retry Download" there just re-downloads 100+ MB and fails the same way.
+      final bool permissionFix = _needsInstallPermission;
       return Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -554,14 +667,17 @@ class _UpdateDialogState extends State<UpdateDialog> with SingleTickerProviderSt
           ),
           const SizedBox(width: 10),
           ElevatedButton.icon(
-            onPressed: _startDownload,
+            onPressed: permissionFix ? _grantInstallPermission : _startDownload,
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryAccent,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('Retry Download'),
+            icon: Icon(
+              permissionFix ? Icons.settings_rounded : Icons.refresh_rounded,
+              size: 18,
+            ),
+            label: Text(permissionFix ? 'Open Settings' : 'Retry Download'),
           ),
         ],
       );

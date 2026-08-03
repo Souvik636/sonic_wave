@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../providers/settings_provider.dart' show AudioQuality;
+import 'id3_tag_writer.dart';
 import 'youtube_service.dart';
 import 'ytdlp_runtime.dart';
 
@@ -167,7 +168,7 @@ class YtDlpDownloader {
         throw Exception('yt-dlp reported success but wrote no audio file');
       }
 
-      final embedded = await _hasEmbeddedCover(File(audioPath));
+      final embedded = await ID3TagWriter.hasEmbeddedCover(File(audioPath));
       debugPrint('[yt-dlp] Downloaded $videoId -> $audioPath '
           '(embeddedArt=$embedded, sidecar=${artifacts.thumbnail != null})');
 
@@ -230,43 +231,6 @@ class YtDlpDownloader {
       debugPrint('[yt-dlp] Failed to scan staging dir: $e');
     }
     return _Artifacts(audio, thumb);
-  }
-
-  /// Best-effort check that cover art really made it into the container.
-  ///
-  /// Reported so the caller knows whether the sidecar image is decoration or
-  /// the only copy of the artwork. A false negative only costs a log line.
-  static Future<bool> _hasEmbeddedCover(File file) async {
-    try {
-      final len = await file.length();
-      if (len < 16) return false;
-      final raf = await file.open();
-      try {
-        // MP4/M4A: look for the 'covr' atom in the metadata, which lives near
-        // the front for yt-dlp output (faststart-style moov placement).
-        final probeLen = len < 262144 ? len : 262144;
-        final head = await raf.read(probeLen);
-        const covr = [0x63, 0x6F, 0x76, 0x72]; // 'covr'
-        const apic = [0x41, 0x50, 0x49, 0x43]; // 'APIC' (ID3v2, mp3 output)
-        return _indexOf(head, covr) >= 0 || _indexOf(head, apic) >= 0;
-      } finally {
-        await raf.close();
-      }
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static int _indexOf(List<int> haystack, List<int> needle) {
-    final limit = haystack.length - needle.length;
-    outer:
-    for (int i = 0; i <= limit; i++) {
-      for (int j = 0; j < needle.length; j++) {
-        if (haystack[i + j] != needle[j]) continue outer;
-      }
-      return i;
-    }
-    return -1;
   }
 
   static String _basename(String path) =>

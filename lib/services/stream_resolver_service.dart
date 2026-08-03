@@ -47,7 +47,14 @@ class StreamResolverService {
   final YouTubeService _youtube = YouTubeService();
   final ArchiveOrgService _archive = ArchiveOrgService();
 
-  Future<ResolvedStream?> resolve(Song song) async {
+  /// Resolve [song] to something playable.
+  ///
+  /// [forceRefresh] is passed through to the YouTube resolver so a retry goes
+  /// back to the network instead of being handed the cached URL that just
+  /// failed. It only affects the YouTube branch — every other source here
+  /// either builds its URL from the id or fetches it live, so there is no
+  /// cached answer to bypass.
+  Future<ResolvedStream?> resolve(Song song, {bool forceRefresh = false}) async {
     final id = song.videoId;
 
     // 0. Local file / content URI check — ONLY if file physically exists on disk or is explicit content/file URI
@@ -123,7 +130,8 @@ class StreamResolverService {
     // 6. YouTube song (default catalog fallback)
     debugPrint('[StreamResolver] Resolving YouTube song exclusively: $id');
     try {
-      final ytUrl = await _youtube.getAudioStreamUrl(id);
+      final ytUrl =
+          await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
       if (ytUrl.startsWith('http')) {
         return ResolvedStream(ytUrl, source: 'youtube');
       }

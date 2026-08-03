@@ -26,7 +26,7 @@ class EncodingSanitizer {
 
   /// Bump when the repair logic changes, so callers that cache sanitized
   /// results (see LocalMetadataService's on-disk index) can invalidate them.
-  static const int version = 2;
+  static const int version = 3;
 
   /// Range for CJK Unified Ideographs and Extension A/B blocks
   static bool _isCjkCodeUnit(int codeUnit) {
@@ -124,6 +124,16 @@ class EncodingSanitizer {
       if (_isPlausibleText(decoded)) return decoded.trim();
     } catch (_) {}
 
+    // Windows-1252 (CP1252): the most common encoding for ID3 tags in the
+    // wild. Bytes 0x80-0x9F are C1 controls in ISO-8859-1 but map to
+    // printable characters in CP1252 (€, –, —, ', ', ", ", etc.).
+    // Trying this before Latin-1 catches the vast majority of non-UTF-8
+    // music tags, which is what was producing the Chinese mojibake.
+    try {
+      final decoded = _decodeWindows1252(bytes);
+      if (_isPlausibleText(decoded)) return decoded.trim();
+    } catch (_) {}
+
     // Then Latin-1, for tags actually written in ISO-8859-1.
     try {
       final decoded = latin1.decode(bytes);
@@ -151,10 +161,38 @@ class EncodingSanitizer {
     return clean / total >= 0.9;
   }
 
-  /// C0 and C1 control blocks, plus the Unicode replacement character.
+  /// Windows-1252 (CP1252) decoder for the 0x80-0x9F gap that Latin-1 maps
+  /// to invisible C1 control characters. Nearly all "Latin-1" tags from
+  /// Windows ripping software actually use CP1252.
+  static const List<int> _cp1252Upper = [
+    // 0x80-0x8F
+    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+    0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
+    // 0x90-0x9F
+    0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178,
+  ];
+
+  static String _decodeWindows1252(List<int> bytes) {
+    final buf = StringBuffer();
+    for (final b in bytes) {
+      if (b >= 0x80 && b <= 0x9F) {
+        buf.writeCharCode(_cp1252Upper[b - 0x80]);
+      } else {
+        buf.writeCharCode(b);
+      }
+    }
+    return buf.toString();
+  }
+
+  /// C0 controls, the DEL character (0x7F), and the Unicode replacement
+  /// character. The 0x80-0x9F (C1) range is NOT rejected here because
+  /// Windows-1252 maps those to printable characters, and the input has
+  /// already been decoded through the appropriate codec by the time this
+  /// check runs.
   static bool _isControl(int rune) {
     if (rune < 0x20) return true;
-    if (rune >= 0x7F && rune <= 0x9F) return true;
+    if (rune == 0x7F) return true;
     if (rune == 0xFFFD) return true;
     return false;
   }

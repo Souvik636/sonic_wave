@@ -5,6 +5,11 @@ enum UpdateStatus {
   downloading,
   verifying,
   readyToInstall,
+
+  /// Handed to Android's PackageInstaller; waiting on the user's confirmation
+  /// and the OS's verdict. A successful self-update kills the process, so this
+  /// state normally ends by the app disappearing rather than by a transition.
+  installing,
   error,
   upToDate,
 }

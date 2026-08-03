@@ -15,8 +15,10 @@ import java.util.concurrent.atomic.AtomicInteger
 class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "com.sonicwave.sonic_wave/intent"
     private val MEDIA_CHANNEL = "com.sonicwave.sonic_wave/media"
+    private val DOWNLOAD_CHANNEL = "com.sonicwave.sonic_wave/downloads"
     private var methodChannel: MethodChannel? = null
     private var mediaChannel: MethodChannel? = null
+    private var downloadChannel: MethodChannel? = null
     private var initialUri: String? = null
     private var initialSharedText: String? = null
 
@@ -158,33 +160,162 @@ class MainActivity : AudioServiceActivity() {
             }
         }
 
-        val installerChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.sonicwave.sonic_wave/installer")
-        installerChannel.setMethodCallHandler { call, result ->
-            if (call.method == "installApk") {
-                val filePath = call.argument<String>("filePath")
-                if (filePath == null) {
-                    result.error("INVALID_PATH", "APK file path was null", null)
-                    return@setMethodCallHandler
-                }
-                try {
-                    val apkFile = java.io.File(filePath)
-                    val apkUri: Uri = androidx.core.content.FileProvider.getUriForFile(
-                        applicationContext,
-                        "${applicationContext.packageName}.fileprovider",
-                        apkFile
-                    )
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(apkUri, "application/vnd.android.package-archive")
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+        // Progress notification + the foreground service that keeps a download
+        // alive once the app is backgrounded. Driven from Dart by
+        // DownloadNotificationService; the Cancel action comes back the other
+        // way, through DownloadForegroundService.channel.
+        downloadChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DOWNLOAD_CHANNEL)
+        DownloadForegroundService.channel = downloadChannel
+        downloadChannel?.setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "start" -> {
+                        DownloadForegroundService.start(
+                            applicationContext,
+                            call.argument<String>("videoId").orEmpty(),
+                            call.argument<String>("title").orEmpty(),
+                            call.argument<String>("subtitle").orEmpty(),
+                        )
+                        result.success(true)
                     }
-                    applicationContext.startActivity(intent)
-                    result.success(true)
-                } catch (e: Exception) {
-                    result.error("INSTALL_FAILED", e.message, null)
+                    "update" -> {
+                        DownloadForegroundService.send(
+                            applicationContext,
+                            DownloadForegroundService.ACTION_UPDATE,
+                        ) {
+                            putExtra(DownloadForegroundService.EXTRA_VIDEO_ID, call.argument<String>("videoId").orEmpty())
+                            putExtra(DownloadForegroundService.EXTRA_TITLE, call.argument<String>("title").orEmpty())
+                            putExtra(DownloadForegroundService.EXTRA_SUBTITLE, call.argument<String>("subtitle").orEmpty())
+                            putExtra(DownloadForegroundService.EXTRA_PERCENT, call.argument<Int>("percent") ?: -1)
+                        }
+                        result.success(true)
+                    }
+                    "complete" -> {
+                        DownloadForegroundService.send(
+                            applicationContext,
+                            DownloadForegroundService.ACTION_COMPLETE,
+                        ) {
+                            putExtra(DownloadForegroundService.EXTRA_VIDEO_ID, call.argument<String>("videoId").orEmpty())
+                            putExtra(DownloadForegroundService.EXTRA_TITLE, call.argument<String>("title").orEmpty())
+                        }
+                        result.success(true)
+                    }
+                    "fail" -> {
+                        DownloadForegroundService.send(
+                            applicationContext,
+                            DownloadForegroundService.ACTION_FAIL,
+                        ) {
+                            putExtra(DownloadForegroundService.EXTRA_VIDEO_ID, call.argument<String>("videoId").orEmpty())
+                            putExtra(DownloadForegroundService.EXTRA_TITLE, call.argument<String>("title").orEmpty())
+                            putExtra(DownloadForegroundService.EXTRA_REASON, call.argument<String>("reason").orEmpty())
+                        }
+                        result.success(true)
+                    }
+                    "stop" -> {
+                        DownloadForegroundService.send(
+                            applicationContext,
+                            DownloadForegroundService.ACTION_STOP,
+                        )
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
                 }
-            } else {
-                result.notImplemented()
+            } catch (e: Exception) {
+                // The notification is feedback, never the mechanism — a service
+                // the OS refused to start must not fail the download in Dart.
+                result.success(false)
             }
         }
+
+        val installerChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.sonicwave.sonic_wave/installer")
+        installerChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                // Compare the downloaded APK against the running install before
+                // the installer is ever launched, so a mismatch can be explained
+                // instead of surfacing as a bare "Install not completed".
+                "inspectApk" -> {
+                    val filePath = call.argument<String>("filePath")
+                    if (filePath == null) {
+                        result.error("INVALID_PATH", "APK file path was null", null)
+                        return@setMethodCallHandler
+                    }
+                    Thread {
+                        val info = try {
+                            ApkInstaller.inspect(applicationContext, File(filePath))
+                        } catch (e: Exception) {
+                            null
+                        }
+                        runOnUiThread {
+                            if (info == null) {
+                                result.error("INSPECT_FAILED", "Could not read the downloaded APK.", null)
+                            } else {
+                                result.success(info)
+                            }
+                        }
+                    }.start()
+                }
+
+                "canInstallPackages" -> result.success(ApkInstaller.canRequestInstall(applicationContext))
+
+                // Send the user to the per-app "Install unknown apps" toggle.
+                // REQUEST_INSTALL_PACKAGES in the manifest only makes the app
+                // eligible to ask; without this grant the installer aborts.
+                "openInstallPermissionSettings" -> {
+                    try {
+                        val intent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            Intent(
+                                android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                Uri.parse("package:$packageName"),
+                            )
+                        } else {
+                            Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)
+                        }
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        applicationContext.startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("SETTINGS_FAILED", e.message, null)
+                    }
+                }
+
+                "installApk" -> {
+                    val filePath = call.argument<String>("filePath")
+                    if (filePath == null) {
+                        result.error("INVALID_PATH", "APK file path was null", null)
+                        return@setMethodCallHandler
+                    }
+                    val apkFile = File(filePath)
+                    if (!apkFile.exists()) {
+                        result.error("INVALID_PATH", "APK file no longer exists at $filePath", null)
+                        return@setMethodCallHandler
+                    }
+                    // A MethodChannel result may only be submitted once, and the
+                    // status callback can in principle fire more than that.
+                    val replied = AtomicBoolean(false)
+                    ApkInstaller.install(applicationContext, apkFile) { success, code, message ->
+                        if (!replied.compareAndSet(false, true)) return@install
+                        runOnUiThread {
+                            if (success) {
+                                result.success(true)
+                            } else {
+                                result.error(code ?: "INSTALL_FAILED", message, null)
+                            }
+                        }
+                    }
+                }
+
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        // A Cancel tap can arrive after the engine is gone. Dropping the
+        // reference is what lets the service detect that and just stop itself
+        // instead of invoking a channel whose executor no longer exists.
+        DownloadForegroundService.channel = null
+        downloadChannel?.setMethodCallHandler(null)
+        downloadChannel = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song.dart';
 import '../providers/settings_provider.dart';
@@ -124,6 +125,63 @@ class DownloadTask {
     this.onStateChanged,
   });
 
+  /// Where the bytes actually land while the transfer is running.
+  ///
+  /// Nothing is written straight into the final name any more. A `.part` file
+  /// keeps the target name free, so a retry resolves to the SAME name instead
+  /// of sliding to `Title (2).m4a` because attempt one's stub made `Title.m4a`
+  /// look taken; it keeps an unfinished transfer out of the user's file manager
+  /// and out of every other music app's library; and it is what makes resuming
+  /// possible at all, since the partial survives a failure under a name the
+  /// next attempt knows how to find.
+  ///
+  /// `.part` is deliberately not in [DownloadService._knownAudioExts], so the
+  /// name-clash check never sees it.
+  File get partFile => File('${audioFile.path}.part');
+
+  /// Identity of the byte stream behind [url], for deciding whether a partial
+  /// file may be appended to.
+  ///
+  /// The URL itself says nothing useful: resolved links are single-use and
+  /// time-limited, so the signature and expiry parameters differ on every
+  /// resolution even for the identical stream. What does identify the bytes is
+  /// the format — YouTube puts it in `itag`, and everything else is pinned
+  /// well enough by host + path.
+  static String formatKeyOf(Uri url) {
+    final itag = url.queryParameters['itag'];
+    if (itag != null && itag.isNotEmpty) return 'itag:$itag';
+    return '${url.host}${url.path}';
+  }
+
+  /// Total size out of a `Content-Range: bytes 500-1023/1024` header.
+  static int? _totalFromContentRange(String? header) {
+    if (header == null) return null;
+    final slash = header.lastIndexOf('/');
+    if (slash < 0) return null;
+    return int.tryParse(header.substring(slash + 1).trim());
+  }
+
+  /// Promote a finished `.part` file to its final name.
+  Future<void> _promotePartFile() async {
+    final part = partFile;
+    if (!await part.exists()) return;
+    if (await audioFile.exists()) {
+      try {
+        await audioFile.delete();
+      } catch (_) {}
+    }
+    try {
+      await part.rename(audioFile.path);
+    } on FileSystemException {
+      // Rename is only atomic within one filesystem; a staging dir and a target
+      // on different volumes (SD card) need a copy.
+      await part.copy(audioFile.path);
+      try {
+        await part.delete();
+      } catch (_) {}
+    }
+  }
+
   void _startSpeedTracking() {
     _lastSpeedBytes = bytesDownloaded;
     _speedTimer?.cancel();
@@ -160,33 +218,138 @@ class DownloadTask {
     eta = null;
   }
 
-  Future<void> start(Uri streamUrl, int size, {Map<String, String>? headers}) async {
+  /// Run the transfer, writing into [partFile] and promoting it to [audioFile]
+  /// once every byte has arrived.
+  ///
+  /// With [allowResume], an existing `.part` is continued via an HTTP `Range`
+  /// request instead of thrown away. A dropped connection on a phone is
+  /// ordinary, and restarting a 4-minute song from zero every time turned a
+  /// blip into a total loss — resuming turns "failed at 80%" into a delay.
+  /// The caller is responsible for only setting it when the partial provably
+  /// came from the same rendition (see [DownloadService._resumeHints]);
+  /// everything below is the second line of defence against appending one
+  /// encoding onto another.
+  Future<void> start(
+    Uri streamUrl,
+    int size, {
+    Map<String, String>? headers,
+    bool allowResume = false,
+  }) async {
     totalSize = size;
     status = DownloadStatus.downloading;
     if (onStateChanged != null) onStateChanged!();
 
-    _httpClient = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 8)
-      ..idleTimeout = const Duration(seconds: 15);
+    final part = partFile;
+    int resumeFrom = 0;
+    try {
+      if (await part.exists()) {
+        if (allowResume) {
+          final onDisk = await part.length();
+          if (onDisk > 0) resumeFrom = onDisk;
+        } else {
+          // Not resumable — a leftover from a different rendition or a cold
+          // start with nothing to validate against. Drop it rather than guess.
+          await part.delete();
+        }
+      }
+    } catch (_) {}
 
-    final request = await _httpClient!.getUrl(streamUrl);
-    request.headers.set('User-Agent', 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36');
-    if (headers != null) {
-      headers.forEach((k, v) => request.headers.set(k, v));
+    Future<HttpClientResponse> open(int from) async {
+      _httpClient?.close();
+      _httpClient = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 8)
+        ..idleTimeout = const Duration(seconds: 15);
+      final request = await _httpClient!.getUrl(streamUrl);
+      request.headers.set('User-Agent', 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36');
+      if (headers != null) {
+        headers.forEach((k, v) => request.headers.set(k, v));
+      }
+      if (from > 0) {
+        request.headers.set(HttpHeaders.rangeHeader, 'bytes=$from-');
+      }
+      return request.close();
     }
 
-    final response = await request.close();
+    var response = await open(resumeFrom);
+    bool appending = false;
+
+    if (resumeFrom > 0) {
+      if (response.statusCode == HttpStatus.partialContent) {
+        final total =
+            _totalFromContentRange(response.headers.value(HttpHeaders.contentRangeHeader));
+        if (totalSize > 0 && total != null && total != totalSize) {
+          // The server is handing back a different rendition than the one that
+          // produced the partial. Appending would splice two encodings into a
+          // single file, which decodes as noise — start over instead.
+          debugPrint('[DownloadTask] Resume rejected for ${song.title}: '
+              'server reports $total bytes, partial belongs to $totalSize');
+          await response.drain();
+          resumeFrom = 0;
+          totalSize = 0;
+          response = await open(0);
+        } else {
+          appending = true;
+          if (total != null && total > 0) {
+            totalSize = total;
+          } else if (totalSize <= 0 && response.contentLength > 0) {
+            totalSize = resumeFrom + response.contentLength;
+          }
+        }
+      } else if (response.statusCode == HttpStatus.requestedRangeNotSatisfiable) {
+        // Everything the server has is already on disk.
+        await response.drain();
+        _httpClient?.close();
+        bytesDownloaded = resumeFrom;
+        if (totalSize <= 0) totalSize = resumeFrom;
+        await _promotePartFile();
+        progress = 1.0;
+        status = DownloadStatus.completed;
+        if (onStateChanged != null) onStateChanged!();
+        return;
+      } else {
+        // 200 means the server ignored Range and is sending the whole body from
+        // byte 0, so the partial is worthless.
+        debugPrint('[DownloadTask] Server ignored Range for ${song.title} '
+            '(status ${response.statusCode}) — restarting from 0');
+        resumeFrom = 0;
+      }
+    }
+
     if (response.statusCode != HttpStatus.ok && response.statusCode != HttpStatus.partialContent) {
       await response.drain();
       _httpClient!.close();
       throw Exception('Server returned status ${response.statusCode}');
     }
 
-    if (totalSize <= 0 && response.contentLength > 0) {
-      totalSize = response.contentLength;
+    if (appending) {
+      bytesDownloaded = resumeFrom;
+      debugPrint('[DownloadTask] Resuming ${song.title} at '
+          '${DownloadItem.formatFileSize(resumeFrom)} of '
+          '${DownloadItem.formatFileSize(totalSize)}');
+    } else {
+      bytesDownloaded = 0;
+      // On a full response the SERVER's length wins over whatever the caller
+      // predicted. The size handed in is an estimate from the extractor
+      // (Explode's manifest, or a previous attempt's Content-Range) and can
+      // legitimately disagree with the rendition actually served — and since
+      // the completeness check below compares against totalSize, trusting a
+      // stale estimate would reject a download that arrived in full.
+      if (response.contentLength > 0) {
+        totalSize = response.contentLength;
+      } else if (totalSize > 0) {
+        // No Content-Length (chunked): there is nothing to verify against, so
+        // don't hold the transfer to a number nobody confirmed.
+        totalSize = 0;
+      }
+    }
+    if (totalSize > 0) {
+      progress = (bytesDownloaded / totalSize).clamp(0.0, 1.0);
     }
 
-    _output = audioFile.openWrite(mode: FileMode.write);
+    try {
+      await part.parent.create(recursive: true);
+    } catch (_) {}
+    _output = part.openWrite(mode: appending ? FileMode.append : FileMode.write);
     final completer = Completer<void>();
 
     _startSpeedTracking();
@@ -215,7 +378,33 @@ class DownloadTask {
       onDone: () async {
         _stopSpeedTracking();
         await _output?.close();
+        _output = null;
         _httpClient?.close();
+
+        // A stream can end cleanly and still be short: a proxy that drops the
+        // connection mid-body closes it without an error, and the old code
+        // promoted that truncated file as a finished song. Failing here instead
+        // keeps the `.part` around, so the retry continues it rather than
+        // leaving the user with a track that cuts off.
+        if (totalSize > 0 && bytesDownloaded < totalSize) {
+          status = DownloadStatus.failed;
+          errorMessage = 'Connection closed after '
+              '${DownloadItem.formatFileSize(bytesDownloaded)} of '
+              '${DownloadItem.formatFileSize(totalSize)}';
+          if (onStateChanged != null) onStateChanged!();
+          completer.completeError(Exception(errorMessage));
+          return;
+        }
+
+        try {
+          await _promotePartFile();
+        } catch (e) {
+          status = DownloadStatus.failed;
+          errorMessage = e.toString();
+          if (onStateChanged != null) onStateChanged!();
+          completer.completeError(e);
+          return;
+        }
         progress = 1.0;
         status = DownloadStatus.completed;
         if (onStateChanged != null) onStateChanged!();
@@ -224,7 +413,10 @@ class DownloadTask {
       onError: (e) async {
         _stopSpeedTracking();
         await _output?.close();
+        _output = null;
         _httpClient?.close();
+        // The `.part` file is deliberately left on disk — it is exactly what
+        // the next attempt resumes from.
         status = DownloadStatus.failed;
         errorMessage = e.toString();
         if (onStateChanged != null) onStateChanged!();
@@ -262,8 +454,10 @@ class DownloadTask {
     await _output?.close();
     _httpClient?.close();
 
-    // Clean up partial files
+    // Clean up partial files. Cancelling is an explicit "I don't want this",
+    // so unlike a failure the `.part` goes too — there is nothing to resume.
     try {
+      if (await partFile.exists()) await partFile.delete();
       if (await audioFile.exists()) await audioFile.delete();
       if (await thumbFile.exists()) await thumbFile.delete();
     } catch (_) {}
@@ -291,6 +485,18 @@ class DownloadService {
   // Retry config
   static const int maxRetries = 3;
 
+  /// Per-song record of what the last failed transfer was reading, keyed by
+  /// videoId. Present only while a `.part` file is worth continuing.
+  ///
+  /// Resume is offered ONLY against the same rendition. A retry re-resolves
+  /// from the network (deliberately — see [_executeDownload]), and a fresh
+  /// resolution can legitimately land on a different format, a different
+  /// mirror, or a different bitrate; appending those bytes to the partial
+  /// would produce a file that is neither. Held in memory rather than on disk
+  /// because a partial from a previous run has no recorded total to validate
+  /// against, and silently guessing is how you ship corrupt audio.
+  final Map<String, _ResumeHint> _resumeHints = {};
+
   final StorageLocationService _storageService = StorageLocationService();
 
   Future<Directory> get _downloadDir async {
@@ -307,10 +513,343 @@ class DownloadService {
     return File('${dir.path}${Platform.pathSeparator}metadata.json');
   }
 
-  /// Where this song's cover image belongs: the hidden cover folder, never
-  /// beside the audio. See [StorageLocationService.coverFolderName].
+  /// Where this song's cover image belongs *if one is needed at all*: the
+  /// hidden cover folder, never beside the audio. See
+  /// [StorageLocationService.coverFolderName].
+  ///
+  /// A cover only reaches disk when the artwork could NOT be embedded into the
+  /// audio container — see [_settleArtwork].
   Future<File> _coverFileFor(String videoId) async =>
       File(await _storageService.coverPathFor(videoId));
+
+  /// Container the downloader aims for.
+  ///
+  /// M4A because that is what YouTube already serves (AAC), so producing it is
+  /// a stream copy rather than a transcode, and because it carries a real
+  /// `covr` atom — cover art can be embedded without re-encoding a thing.
+  static const String preferredContainer = 'm4a';
+
+  /// Audio extensions a download may end up with, used when checking whether a
+  /// title-derived name is already claimed on disk.
+  static const List<String> _knownAudioExts = [
+    'm4a', 'mp3', 'aac', 'flac', 'ogg', 'opus', 'wav', 'webm', 'mp4'
+  ];
+
+  static String _basenameOf(String path) => path.split(RegExp(r'[/\\]')).last;
+
+  static String _extensionOf(String path) {
+    final name = _basenameOf(path);
+    final dot = name.lastIndexOf('.');
+    if (dot <= 0 || dot == name.length - 1) return preferredContainer;
+    return name.substring(dot + 1).toLowerCase();
+  }
+
+  /// Full path minus the extension. Titles legitimately contain dots ("Mr.
+  /// Brightside"), so only the LAST one is treated as the extension separator.
+  static String _stemOf(String path) {
+    final dot = path.lastIndexOf('.');
+    final sep = path.lastIndexOf(RegExp(r'[/\\]'));
+    return dot > sep && dot > 0 ? path.substring(0, dot) : path;
+  }
+
+  /// Case- and separator-insensitive key for comparing two paths.
+  static String _pathKey(String path) =>
+      path.replaceAll('\\', '/').toLowerCase();
+
+  /// The file a download of [song] should produce: `<download dir>/<title>.<ext>`.
+  ///
+  /// Songs are stored under their TITLE, not under the source's internal id. A
+  /// folder of `dQw4w9WgXcQ.m4a` is unusable the moment the user opens it in a
+  /// file manager, copies tracks to a computer, or plays them in another app —
+  /// the id is meaningful to this app and to nothing else.
+  ///
+  /// Two different songs can genuinely share a title, so a name already taken
+  /// by another track gets a ` (2)`, ` (3)` suffix. Re-downloading the SAME
+  /// song deliberately reuses its own existing name instead of piling up
+  /// copies, which is why the song's registered path is exempt from the clash
+  /// check. Falls back to the id in the pathological case where 99 tracks share
+  /// a title, since the id is unique by construction.
+  ///
+  /// [_downloadedSongs] must already be loaded; callers run after
+  /// [loadDownloads].
+  Future<File> _resolveAudioFile(Song song, String ext) async {
+    final dir = await _downloadDir;
+    final sep = Platform.pathSeparator;
+    final base = StorageLocationService.sanitizeFileName(
+      song.title,
+      fallback: song.videoId,
+    );
+
+    String? ownKey;
+    for (final s in _downloadedSongs) {
+      if (s.videoId == song.videoId) {
+        final p = s.filePath;
+        if (p != null && p.isNotEmpty) ownKey = _pathKey(p);
+        break;
+      }
+    }
+
+    for (int n = 1; n <= 99; n++) {
+      final stem = n == 1 ? base : '$base ($n)';
+      bool clash = false;
+      // Any container counts: `Title.mp3` sitting there makes `Title.m4a` a
+      // confusing near-duplicate, and the container-repair pass may rename one
+      // onto the other.
+      for (final e in _knownAudioExts) {
+        final candidate = '${dir.path}$sep$stem.$e';
+        if (_pathKey(candidate) == ownKey) continue;
+        // The in-progress `.part` counts as taken. Transfers no longer create
+        // the final file until they finish (see [DownloadTask.partFile]), so
+        // without this a second song with the same title would look at an empty
+        // slot, reserve the identical name, and the two would write over each
+        // other's staging file.
+        if (File(candidate).existsSync() || File('$candidate.part').existsSync()) {
+          clash = true;
+          break;
+        }
+      }
+      // Same reasoning for a name another running task has reserved but not yet
+      // written anything to.
+      if (!clash) {
+        for (final t in _activeTasks.values) {
+          if (t.song.videoId == song.videoId) continue;
+          if (_stemOf(_pathKey(t.audioFile.path)) == _pathKey('${dir.path}$sep$stem')) {
+            clash = true;
+            break;
+          }
+        }
+      }
+      if (!clash) return File('${dir.path}$sep$stem.$ext');
+    }
+    return File('${dir.path}$sep${song.videoId}.$ext');
+  }
+
+  /// The path this song currently occupies, before the download replaces it.
+  String? _registeredPathFor(String videoId) {
+    for (final s in _downloadedSongs) {
+      if (s.videoId == videoId) return s.filePath;
+    }
+    return null;
+  }
+
+  /// Delete the file a re-download has just superseded.
+  ///
+  /// A song re-downloaded after a title edit (or into a different container)
+  /// lands under a new name; without this the old file stays behind as an
+  /// orphan that no index entry points at, invisible to the app but still
+  /// eating the user's storage and still listed by every other music player.
+  Future<void> _removeSupersededFile(String? previousPath, String newPath) async {
+    if (previousPath == null || previousPath.isEmpty) return;
+    if (_pathKey(previousPath) == _pathKey(newPath)) return;
+    try {
+      final old = File(previousPath);
+      if (await old.exists()) {
+        await old.delete();
+        await MediaStoreScanner.scanAll([previousPath]);
+        debugPrint('[DownloadService] Removed superseded file: $previousPath');
+      }
+    } catch (e) {
+      debugPrint('[DownloadService] Could not remove superseded file: $e');
+    }
+  }
+
+  /// Put the artwork where it belongs and report where the index should point.
+  ///
+  /// The rule, in order:
+  /// 1. If the cover is already inside the audio container, we are done. The
+  ///    file is self-contained — it shows its own art in every other player and
+  ///    on every other device — and NO image is written to disk.
+  /// 2. Otherwise try to embed it ourselves ([ID3TagWriter]).
+  /// 3. Only if embedding is genuinely impossible (an Opus/WebM container, a
+  ///    malformed MP4) does a standalone image get written, into the hidden
+  ///    cover folder, and mapped to the song through `metadata.json`.
+  ///
+  /// Returns the path the index should point at: the hidden sidecar for case 3,
+  /// otherwise the app-private render cache written by [_writeArtCache]. Null
+  /// only when no artwork could be obtained at all, in which case the caller
+  /// keeps the song's remote thumbnail URL.
+  ///
+  /// The render cache is what makes the embedded art VISIBLE in this app while
+  /// offline. Embedding alone is not enough for that: nothing decodes the
+  /// container to draw a list tile, so with only a remote URL in the index a
+  /// downloaded song fell back to the placeholder as soon as the HTTP image
+  /// cache was evicted. The cache lives in app-private support storage — not in
+  /// the user's music folder — so it is invisible to file managers and the media
+  /// scanner, and it goes away with the app.
+  ///
+  /// [stagedThumbnail] is an image yt-dlp already fetched; it saves a network
+  /// round-trip and is deleted either way, since staging is not storage.
+  Future<String?> _settleArtwork(
+    Song song,
+    File audioFile, {
+    String? stagedThumbnail,
+    bool alreadyEmbedded = false,
+  }) async {
+    bool embedded =
+        alreadyEmbedded || await ID3TagWriter.hasEmbeddedCover(audioFile);
+
+    // Only fetch the image if the file still needs one, and fetch it at most
+    // once: a cover the network refuses to hand over will not appear on a
+    // second ask, and this runs at the tail of a download the user is watching.
+    Uint8List? bytes;
+    bool isPng = false;
+    bool coverLookedUp = false;
+
+    Future<void> loadCover() async {
+      if (coverLookedUp) return;
+      coverLookedUp = true;
+      if (stagedThumbnail != null) {
+        try {
+          final staged = File(stagedThumbnail);
+          if (await staged.exists()) {
+            bytes = await staged.readAsBytes();
+            isPng = stagedThumbnail.toLowerCase().endsWith('.png');
+          }
+        } catch (e) {
+          debugPrint('[DownloadService] Could not read staged cover: $e');
+        }
+      }
+      if (bytes == null || bytes!.isEmpty) {
+        final fetched = await _fetchCoverBytes(song);
+        bytes = fetched?.bytes;
+        isPng = fetched?.isPng ?? false;
+      }
+    }
+
+    if (!embedded) {
+      await loadCover();
+      final image = bytes;
+      if (image != null && image.isNotEmpty && await audioFile.exists()) {
+        try {
+          embedded = await ID3TagWriter.embedCoverArt(
+            audioFile: audioFile,
+            imageBytes: image,
+            mimeType: isPng ? 'image/png' : 'image/jpeg',
+            title: song.title,
+            artist: song.artist,
+          );
+        } catch (e) {
+          debugPrint('[DownloadService] Cover embedding failed: $e');
+          embedded = false;
+        }
+      }
+    }
+
+    // Staged artwork has done its job; it is cache, not storage.
+    if (stagedThumbnail != null) {
+      try {
+        final staged = File(stagedThumbnail);
+        if (await staged.exists()) await staged.delete();
+      } catch (_) {}
+    }
+
+    if (embedded) {
+      // No sidecar in the user's folder — but the app still needs a copy it can
+      // draw offline. Reading it costs nothing here: the bytes are already in
+      // hand unless yt-dlp embedded the art without leaving its staged image,
+      // and a download is by definition online.
+      await _removeCoverFile(song.videoId);
+      await loadCover();
+      final image = bytes;
+      if (image == null || image.isEmpty) return null;
+      return _writeArtCache(song.videoId, image, isPng: isPng);
+    }
+
+    await loadCover();
+    final image = bytes;
+    if (image == null || image.isEmpty) return null;
+
+    debugPrint('[DownloadService] Could not embed art into '
+        '${_basenameOf(audioFile.path)} — keeping a hidden sidecar cover');
+    return _writeCoverFile(song.videoId, image, isPng: isPng);
+  }
+
+  /// Write the fallback cover into the hidden folder. Returns its path, or null.
+  Future<String?> _writeCoverFile(String videoId, Uint8List bytes,
+      {bool isPng = false}) async {
+    try {
+      // coverPathFor always names the file .jpg; keep a PNG honest so decoders
+      // that trust the extension don't choke on it.
+      var path = await _storageService.coverPathFor(videoId);
+      if (isPng) path = '${path.substring(0, path.length - 4)}.png';
+      final file = File(path);
+      if (!await file.parent.exists()) {
+        await file.parent.create(recursive: true);
+      }
+      await file.writeAsBytes(bytes, flush: true);
+      return file.path;
+    } catch (e) {
+      debugPrint('[DownloadService] Could not write sidecar cover: $e');
+      return null;
+    }
+  }
+
+  /// Drop any sidecar cover for [videoId] — used once the art is embedded, so
+  /// an upgrade or a re-download cleans up the copy an older build left behind.
+  Future<void> _removeCoverFile(String videoId) async {
+    for (final ext in const ['jpg', 'png']) {
+      try {
+        var path = await _storageService.coverPathFor(videoId);
+        if (ext == 'png') path = '${path.substring(0, path.length - 4)}.png';
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+  }
+
+  Directory? _artCacheDir;
+
+  /// App-private directory holding the render copy of embedded cover art.
+  ///
+  /// Application *support* rather than cache storage: the OS may clear a cache
+  /// directory at will, and losing these files would silently return every
+  /// downloaded song to the placeholder. Mirrors `LocalMetadataService`'s
+  /// `localart` folder, which does the same job for imported local files.
+  Future<Directory> _getArtCacheDir() async {
+    final cached = _artCacheDir;
+    if (cached != null && await cached.exists()) return cached;
+    final support = await getApplicationSupportDirectory();
+    final dir =
+        Directory('${support.path}${Platform.pathSeparator}downloadart');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    _artCacheDir = dir;
+    return dir;
+  }
+
+  /// Store the render copy of [videoId]'s embedded art. Returns its path, or
+  /// null on failure — in which case the caller falls back to the remote URL,
+  /// so a failed cache write costs artwork offline and nothing else.
+  Future<String?> _writeArtCache(String videoId, Uint8List bytes,
+      {bool isPng = false}) async {
+    try {
+      final dir = await _getArtCacheDir();
+      final file = File(
+          '${dir.path}${Platform.pathSeparator}$videoId.${isPng ? 'png' : 'jpg'}');
+      await file.writeAsBytes(bytes, flush: true);
+      // A re-download can change the format; leave no stale twin behind for the
+      // index to point at.
+      final other = File(
+          '${dir.path}${Platform.pathSeparator}$videoId.${isPng ? 'jpg' : 'png'}');
+      if (await other.exists()) await other.delete();
+      return file.path;
+    } catch (e) {
+      debugPrint('[DownloadService] Could not cache cover art: $e');
+      return null;
+    }
+  }
+
+  /// Drop the cached render copy for [videoId]. Called on delete: the file lives
+  /// outside the download folder, so the directory sweeps never reach it.
+  Future<void> _removeArtCache(String videoId) async {
+    try {
+      final dir = await _getArtCacheDir();
+      for (final ext in const ['jpg', 'png']) {
+        final file =
+            File('${dir.path}${Platform.pathSeparator}$videoId.$ext');
+        if (await file.exists()) await file.delete();
+      }
+    } catch (_) {}
+  }
 
   /// Forget everything derived from the current storage root.
   ///
@@ -678,6 +1217,9 @@ class DownloadService {
         valid.add(song);
       } else {
         changed = true;
+        // The audio is gone, so its cached cover is an orphan no index entry
+        // will ever point at again.
+        await _removeArtCache(song.videoId);
         debugPrint('[DownloadService] Purged ghost download: ${song.title} ($path)');
       }
     }
@@ -743,24 +1285,33 @@ class DownloadService {
 
   /// Check network connectivity.
   ///
-  /// Fails OPEN: only a lookup that comes back with a definite "no such host"
-  /// counts as offline. A slow DNS answer does not — this gate used to give up
-  /// after 3 seconds and report "No network connection", which on a weak mobile
-  /// connection rejected downloads that would have worked, while playback
-  /// (which never consults this) kept streaming and made the refusal look
-  /// nonsensical. If the network really is down, the transfer itself reports it
-  /// with a far more accurate error than a DNS probe can.
+  /// Fails OPEN, without exception. Only a lookup that comes back with a
+  /// definite, *fast* "no such host" would be evidence of being offline — and
+  /// even that is unreliable on mobile, where a captive portal, a carrier DNS
+  /// hiccup or a network handing over between cells all produce a
+  /// SocketException on a connection that works perfectly a second later.
+  ///
+  /// The previous version returned false on any exception, which is what turned
+  /// a flaky DNS answer into "No network connection. Please check your internet"
+  /// and refused a download that would have succeeded — while playback, which
+  /// never consults this gate, kept streaming and made the refusal look absurd.
+  /// The transfer itself is a far better judge of reachability, and it reports a
+  /// real error instead of a guess, so this now only ever logs.
   Future<bool> isNetworkAvailable() async {
     try {
       final result = await InternetAddress.lookup('google.com')
           .timeout(const Duration(seconds: 8));
-      return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
+      if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) return true;
+      debugPrint('[DownloadService] DNS probe returned no address — '
+          'letting the transfer decide');
+      return true;
     } on TimeoutException {
       debugPrint('[DownloadService] DNS probe timed out — assuming online');
       return true;
     } catch (e) {
-      debugPrint('[DownloadService] Network probe failed: $e');
-      return false;
+      debugPrint('[DownloadService] DNS probe failed ($e) — assuming online; '
+          'the transfer will report the real error');
+      return true;
     }
   }
 
@@ -825,8 +1376,8 @@ class DownloadService {
       ));
 
       // Create a placeholder task so UI shows queued state
-      final dir = await _downloadDir;
-      final audioFile = File('${dir.path}/${song.videoId}.mp3');
+      await loadDownloads();
+      final audioFile = await _resolveAudioFile(song, preferredContainer);
       final thumbFile = await _coverFileFor(song.videoId);
       final task = DownloadTask(
         song: song,
@@ -927,15 +1478,25 @@ class DownloadService {
     ValueChanged<double>? onProgress, {
     VoidCallback? onStateChanged,
     required AudioQuality quality,
+    File? reservedAudioFile,
   }) async {
     final dir = await _downloadDir;
+
+    // The index has to be in memory before a name can be reserved: title
+    // collisions are resolved against the songs already downloaded.
+    await loadDownloads();
+    final previousPath = _registeredPathFor(song.videoId);
+    // Reuse the name the first attempt reserved, so a retry does not slide onto
+    // `Title (2).m4a` — see [_executeDownload]'s `reservedAudioFile`.
+    final plannedAudio =
+        reservedAudioFile ?? await _resolveAudioFile(song, preferredContainer);
 
     // Register a task up front so the existing UI (progress bar, speed, cancel)
     // works exactly as it does for the HTTP path. thumbFile points at the
     // hidden cover location because DownloadTask.cancel() deletes it.
     final task = DownloadTask(
       song: song,
-      audioFile: File('${dir.path}/${song.videoId}.m4a'),
+      audioFile: plannedAudio,
       thumbFile: await _coverFileFor(song.videoId),
       onStateChanged: () {
         if (onProgress != null && _activeTasks.containsKey(song.videoId)) {
@@ -994,44 +1555,31 @@ class DownloadService {
 
       if (task.isCancelled) return false;
 
-      // Move the finished artifacts out of staging into whichever location the
-      // user has configured (app-internal, device internal, or SD card).
-      final movedAudio =
-          await _storageService.moveFile(result.audioPath, dir);
+      // Move the finished artifact out of staging into whichever location the
+      // user has configured (app-internal, device internal, or SD card), and
+      // rename it from the staging id to the song's title in the same step.
+      // The container is whatever yt-dlp actually produced — normally the
+      // requested M4A, but the extension has to follow the bytes.
+      final producedExt = _extensionOf(result.audioPath);
+      final targetName = producedExt == preferredContainer
+          ? _basenameOf(plannedAudio.path)
+          : '${_stemOf(plannedAudio.path)}.$producedExt';
+      final movedAudio = await _storageService
+          .moveFile(result.audioPath, dir, fileName: targetName);
       if (movedAudio == null) {
         throw Exception('Could not move downloaded audio into $dir');
       }
 
-      // The artwork the USER gets is the copy embedded inside the audio file by
-      // yt-dlp (--embed-thumbnail), so the file is self-contained wherever it
-      // ends up. This second copy is only the app's render cache, and it goes
-      // into the hidden cover folder — beside the audio it would land in the
-      // device Gallery.
-      final coverDir = await _storageService.getCoverDir();
-      String? movedThumb;
-      if (result.thumbnailPath != null) {
-        movedThumb =
-            await _storageService.moveFile(result.thumbnailPath!, coverDir);
-      }
-
-      movedThumb ??= await _fetchSidecarThumbnail(song, coverDir);
-
-      if (!result.thumbnailEmbedded && movedThumb != null && File(movedThumb).existsSync()) {
-        try {
-          final thumbFile = File(movedThumb);
-          final bytes = await thumbFile.readAsBytes();
-          final mime = movedThumb.toLowerCase().contains('.png') ? 'image/png' : 'image/jpeg';
-          await ID3TagWriter.embedCoverArt(
-            audioFile: File(movedAudio),
-            imageBytes: bytes,
-            mimeType: mime,
-            title: song.title,
-            artist: song.artist,
-          );
-        } catch (e) {
-          debugPrint('[DownloadService] Cover embedding fallback error: $e');
-        }
-      }
+      // Artwork belongs INSIDE the file. yt-dlp's --embed-thumbnail normally
+      // has already put it there; anything else is handled (and any stale
+      // sidecar cleaned up) by _settleArtwork, which only writes a standalone
+      // image when embedding turns out to be impossible.
+      final coverPath = await _settleArtwork(
+        song,
+        File(movedAudio),
+        stagedThumbnail: result.thumbnailPath,
+        alreadyEmbedded: result.thumbnailEmbedded,
+      );
 
       task.progress = 1.0;
       task.status = DownloadStatus.completed;
@@ -1039,14 +1587,15 @@ class DownloadService {
       if (onStateChanged != null) onStateChanged();
 
       await loadDownloads();
+      await _removeSupersededFile(previousPath, movedAudio);
       _downloadedSongs.removeWhere((s) => s.videoId == song.videoId);
       _downloadedSongs.add(Song(
         id: song.id,
         videoId: song.videoId,
         title: song.title,
         artist: song.artist,
-        thumbnailUrl: movedThumb ?? song.thumbnailUrl,
-        highResThumbnailUrl: movedThumb ?? song.highResThumbnailUrl,
+        thumbnailUrl: coverPath ?? song.thumbnailUrl,
+        highResThumbnailUrl: coverPath ?? song.highResThumbnailUrl,
         duration: song.duration,
         filePath: movedAudio,
       ));
@@ -1070,43 +1619,61 @@ class DownloadService {
     }
   }
 
-  /// Download the cover art on its own, for when yt-dlp produced no image.
+  /// Fetch the song's cover image into memory.
   ///
-  /// [dir] must be the hidden cover directory — never the download folder.
-  /// Returns the local path, or null if the fetch failed.
-  Future<String?> _fetchSidecarThumbnail(Song song, Directory dir) async {
-    if (song.thumbnailUrl.isEmpty || !song.thumbnailUrl.startsWith('http')) {
-      return null;
+  /// Nothing is written to disk here: the bytes are destined for the inside of
+  /// the audio file, and only [_settleArtwork] decides whether a copy ever
+  /// needs to exist separately. The high-res URL is tried first because the
+  /// embedded art is what other players and other devices will render, and the
+  /// list thumbnail is too small to look good there.
+  Future<_CoverBytes?> _fetchCoverBytes(Song song) async {
+    final candidates = <String>[];
+    for (final url in [song.highResThumbnailUrl, song.thumbnailUrl]) {
+      if (url.isNotEmpty && url.startsWith('http') && !candidates.contains(url)) {
+        candidates.add(url);
+      }
     }
-    final client = HttpClient();
+    if (candidates.isEmpty) return null;
+
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 8);
     try {
-      final request = await client.getUrl(Uri.parse(song.thumbnailUrl));
-      final response = await request.close();
-      if (response.statusCode != HttpStatus.ok) return null;
-      final bytes = await consolidateHttpClientResponseBytes(response);
-      if (bytes.isEmpty) return null;
-      final ext = song.thumbnailUrl.toLowerCase().contains('.png') ? 'png' : 'jpg';
-      final file = File('${dir.path}/${song.videoId}.$ext');
-      await file.writeAsBytes(bytes);
-      return file.path;
-    } catch (e) {
-      debugPrint('[DownloadService] Sidecar thumbnail fetch failed: $e');
+      for (final url in candidates) {
+        try {
+          final request = await client.getUrl(Uri.parse(url));
+          final response = await request.close();
+          if (response.statusCode != HttpStatus.ok) {
+            await response.drain();
+            continue;
+          }
+          final bytes = await consolidateHttpClientResponseBytes(response);
+          if (bytes.isEmpty) continue;
+          // Trust the magic bytes over the URL: YouTube serves .jpg URLs that
+          // are actually WebP, and a mislabelled PNG breaks strict decoders.
+          final isPng = bytes.length >= 4 &&
+              bytes[0] == 0x89 &&
+              bytes[1] == 0x50 &&
+              bytes[2] == 0x4E &&
+              bytes[3] == 0x47;
+          return _CoverBytes(bytes, isPng);
+        } catch (e) {
+          debugPrint('[DownloadService] Cover fetch failed ($url): $e');
+        }
+      }
       return null;
     } finally {
       client.close();
     }
   }
 
-  Future<void> _executeDownload(Song song, ValueChanged<double>? onProgress, {VoidCallback? onStateChanged, int attempt = 0, AudioQuality quality = AudioQuality.high}) async {
-    final dir = await _downloadDir;
-    final audioFile = File('${dir.path}/${song.videoId}.mp3');
-    // The cover cache goes in the hidden folder, NEVER beside the audio — a
-    // visible .jpg in the download folder ends up in the device Gallery.
-    final thumbFile = await _coverFileFor(song.videoId);
-
+  Future<void> _executeDownload(Song song, ValueChanged<double>? onProgress, {VoidCallback? onStateChanged, int attempt = 0, AudioQuality quality = AudioQuality.high, File? reservedAudioFile}) async {
     // Preferred path for YouTube: let yt-dlp + FFmpeg do the download, the
     // container conversion and the artwork embedding natively. Falls through to
     // the HTTP path below on any failure, so this can only add capability.
+    //
+    // A retry re-enters this method from the top, so yt-dlp is tried again on
+    // every attempt rather than the first failure demoting the song to the
+    // weaker HTTP path for good.
     if (_isYouTubeId(song.videoId)) {
       try {
         final ok = await _executeYtDlpDownload(
@@ -1114,13 +1681,51 @@ class DownloadService {
           onProgress,
           onStateChanged: onStateChanged,
           quality: quality,
+          reservedAudioFile: reservedAudioFile,
         );
-        if (ok) return;
+        if (ok) {
+          // yt-dlp won this attempt, so whatever the HTTP path had staged for
+          // this song is dead weight.
+          _resumeHints.remove(song.videoId);
+          if (reservedAudioFile != null) {
+            try {
+              final leftover = File('${reservedAudioFile.path}.part');
+              if (await leftover.exists()) await leftover.delete();
+            } catch (_) {}
+          }
+          return;
+        }
       } catch (e) {
         debugPrint('[DownloadService] yt-dlp path failed for ${song.title}: $e '
             '— falling back to direct HTTP download');
       }
     }
+
+    // Reserve the title-derived name (see [_resolveAudioFile]) against the
+    // songs already in the library. The extension starts as the preferred
+    // container and is corrected from the magic bytes once the transfer is
+    // done — the server decides the container, not us.
+    await loadDownloads();
+    final previousPath = _registeredPathFor(song.videoId);
+    // The target name is reserved ONCE and reused by every retry of this
+    // download. Re-resolving it per attempt walked the clash suffix forward:
+    // once attempt one had put something at `Title.m4a`, attempt two saw the
+    // name as taken and landed on `Title (2).m4a`, attempt three on
+    // `Title (3).m4a` — littering the folder with stubs no index entry points
+    // at, and making resume impossible because each attempt wrote to a
+    // different file.
+    final audioFile =
+        reservedAudioFile ?? await _resolveAudioFile(song, preferredContainer);
+    // The fallback cover — only ever written if the art cannot be embedded —
+    // goes in the hidden folder, NEVER beside the audio, where the media
+    // scanner would put it in the device Gallery.
+    final thumbFile = await _coverFileFor(song.videoId);
+
+    // Identity of the rendition this attempt ends up reading, recorded so a
+    // failure can leave a resume hint the NEXT attempt can validate against.
+    // Declared out here because the catch block needs it and `streamUrl` is
+    // scoped to the try.
+    String? usedFormatKey;
 
     try {
       // 1. Resolve stream URL using StreamResolverService (works for JioSaavn, YouTube, Jamendo, etc.)
@@ -1128,7 +1733,14 @@ class DownloadService {
       int totalBytes = 0;
       Map<String, String>? headers;
 
-      final resolved = await StreamResolverService().resolve(song);
+      // A retry MUST go back to the network instead of re-reading the resolved
+      // URL cache. Stream URLs are time-limited and IP-bound, so the single
+      // most likely reason the previous attempt died is that this exact URL
+      // stopped working — handing the same one back made all three attempts
+      // fail identically and turned the retry loop into a slow way of
+      // reporting the first error.
+      final resolved =
+          await StreamResolverService().resolve(song, forceRefresh: attempt > 0);
       if (resolved != null && resolved.url.isNotEmpty && !resolved.url.startsWith('file://')) {
         streamUrl = Uri.parse(resolved.url);
         headers = resolved.headers;
@@ -1169,46 +1781,48 @@ class DownloadService {
       _activeTasks[song.videoId] = task;
       if (onStateChanged != null) onStateChanged();
 
-      await task.start(streamUrl, totalBytes, headers: headers);
+      // Continue an existing `.part` only if the previous attempt left a hint
+      // proving it came from this same rendition. Any other partial — a
+      // different itag, a different mirror, a leftover from a previous run — is
+      // discarded inside start(), because appending across encodings produces a
+      // file that plays as noise.
+      usedFormatKey = DownloadTask.formatKeyOf(streamUrl);
+      final hint = _resumeHints[song.videoId];
+      final canResume = hint != null && hint.formatKey == usedFormatKey;
+      if (canResume && totalBytes <= 0) {
+        // Give start() the size the earlier attempt learned, so its
+        // Content-Range cross-check has something to compare against.
+        totalBytes = hint.total;
+      }
+
+      await task.start(
+        streamUrl,
+        totalBytes,
+        headers: headers,
+        allowResume: canResume,
+      );
+
+      // Landed. Any partial is now consumed, so the hint must not outlive it.
+      _resumeHints.remove(song.videoId);
 
       // Clean up task from active list
       _activeTasks.remove(song.videoId);
 
-      // 3. Cover art. Try to EMBED it into the audio file first (ID3/APIC —
-      // only possible for real MP3 containers); the on-disk copy is the app's
-      // render cache and lives in the hidden cover folder so it never appears
-      // in the device Gallery.
-      final thumbHttpClient = HttpClient();
-      try {
-        final request = await thumbHttpClient.getUrl(Uri.parse(song.thumbnailUrl));
-        final response = await request.close();
-        if (response.statusCode == HttpStatus.ok) {
-          final List<int> bytes = await consolidateHttpClientResponseBytes(response);
-          await thumbFile.writeAsBytes(bytes);
-
-          // Embed cover art into the downloaded audio file
-          if (bytes.isNotEmpty && await audioFile.exists()) {
-            final mime = song.thumbnailUrl.toLowerCase().contains('.png') ? 'image/png' : 'image/jpeg';
-            await ID3TagWriter.embedCoverArt(
-              audioFile: audioFile,
-              imageBytes: Uint8List.fromList(bytes),
-              mimeType: mime,
-              title: song.title,
-              artist: song.artist,
-            );
-          }
-        }
-      } catch (e) {
-        debugPrint('Error downloading thumbnail: $e');
-      } finally {
-        thumbHttpClient.close();
-      }
-
-      // 4. Container validation & extension normalization
+      // 3. Container validation & extension normalization. This runs BEFORE the
+      // artwork step, not after: the tag writer picks its strategy from the
+      // container's magic bytes, so tagging first meant an AAC stream that had
+      // not yet been recognised got an ID3 header prepended — which the repair
+      // pass then stripped straight back off, taking the artwork with it.
       final validFilePath = await detectAndFixAudioContainer(audioFile);
+
+      // 4. Cover art goes INSIDE the file so it travels with it. Only when the
+      // container cannot carry artwork does a standalone image get written, and
+      // then only into the hidden folder, mapped through metadata.json.
+      final coverPath = await _settleArtwork(song, File(validFilePath));
 
       // Update metadata
       await loadDownloads();
+      await _removeSupersededFile(previousPath, validFilePath);
       _downloadedSongs.removeWhere((s) => s.videoId == song.videoId);
 
       // Update song with local paths including the physical validFilePath
@@ -1217,8 +1831,8 @@ class DownloadService {
         videoId: song.videoId,
         title: song.title,
         artist: song.artist,
-        thumbnailUrl: thumbFile.path,
-        highResThumbnailUrl: thumbFile.path,
+        thumbnailUrl: coverPath ?? song.thumbnailUrl,
+        highResThumbnailUrl: coverPath ?? song.highResThumbnailUrl,
         duration: song.duration,
         filePath: validFilePath,
       );
@@ -1232,6 +1846,24 @@ class DownloadService {
       // hidden folder precisely so it stays out of the user's Gallery.
       await MediaStoreScanner.scanIfPublic(validFilePath);
     } catch (e) {
+      // Record what this attempt was reading, so the retry can decide whether
+      // the `.part` file it left behind is safe to continue. Only worth keeping
+      // when there are actually bytes on disk AND a known total to validate the
+      // next server response against.
+      final failedTask = _activeTasks[song.videoId];
+      if (failedTask != null &&
+          usedFormatKey != null &&
+          failedTask.bytesDownloaded > 0 &&
+          failedTask.totalSize > 0 &&
+          !failedTask.isCancelled) {
+        _resumeHints[song.videoId] =
+            _ResumeHint(usedFormatKey, failedTask.totalSize);
+        debugPrint('[DownloadService] Kept ${DownloadItem.formatFileSize(failedTask.bytesDownloaded)} '
+            'of ${song.title} for resume');
+      } else {
+        _resumeHints.remove(song.videoId);
+      }
+
       // Retry logic
       if (attempt < maxRetries - 1) {
         debugPrint('Download attempt ${attempt + 1} failed for ${song.title}, retrying...');
@@ -1243,10 +1875,24 @@ class DownloadService {
           if (onStateChanged != null) onStateChanged();
         }
         await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
-        return _executeDownload(song, onProgress, onStateChanged: onStateChanged, attempt: attempt + 1, quality: quality);
+        // The reserved name goes with it: see [reservedAudioFile].
+        return _executeDownload(song, onProgress,
+            onStateChanged: onStateChanged,
+            attempt: attempt + 1,
+            quality: quality,
+            reservedAudioFile: audioFile);
       }
 
-      // Final failure
+      // Final failure. The `.part` file is dropped here rather than left to
+      // occupy storage indefinitely — a hint that survives the last attempt has
+      // nothing left to be used by, since a user-initiated re-download starts a
+      // fresh chain with attempt 0.
+      _resumeHints.remove(song.videoId);
+      try {
+        final leftover = File('${audioFile.path}.part');
+        if (await leftover.exists()) await leftover.delete();
+      } catch (_) {}
+
       final task = _activeTasks[song.videoId];
       if (task != null) {
         task.status = DownloadStatus.failed;
@@ -1270,6 +1916,9 @@ class DownloadService {
   Future<void> cancelDownload(String videoId) async {
     // Remove from queue if queued
     _queue.removeWhere((q) => q.song.videoId == videoId);
+    // An explicit cancel discards the partial too, so nothing may claim it is
+    // resumable afterwards.
+    _resumeHints.remove(videoId);
     await _activeTasks[videoId]?.cancel();
     _activeTasks.remove(videoId);
   }
@@ -1331,7 +1980,6 @@ class DownloadService {
       final defaultAudioMp3 = File('${dir.path}/$videoId.mp3');
       final defaultAudioM4a = File('${dir.path}/$videoId.m4a');
       final defaultThumb = File('${dir.path}/$videoId.jpg');
-      final sidecarCover = await _coverFileFor(videoId);
 
       if (await defaultAudioMp3.exists()) {
         await defaultAudioMp3.delete();
@@ -1345,9 +1993,8 @@ class DownloadService {
         await defaultThumb.delete();
         removed.add(defaultThumb.path);
       }
-      if (await sidecarCover.exists()) {
-        await sidecarCover.delete();
-      }
+      await _removeCoverFile(videoId);
+      await _removeArtCache(videoId);
 
       await _saveMetadata();
       await MediaStoreScanner.scanAll(removed);
@@ -1376,6 +2023,7 @@ class DownloadService {
             await thumb.delete();
           }
         }
+        await _removeArtCache(song.videoId);
       }
 
       final coverDir = await _storageService.getCoverDir();
@@ -1490,6 +2138,26 @@ class DownloadService {
       debugPrint('Error saving downloads metadata: $e');
     }
   }
+}
+
+/// Cover image bytes plus the container they really are, sniffed from the
+/// magic bytes rather than believed from the URL.
+class _CoverBytes {
+  final Uint8List bytes;
+  final bool isPng;
+  const _CoverBytes(this.bytes, this.isPng);
+}
+
+/// What a failed transfer established about the stream it was reading, so the
+/// next attempt can continue the `.part` file instead of starting over.
+class _ResumeHint {
+  /// [DownloadTask.formatKeyOf] of the URL that produced the partial.
+  final String formatKey;
+
+  /// Full size of that rendition, as the server reported it.
+  final int total;
+
+  const _ResumeHint(this.formatKey, this.total);
 }
 
 class _QueuedDownload {

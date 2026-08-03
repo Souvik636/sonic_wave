@@ -16,7 +16,7 @@ import '../services/download_service.dart';
 import '../services/storage_location_service.dart';
 import '../services/youtube_service.dart';
 import '../services/youtube_link_parser.dart';
-import '../services/app_messenger.dart';
+import '../services/download_notification_service.dart';
 import '../services/local_metadata_service.dart';
 import '../services/recommendation_engine.dart';
 import '../widgets/app_toast.dart';
@@ -31,6 +31,101 @@ enum DeleteType {
   memoryOnly,
 }
 
+/// Where a link shared into the app has got to.
+///
+/// A share is the one download the user cannot watch: it starts from another
+/// app's share sheet, so there is no song tile to grow a progress ring and no
+/// screen the user chose to be on. The phase is what the floating card renders,
+/// which is the only feedback this flow has.
+enum SharedDownloadPhase {
+  /// Reading the video's title/artist/artwork. No progress to report yet.
+  resolving,
+
+  /// Bytes are moving; [SharedDownloadStatus.progress] is meaningful.
+  downloading,
+
+  /// Held because the device is offline. Not terminal: the link is kept and
+  /// retried the moment connectivity comes back.
+  ///
+  /// A share arrives from another app, is usually abandoned immediately, and
+  /// cannot be re-fired without going back to YouTube and sharing again — so
+  /// failing it outright the instant the network happened to be down threw
+  /// away the user's request for a condition that typically clears in seconds.
+  waitingForNetwork,
+
+  /// Saved to Downloads. Terminal, offers Play.
+  done,
+
+  /// Gave up. Terminal, offers Retry unless the share had no link at all.
+  failed,
+
+  /// Nothing to do — the song is already downloading, or already downloaded.
+  duplicate,
+}
+
+/// Immutable snapshot of the shared-link download, rendered by
+/// `SharedLinkDownloadCard`.
+@immutable
+class SharedDownloadStatus {
+  final SharedDownloadPhase phase;
+
+  /// Always known: it comes from the shared link itself, before any lookup.
+  final String videoId;
+
+  /// Null until the video's details resolve — the card shows a shimmer in the
+  /// artwork slot until then rather than a title it had to invent.
+  final Song? song;
+
+  /// 0..1, meaningful in [SharedDownloadPhase.downloading].
+  final double progress;
+
+  /// Why it failed, or why there was nothing to do. Shown verbatim.
+  final String? message;
+
+  /// False for a share that contained no link: there is nothing to retry, so
+  /// offering the button would be a dead end.
+  final bool canRetry;
+
+  const SharedDownloadStatus({
+    required this.phase,
+    required this.videoId,
+    this.song,
+    this.progress = 0.0,
+    this.message,
+    this.canRetry = true,
+  });
+
+  bool get isTerminal =>
+      phase == SharedDownloadPhase.done ||
+      phase == SharedDownloadPhase.failed ||
+      phase == SharedDownloadPhase.duplicate;
+
+  /// True while the download can still be called off. A queued share counts:
+  /// the user must be able to abandon a share that is waiting on a network
+  /// that may not come back for hours.
+  bool get isCancellable =>
+      phase == SharedDownloadPhase.resolving ||
+      phase == SharedDownloadPhase.downloading ||
+      phase == SharedDownloadPhase.waitingForNetwork;
+
+  SharedDownloadStatus copyWith({
+    SharedDownloadPhase? phase,
+    Song? song,
+    double? progress,
+    String? message,
+    bool? canRetry,
+  }) {
+    return SharedDownloadStatus(
+      phase: phase ?? this.phase,
+      videoId: videoId,
+      song: song ?? this.song,
+      progress: progress ?? this.progress,
+      message: message ?? this.message,
+      canRetry: canRetry ?? this.canRetry,
+    );
+  }
+}
+
 class PlayerProvider extends ChangeNotifier {
   final SonicWaveAudioHandler _audioHandler;
   final List<HistoryEntry> _history = [];
@@ -38,6 +133,33 @@ class PlayerProvider extends ChangeNotifier {
   final List<Song> _favorites = [];
   final List<UserAlbum> _albums = [];
   final Map<String, double> _downloadProgress = {};
+
+  /// State of the link most recently shared into the app, or null when there is
+  /// nothing to show. Only one is tracked: a share is a foreground, one-at-a-time
+  /// gesture, and stacking cards would bury the newest under the oldest.
+  SharedDownloadStatus? _sharedDownload;
+  SharedDownloadStatus? get sharedDownload => _sharedDownload;
+
+  /// Push a new shared-download state to the card.
+  void _setSharedDownload(SharedDownloadStatus? status) {
+    _sharedDownload = status;
+    notifyListeners();
+  }
+
+  /// Take the card down. Called by its dismiss gesture, its auto-dismiss timer,
+  /// and by a fresh share replacing whatever was on screen.
+  void dismissSharedDownload() {
+    if (_sharedDownload == null) return;
+    _setSharedDownload(null);
+  }
+
+  /// Test seam: put the card into a given phase without a network round-trip.
+  /// Every phase but `failed` is otherwise only reachable through a real
+  /// download, which a widget test cannot run.
+  @visibleForTesting
+  void debugSetSharedDownload(SharedDownloadStatus? status) =>
+      _setSharedDownload(status);
+
   static const int _maxRecentlyPlayed = 30;
   static const String _recentlyPlayedKey = 'recently_played';
   static const String _favoritesKey = 'favorites_songs';
@@ -155,6 +277,12 @@ class PlayerProvider extends ChangeNotifier {
         .then((text) async {
       if (text != null && text.isNotEmpty) {
         await handleSharedText(text);
+      } else {
+        // Nothing new was shared, so this launch is the chance to pick up a
+        // share that was queued offline in an earlier run. Only when there is
+        // no fresh share: a new one is what the user is asking for right now
+        // and must not be pre-empted by an old one.
+        await resumePendingShare();
       }
     }).catchError((e) {
       debugPrint('[PlayerProvider] Error getting initial shared text: $e');
@@ -166,6 +294,31 @@ class PlayerProvider extends ChangeNotifier {
   /// the same job twice.
   final Set<String> _sharedLinkInFlight = {};
 
+  /// The text of the share being handled, kept so Retry can re-run it verbatim.
+  String? _lastSharedText;
+
+  /// Share text held because the device was offline when it arrived, persisted
+  /// so it survives the process being killed while SonicWave is in the
+  /// background — which is exactly when a queued share is most likely to be
+  /// waiting.
+  static const String _pendingShareKey = 'pending_shared_link';
+
+  /// Polls for connectivity while a share sits in
+  /// [SharedDownloadPhase.waitingForNetwork].
+  Timer? _shareRetryTimer;
+
+  /// How often a queued share re-checks for a network. The check is a single
+  /// DNS lookup — cheap, but not free on battery. 15s makes reconnecting feel
+  /// immediate without draining a phone left with a share queued overnight.
+  static const Duration _shareRetryInterval = Duration(seconds: 15);
+
+  /// Ceiling on reading a shared video's title/artist/artwork.
+  ///
+  /// Generous, because this runs once per share and a slow mobile connection
+  /// deserves the room — but finite, so the card always reaches a state the user
+  /// can act on.
+  static const Duration _sharedLinkLookupTimeout = Duration(seconds: 20);
+
   /// Handle text shared into the app from another app's share sheet.
   ///
   /// The only thing we act on is a YouTube video link. Anything else is left
@@ -176,64 +329,323 @@ class PlayerProvider extends ChangeNotifier {
   /// uses the yt-dlp pipeline (native container + embedded artwork), respects
   /// the configured audio quality, reports progress through `downloadProgress`,
   /// and lands in Downloads exactly like a download started from the UI.
+  ///
+  /// Progress is reported two ways, because a share is fired from another app
+  /// and then usually abandoned: `SharedLinkDownloadCard` while SonicWave is on
+  /// screen, and a foreground-service notification once it is not — the service
+  /// being what stops Android reclaiming the process mid-transfer.
   Future<void> handleSharedText(String text) async {
+    _lastSharedText = text;
     final videoId = YouTubeLinkParser.extractVideoId(text);
     if (videoId == null) {
       debugPrint('[PlayerProvider] Shared text has no YouTube video link');
-      AppMessenger.show(
-        'No YouTube video link found in what you shared.',
-        isError: true,
-      );
+      // No id means no download to retry — the share itself was the problem.
+      _setSharedDownload(const SharedDownloadStatus(
+        phase: SharedDownloadPhase.failed,
+        videoId: '',
+        message: 'No YouTube link in what you shared',
+        canRetry: false,
+      ));
       return;
     }
 
     if (_sharedLinkInFlight.contains(videoId) ||
         _downloadProgress.containsKey(videoId)) {
-      AppMessenger.show('That song is already downloading.');
+      _setSharedDownload(SharedDownloadStatus(
+        phase: SharedDownloadPhase.duplicate,
+        videoId: videoId,
+        song: _songForVideoId(videoId),
+        message: 'Already downloading',
+      ));
       return;
     }
 
     _sharedLinkInFlight.add(videoId);
+    DownloadNotificationService.onCancelRequested = _onNotificationCancel;
+
     try {
       await loadDownloads();
       final existing = _downloadedSongs.where((s) => s.videoId == videoId);
       if (existing.isNotEmpty) {
-        AppMessenger.show('"${existing.first.title}" is already downloaded.');
+        // Nothing to fetch, but the user still asked for this song — offering
+        // Play turns a dead end into the thing they probably wanted.
+        _setSharedDownload(SharedDownloadStatus(
+          phase: SharedDownloadPhase.duplicate,
+          videoId: videoId,
+          song: existing.first,
+          message: 'Already in your Downloads',
+        ));
+        return;
+      }
+
+      // Offline: hold the share instead of burning it. A share cannot be
+      // re-fired without going back to the other app and sharing again, so
+      // failing it for a condition that usually clears in seconds threw away
+      // the user's request for no good reason.
+      if (!await _hasNetwork()) {
+        await _queueShareForNetwork(text, videoId);
         return;
       }
 
       debugPrint('[PlayerProvider] Shared YouTube link -> downloading $videoId');
 
-      Song song;
-      try {
-        song = await YouTubeService().getVideoDetails(videoId);
-      } catch (e) {
-        debugPrint('[PlayerProvider] Shared link lookup failed: $e');
-        AppMessenger.show(
-          'Couldn\'t read that video\'s details. Check your connection.',
-          isError: true,
-        );
-        return;
-      }
+      _setSharedDownload(SharedDownloadStatus(
+        phase: SharedDownloadPhase.resolving,
+        videoId: videoId,
+      ));
+      await DownloadNotificationService.start(
+        videoId: videoId,
+        title: 'Preparing download',
+        subtitle: 'Reading video details',
+      );
 
-      AppMessenger.show('Downloading "${song.title}"…');
+      // Metadata NEVER blocks the download. The video id alone is everything
+      // yt-dlp needs to fetch the audio, and it writes the real title, artist
+      // and artwork into the file itself — so a lookup that fails or times out
+      // yields a placeholder and the transfer proceeds regardless.
+      //
+      // Aborting here was discarding downloads that would have completed
+      // perfectly well: the metadata call and the download call go out over the
+      // same flaky link, but only one of them is what the user actually asked
+      // for. The timeout is still enforced, it just no longer decides the
+      // outcome of the share.
+      final song = await YouTubeService()
+          .getVideoDetailsResilient(videoId)
+          .timeout(
+            _sharedLinkLookupTimeout,
+            onTimeout: () => YouTubeService.placeholderSong(videoId),
+          );
+
+      // A cancel during the lookup leaves no task to stop, so it is checked here
+      // rather than trusting the download to notice.
+      if (_sharedDownload?.videoId != videoId) return;
+
+      _setSharedDownload(SharedDownloadStatus(
+        phase: SharedDownloadPhase.downloading,
+        videoId: videoId,
+        song: song,
+      ));
+      await DownloadNotificationService.update(
+        videoId: videoId,
+        progress: 0,
+        title: song.title,
+        subtitle: song.artist,
+      );
 
       // downloadSong swallows its own errors, so success is decided by whether
       // the song actually landed in the downloads list.
-      await downloadSong(song);
+      await downloadSong(song, onProgress: (progress) {
+        final current = _sharedDownload;
+        if (current == null || current.videoId != videoId) return;
+        _setSharedDownload(current.copyWith(
+          phase: SharedDownloadPhase.downloading,
+          progress: progress,
+        ));
+        unawaited(DownloadNotificationService.update(
+          videoId: videoId,
+          progress: progress,
+          title: song.title,
+          subtitle: song.artist,
+        ));
+      });
+
+      // Cancelled mid-flight: the card has already been cleared and the service
+      // stopped, so reporting a failure here would contradict what the user did.
+      if (_sharedDownload?.videoId != videoId) return;
 
       final saved = _downloadedSongs.any((s) => s.videoId == videoId);
       if (saved) {
-        AppMessenger.show('Saved "${song.title}" to Downloads.');
-      } else {
-        AppMessenger.show(
-          'Download failed for "${song.title}".',
-          isError: true,
+        _setSharedDownload(SharedDownloadStatus(
+          phase: SharedDownloadPhase.done,
+          videoId: videoId,
+          song: _songForVideoId(videoId) ?? song,
+          progress: 1.0,
+          message: 'Saved to Downloads',
+        ));
+        await DownloadNotificationService.complete(
+          videoId: videoId,
+          title: song.title,
         );
+      } else {
+        // A download that died because the link dropped is not the same as one
+        // that died because the video is unavailable. The first is worth
+        // holding onto — the connection usually comes back, and by then the
+        // user has long since left the app.
+        if (!await _hasNetwork()) {
+          await _queueShareForNetwork(text, videoId, song: song);
+        } else {
+          await _failSharedDownload(videoId, 'Download failed', song: song);
+        }
       }
     } finally {
       _sharedLinkInFlight.remove(videoId);
     }
+  }
+
+  /// True if the device can currently reach the network.
+  ///
+  /// Deliberately fail-OPEN in one direction only: this decides whether to
+  /// *queue*, never whether to refuse, so a false "online" simply lets the
+  /// transfer run and report a real error, while a false "offline" would park a
+  /// share that could have downloaded. The 4s ceiling keeps a share from
+  /// sitting on a DNS probe.
+  Future<bool> _hasNetwork() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 4));
+      return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Park [text] until the network returns, and start polling for it.
+  Future<void> _queueShareForNetwork(String text, String videoId,
+      {Song? song}) async {
+    debugPrint('[PlayerProvider] No network — queued shared link $videoId');
+
+    _setSharedDownload(SharedDownloadStatus(
+      phase: SharedDownloadPhase.waitingForNetwork,
+      videoId: videoId,
+      song: song,
+      message: 'Waiting for a connection',
+    ));
+
+    // Persisted as well as held in memory: a share is usually made from another
+    // app, so SonicWave is in the background and eligible to be killed long
+    // before the network returns.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_pendingShareKey, text);
+    } catch (e) {
+      debugPrint('[PlayerProvider] Could not persist queued share: $e');
+    }
+
+    await DownloadNotificationService.update(
+      videoId: videoId,
+      progress: 0,
+      title: song?.title ?? 'Waiting for connection',
+      subtitle: 'Download will start when you\'re back online',
+    );
+
+    // The in-flight guard has to come off before the retry re-enters
+    // handleSharedText, or the retry reports the share as a duplicate of
+    // itself. The finally block below would do it, but only after this returns
+    // — and the first poll can fire before then.
+    _sharedLinkInFlight.remove(videoId);
+    _startShareRetryPolling();
+  }
+
+  void _startShareRetryPolling() {
+    _shareRetryTimer?.cancel();
+    _shareRetryTimer = Timer.periodic(_shareRetryInterval, (timer) async {
+      // The user dismissed or cancelled the card, or a newer share replaced it.
+      if (_sharedDownload?.phase != SharedDownloadPhase.waitingForNetwork) {
+        timer.cancel();
+        _shareRetryTimer = null;
+        return;
+      }
+      if (!await _hasNetwork()) return;
+
+      timer.cancel();
+      _shareRetryTimer = null;
+
+      final text = await _takePendingShare();
+      if (text == null) return;
+      debugPrint('[PlayerProvider] Network back — resuming queued share');
+      await handleSharedText(text);
+    });
+  }
+
+  /// Read and clear the persisted queued share, so it is retried exactly once
+  /// per queueing and cannot be replayed on a later launch.
+  Future<String?> _takePendingShare() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final text = prefs.getString(_pendingShareKey);
+      if (text != null) await prefs.remove(_pendingShareKey);
+      return text;
+    } catch (e) {
+      debugPrint('[PlayerProvider] Could not read queued share: $e');
+      return null;
+    }
+  }
+
+  /// Pick up a share that was queued offline in a previous run.
+  ///
+  /// Called once at startup. If the network is already back the download simply
+  /// starts; if it is not, the share is re-queued and polling resumes, so it
+  /// survives any number of restarts until it either lands or the user cancels.
+  Future<void> resumePendingShare() async {
+    final text = await _takePendingShare();
+    if (text == null || text.isEmpty) return;
+    debugPrint('[PlayerProvider] Restoring share queued in a previous session');
+    await handleSharedText(text);
+  }
+
+  /// The downloaded copy of [videoId], if the library has one.
+  Song? _songForVideoId(String videoId) {
+    for (final s in _downloadedSongs) {
+      if (s.videoId == videoId) return s;
+    }
+    return null;
+  }
+
+  Future<void> _failSharedDownload(String videoId, String message,
+      {Song? song}) async {
+    if (_sharedDownload?.videoId != videoId) return;
+    _setSharedDownload(SharedDownloadStatus(
+      phase: SharedDownloadPhase.failed,
+      videoId: videoId,
+      song: song ?? _sharedDownload?.song,
+      message: message,
+    ));
+    await DownloadNotificationService.fail(
+      videoId: videoId,
+      title: song?.title ?? 'Shared link',
+      reason: message,
+    );
+  }
+
+  /// Stop the shared download and take everything down with it.
+  ///
+  /// Used by the card's ✕ and by the notification's Cancel action, so both
+  /// routes run the same cleanup rather than drifting apart.
+  Future<void> cancelSharedDownload() async {
+    final current = _sharedDownload;
+    if (current == null) return;
+    _setSharedDownload(null);
+    // Cancelling a queued share must also drop the persisted copy, or it comes
+    // back on the next launch as a download the user already said no to.
+    _shareRetryTimer?.cancel();
+    _shareRetryTimer = null;
+    await _takePendingShare();
+    await DownloadNotificationService.stop();
+    if (current.videoId.isNotEmpty) {
+      _sharedLinkInFlight.remove(current.videoId);
+      await cancelDownload(current.videoId);
+    }
+  }
+
+  /// Cancel arriving from the notification, possibly while the app is not on
+  /// screen. Guarded on the id so a stale notification cannot cancel a newer
+  /// download that happens to be running.
+  void _onNotificationCancel(String videoId) {
+    if (_sharedDownload?.videoId != videoId) return;
+    unawaited(cancelSharedDownload());
+  }
+
+  /// Re-run the last share from the top.
+  Future<void> retrySharedDownload() async {
+    final text = _lastSharedText;
+    final videoId = _sharedDownload?.videoId;
+    _setSharedDownload(null);
+    await DownloadNotificationService.stop();
+    if (videoId != null && videoId.isNotEmpty) {
+      _sharedLinkInFlight.remove(videoId);
+    }
+    if (text == null || text.isEmpty) return;
+    await handleSharedText(text);
   }
 
   Future<void> handleOpenedFileUri(String uriStr) async {
@@ -347,10 +759,28 @@ class PlayerProvider extends ChangeNotifier {
   Stream<ProcessingState> get processingStateStream =>
       _audioHandler.player.processingStateStream;
 
-  // Generation counter to handle rapid song switching
+  /// Guard for "is my playback request still the newest one?".
+  ///
+  /// EVERY entry point that starts playback bumps this and captures the value,
+  /// and per-request state — notably [_loadingSong], which is what the player
+  /// screen and song tiles render as the buffering spinner — is only cleared by
+  /// the request that still owns it.
+  ///
+  /// skipNext / skipPrevious / playQueueItem used to sit outside this guard
+  /// entirely: their `finally` cleared [_loadingSong] unconditionally, so a skip
+  /// that resolved late ripped the spinner off whatever song the user had tapped
+  /// in the meantime, and the UI stopped agreeing with what was actually loading.
   int _playGeneration = 0;
 
+  /// Clear the loading marker only if [generation] is still the active request.
+  void _finishLoading(int generation) {
+    if (_playGeneration != generation) return;
+    _loadingSong = null;
+    notifyListeners();
+  }
+
   Future<void> skipNext() async {
+    final thisGeneration = ++_playGeneration;
     final nextIdx = currentIndex + 1;
     if (nextIdx < playlist.length) {
       _loadingSong = playlist[nextIdx];
@@ -358,10 +788,11 @@ class PlayerProvider extends ChangeNotifier {
     }
     try {
       await _audioHandler.skipToNext();
-      if (currentSong != null) {
+      if (_playGeneration == thisGeneration && currentSong != null) {
         _addToRecentlyPlayed(currentSong!);
       }
     } catch (e) {
+      if (_playGeneration != thisGeneration) return;
       debugPrint('Error skipping to next song: $e');
       _playbackError = 'Track unavailable. Skipping to next...';
       if (playlist.length > 1 && currentIndex < playlist.length - 1) {
@@ -370,12 +801,12 @@ class PlayerProvider extends ChangeNotifier {
         });
       }
     } finally {
-      _loadingSong = null;
-      notifyListeners();
+      _finishLoading(thisGeneration);
     }
   }
 
   Future<void> skipPrevious() async {
+    final thisGeneration = ++_playGeneration;
     final prevIdx = currentIndex - 1;
     if (prevIdx >= 0 && prevIdx < playlist.length) {
       _loadingSong = playlist[prevIdx];
@@ -384,29 +815,32 @@ class PlayerProvider extends ChangeNotifier {
     try {
       await _audioHandler.skipToPrevious();
     } catch (e) {
-      debugPrint('Error skipping to previous song: $e');
+      if (_playGeneration == thisGeneration) {
+        debugPrint('Error skipping to previous song: $e');
+      }
     } finally {
-      _loadingSong = null;
-      notifyListeners();
+      _finishLoading(thisGeneration);
     }
   }
 
   /// Jump straight to a queue entry by index and start playing it.
   Future<void> playQueueItem(int index) async {
+    final thisGeneration = ++_playGeneration;
     if (index >= 0 && index < playlist.length) {
       _loadingSong = playlist[index];
       notifyListeners();
     }
     try {
       await _audioHandler.skipToQueueIndex(index);
-      if (currentSong != null) {
+      if (_playGeneration == thisGeneration && currentSong != null) {
         _addToRecentlyPlayed(currentSong!);
       }
     } catch (e) {
-      debugPrint('Error playing queue item: $e');
+      if (_playGeneration == thisGeneration) {
+        debugPrint('Error playing queue item: $e');
+      }
     } finally {
-      _loadingSong = null;
-      notifyListeners();
+      _finishLoading(thisGeneration);
     }
   }
 
@@ -461,11 +895,7 @@ class PlayerProvider extends ChangeNotifier {
       }
       // Don't rethrow for superseded requests
     } finally {
-      // Only clear loading state if this is still the active request
-      if (_playGeneration == thisGeneration) {
-        _loadingSong = null;
-        notifyListeners();
-      }
+      _finishLoading(thisGeneration);
     }
   }
 
@@ -498,10 +928,7 @@ class PlayerProvider extends ChangeNotifier {
         _playbackError = e.toString().replaceAll('Exception:', '').trim();
       }
     } finally {
-      if (_playGeneration == thisGeneration) {
-        _loadingSong = null;
-        notifyListeners();
-      }
+      _finishLoading(thisGeneration);
     }
   }
 
@@ -1061,7 +1488,16 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> downloadSong(Song song, {BuildContext? context}) async {
+  /// Download [song] into the offline library.
+  ///
+  /// [onProgress] lets a caller observe the transfer without owning a second
+  /// download path — the shared-link flow uses it to drive its card and the
+  /// notification from the same job every other download already runs through.
+  Future<void> downloadSong(
+    Song song, {
+    BuildContext? context,
+    ValueChanged<double>? onProgress,
+  }) async {
     if (_downloadProgress.containsKey(song.videoId)) return;
     _downloadProgress[song.videoId] = 0.01;
     notifyListeners();
@@ -1073,6 +1509,7 @@ class PlayerProvider extends ChangeNotifier {
     try {
       await DownloadService().downloadSong(song, (progress) {
         _downloadProgress[song.videoId] = progress;
+        onProgress?.call(progress);
         notifyListeners();
       }, onStateChanged: () {
         notifyListeners();
@@ -1649,7 +2086,7 @@ class PlayerProvider extends ChangeNotifier {
       await for (final entity in dir.list(followLinks: false)) {
         if (entity is File) {
           final ext = entity.path.split('.').last.toLowerCase();
-          final supportedExts = {'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac', 'mka', 'amr', 'm4b'};
+          final supportedExts = {'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac', 'mka', 'amr', 'm4b', 'mpeg', 'mp2'};
           if (supportedExts.contains(ext)) {
             final filename = entity.uri.pathSegments.last;
             final nameWithoutExt = filename.contains('.')
@@ -2136,10 +2573,33 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  /// True once [dispose] has run. See [notifyListeners].
+  bool _disposed = false;
+
+  /// Swallow notifications that arrive after disposal instead of throwing.
+  ///
+  /// The constructor starts five independent async loads (history, favorites,
+  /// downloads, albums, device songs) and each notifies when it lands. If the
+  /// provider is disposed while any of them is still in flight — a share intent
+  /// handled and dismissed during startup, a hot restart, a widget test that
+  /// creates and disposes a provider — the late notification hits
+  /// ChangeNotifier's disposed assertion and throws inside whichever load is
+  /// unlucky, which then reports as a spurious "Error loading albums".
+  ///
+  /// Dropping the notification is the correct response: there is no longer
+  /// anyone listening, and the state it would have announced is being discarded.
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _sleepTimer?.cancel();
     _countdownTimer?.cancel();
+    _shareRetryTimer?.cancel();
     _playbackStateSub?.cancel();
     _mediaItemSub?.cancel();
     _processingStateSub?.cancel();

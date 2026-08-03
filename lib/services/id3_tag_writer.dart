@@ -8,6 +8,91 @@ import 'package:flutter/foundation.dart';
 class ID3TagWriter {
   ID3TagWriter._();
 
+  static const List<int> _apicMarker = [0x41, 0x50, 0x49, 0x43]; // 'APIC'
+  static const List<int> _covrMarker = [0x63, 0x6F, 0x76, 0x72]; // 'covr'
+  static const List<int> _dataMarker = [0x64, 0x61, 0x74, 0x61]; // 'data'
+
+  /// Bytes examined at each end of the file by [hasEmbeddedCover].
+  static const int _coverProbeBytes = 512 * 1024;
+
+  /// Whether [audioFile] already carries cover art inside the container.
+  ///
+  /// This is what decides whether a sidecar image is written at all. Artwork
+  /// that lives in the file travels with it into every other player and every
+  /// other device, so a second copy on disk is pure clutter — and on shared
+  /// storage it is one more picture in the user's Gallery.
+  ///
+  /// BOTH ends of the file are probed. An MP4 `moov` box (which holds the
+  /// `covr` atom) may sit at the front for faststart output or at the very
+  /// back for a plain remux; scanning only the head reports "no artwork" for
+  /// every non-faststart M4A and provokes a sidecar the file never needed.
+  ///
+  /// Conservative by construction: a false negative costs one redundant image,
+  /// a false positive would lose the artwork entirely.
+  static Future<bool> hasEmbeddedCover(File audioFile) async {
+    try {
+      final len = await audioFile.length();
+      if (len < 16) return false;
+      final raf = await audioFile.open();
+      try {
+        final headLen = len < _coverProbeBytes ? len : _coverProbeBytes;
+        final head = await raf.read(headLen);
+        if (head.length < 4) return false;
+
+        // MP3: an APIC frame only ever lives in the ID3v2 tag at the very
+        // start, so there is no point looking anywhere else.
+        if (head[0] == 0x49 && head[1] == 0x44 && head[2] == 0x33) {
+          return _indexOf(head, _apicMarker) >= 0;
+        }
+
+        if (_hasCovrAtom(head)) return true;
+        if (len > _coverProbeBytes) {
+          await raf.setPosition(len - _coverProbeBytes);
+          final tail = await raf.read(_coverProbeBytes);
+          if (_hasCovrAtom(tail)) return true;
+        }
+        return false;
+      } finally {
+        await raf.close();
+      }
+    } catch (e) {
+      debugPrint('[ID3TagWriter] Cover probe failed for ${audioFile.path}: $e');
+      return false;
+    }
+  }
+
+  /// A genuine `covr` atom is immediately followed by a sized `data` atom:
+  /// `[len]['covr'][len]['data']`. Requiring that pairing stops four incidental
+  /// bytes of AAC payload from reading as artwork.
+  static bool _hasCovrAtom(List<int> bytes) {
+    int from = 0;
+    while (true) {
+      final at = _indexOf(bytes, _covrMarker, from);
+      if (at < 0) return false;
+      final dataAt = at + 8;
+      if (dataAt + 4 <= bytes.length && _matchesAt(bytes, dataAt, _dataMarker)) {
+        return true;
+      }
+      from = at + 1;
+    }
+  }
+
+  static bool _matchesAt(List<int> haystack, int at, List<int> needle) {
+    if (at + needle.length > haystack.length) return false;
+    for (int i = 0; i < needle.length; i++) {
+      if (haystack[at + i] != needle[i]) return false;
+    }
+    return true;
+  }
+
+  static int _indexOf(List<int> haystack, List<int> needle, [int from = 0]) {
+    final limit = haystack.length - needle.length;
+    for (int i = from < 0 ? 0 : from; i <= limit; i++) {
+      if (_matchesAt(haystack, i, needle)) return i;
+    }
+    return -1;
+  }
+
   /// Embed cover artwork (and optional title/artist metadata) into an audio file.
   ///
   /// Supports MP3, M4A, and FLAC containers.
