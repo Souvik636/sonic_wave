@@ -253,30 +253,13 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   /// Fires after 8 minutes of continuous pause. Stops the player, clears
   /// all network resources, and tells audio_service to tear down the
   /// foreground service — which dismisses the media notification.
-  void _onIdleTimeout() {
+  Future<void> _onIdleTimeout() async {
     debugPrint('[AudioHandler] 8-minute idle timeout — stopping player and dismissing notification');
 
     // Let the provider save session state BEFORE we wipe the queue.
     onIdleTimeout?.call();
 
-    _prefetchedStreams.clear();
-    _prefetchTimer?.cancel();
-    _cancelPrefetchCleanupTimer();
-
-    _player.stop();
-    _playlist.clear();
-    _currentIndex = -1;
-    _playGeneration++;
-
-    // Clear the media item so audio_service removes the notification.
-    mediaItem.add(null);
-
-    // Emit a terminal playback state so the service can shut down.
-    playbackState.add(playbackState.value.copyWith(
-      controls: [],
-      processingState: AudioProcessingState.idle,
-      playing: false,
-    ));
+    await stop();
   }
 
   double _userVolume = 1.0;
@@ -1062,6 +1045,12 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     _currentIndex = -1;
     _playlist.clear();
     mediaItem.add(null);
+    playbackState.add(PlaybackState(
+      controls: const [],
+      systemActions: const {},
+      processingState: AudioProcessingState.idle,
+      playing: false,
+    ));
     await super.stop();
   }
 
@@ -1375,7 +1364,12 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   Future<void> onTaskRemoved() async {
     _cancelIdleTimer();
     _cancelPrefetchCleanupTimer();
-    await stop();
+    if (!_player.playing) {
+      debugPrint('[AudioHandler] App removed from recents while paused — releasing media player');
+      await stop();
+    } else {
+      debugPrint('[AudioHandler] App removed from recents while playing — background playback continues');
+    }
     await super.onTaskRemoved();
   }
 }
