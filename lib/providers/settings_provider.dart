@@ -519,18 +519,31 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> _checkConnection() async {
     try {
-      final result = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
-      final isOffline = result.isEmpty || result.first.rawAddress.isEmpty;
+      final hasConnection = await _isNetworkReachable();
+      final isOffline = !hasConnection;
       if (_noInternetDetected != isOffline) {
         _noInternetDetected = isOffline;
         notifyListeners();
       }
     } catch (_) {
-      if (!_noInternetDetected) {
-        _noInternetDetected = true;
-        notifyListeners();
-      }
+      // Keep existing state on probe error to avoid false offline triggers in background
     }
+  }
+
+  Future<bool> _isNetworkReachable() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 5));
+      if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) return true;
+    } catch (_) {}
+
+    try {
+      final result = await InternetAddress.lookup('cloudflare.com')
+          .timeout(const Duration(seconds: 5));
+      if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) return true;
+    } catch (_) {}
+
+    return false;
   }
 
   @override

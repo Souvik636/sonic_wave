@@ -807,60 +807,41 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     MediaItem mediaItem,
     Map<String, String> headers,
   ) async {
-    // If the stream is from YouTube, stream DIRECTLY via AudioSource.uri.
-    // LockCachingAudioSource's local proxy server stalls on YouTube CDN (googlevideo.com)
-    // range requests, causing continuous buffering/loading spinners while downloads succeed.
-    if (resolved.source.startsWith('youtube') || resolved.url.contains('googlevideo.com')) {
-      debugPrint('[AudioHandler] YouTube stream — using direct native ExoPlayer AudioSource.uri');
-      final ytHeaders = Map<String, String>.from(headers);
-      ytHeaders.putIfAbsent('User-Agent', () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-      ytHeaders.putIfAbsent('Accept', () => '*/*');
-      return AudioSource.uri(
-        Uri.parse(resolved.url),
-        headers: ytHeaders,
-        tag: mediaItem,
-      );
-    }
+    final streamHeaders = Map<String, String>.from(headers);
+    streamHeaders.putIfAbsent(
+      'User-Agent',
+      () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    );
+    streamHeaders.putIfAbsent('Accept', () => '*/*');
 
-    final cacheable = !resolved.isLive &&
-        song.videoId.isNotEmpty &&
-        resolved.url.startsWith('http');
-    if (!cacheable) {
-      return AudioSource.uri(Uri.parse(resolved.url),
-          headers: headers, tag: mediaItem);
-    }
-
-    try {
-      final cache = StreamCacheService();
-      final file = await cache.fileFor(
-          song.videoId, YouTubeService.streamingQuality.name);
-      final alreadyCached = await file.exists();
-      if (alreadyCached) {
-        debugPrint('[AudioHandler] Stream cache hit: ${song.title}');
-        return AudioSource.file(file.path, tag: mediaItem);
+    // 1. Check if the song has already been cached to disk
+    if (!resolved.isLive && song.videoId.isNotEmpty && resolved.url.startsWith('http')) {
+      try {
+        final cache = StreamCacheService();
+        final file = await cache.fileFor(
+          song.videoId,
+          YouTubeService.streamingQuality.name,
+        );
+        if (await file.exists()) {
+          debugPrint('[AudioHandler] Stream cache hit: ${song.title}');
+          return AudioSource.file(file.path, tag: mediaItem);
+        }
+      } catch (e) {
+        debugPrint('[AudioHandler] Stream cache check error: $e');
       }
-
-      cache.noteWrite(_estimatedSize(song));
-      // ignore: experimental_member_use
-      return LockCachingAudioSource(
-        Uri.parse(resolved.url),
-        headers: headers,
-        cacheFile: file,
-        tag: mediaItem,
-      );
-    } catch (e) {
-      debugPrint('[AudioHandler] Stream cache unavailable, streaming direct: $e');
-      return AudioSource.uri(Uri.parse(resolved.url),
-          headers: headers, tag: mediaItem);
     }
-  }
 
-  /// Rough byte size of [song], used only to decide when the cache is due a
-  /// trim. ~48 KB/s is a fair average across the bitrates served here; a song
-  /// with no known duration is assumed to be an ordinary ~4-minute track.
-  static int _estimatedSize(Song song) {
-    final seconds = song.duration.inSeconds;
-    return (seconds > 0 ? seconds : 240) * 48 * 1024;
+    // 2. Stream DIRECTLY via native ExoPlayer AudioSource.uri for all HTTP streams.
+    // LockCachingAudioSource's in-process local HTTP proxy server (127.0.0.1) stalls
+    // on range requests when the app enters the background or switches networks, causing continuous
+    // buffering spinners during background playback. Native ExoPlayer manages background network
+    // sockets, wake locks, and cellular buffering natively without proxy overhead.
+    debugPrint('[AudioHandler] Streaming direct via native ExoPlayer AudioSource.uri for ${song.title} (${resolved.source})');
+    return AudioSource.uri(
+      Uri.parse(resolved.url),
+      headers: streamHeaders,
+      tag: mediaItem,
+    );
   }
 
   /// Prefetch the next 2 songs' stream URLs so skipping is instant
