@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/storage_location_service.dart';
@@ -22,6 +23,9 @@ enum ThemeAccent {
   sapphire,
   sakura,
   lava,
+  cyberpunk,
+  midnight,
+  mint,
 
   /// Material You — follows the device wallpaper's dynamic color (Android 12+).
   /// Falls back to purple when the platform provides no dynamic palette.
@@ -51,9 +55,11 @@ class SettingsProvider extends ChangeNotifier {
   static const String _showVisualizerKey = 'settings_show_visualizer';
   static const String _playerStyleKey = 'settings_player_style';
   static const String _crossfadeKey = 'settings_crossfade_seconds';
+  static const String _randomizeThemeKey = 'settings_randomize_theme';
 
   AudioQuality _audioQuality = AudioQuality.high;
   ThemeAccent _themeAccent = ThemeAccent.purple;
+  bool _randomizeThemeOnLaunch = false;
   SoundEnhancer _soundEnhancer = SoundEnhancer.none;
   double _visualizerSpeed = 1.0;
   bool _enableBackgroundPlayback = true;
@@ -84,6 +90,7 @@ class SettingsProvider extends ChangeNotifier {
   // Getters
   AudioQuality get audioQuality => _audioQuality;
   ThemeAccent get themeAccent => _themeAccent;
+  bool get randomizeThemeOnLaunch => _randomizeThemeOnLaunch;
   SoundEnhancer get soundEnhancer => _soundEnhancer;
   double get visualizerSpeed => _visualizerSpeed;
   bool get enableBackgroundPlayback => _enableBackgroundPlayback;
@@ -128,6 +135,12 @@ class SettingsProvider extends ChangeNotifier {
         return const Color(0xFFFF80AB); // Sakura — soft blossom
       case ThemeAccent.lava:
         return const Color(0xFFFF4B2B); // Inferno — molten red-orange
+      case ThemeAccent.cyberpunk:
+        return const Color(0xFFD500F9); // Cyberpunk — electric magenta/violet
+      case ThemeAccent.midnight:
+        return const Color(0xFF651FFF); // Midnight — deep twilight indigo
+      case ThemeAccent.mint:
+        return const Color(0xFF00BFA5); // Arctic Mint — glowing teal seafoam
       case ThemeAccent.system:
         // Material You wallpaper color; purple fallback pre-Android 12.
         return systemDynamicColor ?? const Color(0xFF7C5CFF);
@@ -164,6 +177,15 @@ class SettingsProvider extends ChangeNotifier {
         break;
       case ThemeAccent.lava:
         endColor = const Color(0xFFFFAB40); // molten → ember
+        break;
+      case ThemeAccent.cyberpunk:
+        endColor = const Color(0xFF00E5FF); // magenta → neon cyan
+        break;
+      case ThemeAccent.midnight:
+        endColor = const Color(0xFF7C4DFF); // indigo → vivid iris
+        break;
+      case ThemeAccent.mint:
+        endColor = const Color(0xFF64FFDA); // teal → glacial mint
         break;
       case ThemeAccent.system:
         // Blend toward a lighter tint of the wallpaper-derived accent.
@@ -255,6 +277,26 @@ class SettingsProvider extends ChangeNotifier {
         _themeAccent = ThemeAccent.values[accentIdx];
       }
 
+      // Load randomize theme on launch
+      _randomizeThemeOnLaunch = prefs.getBool(_randomizeThemeKey) ?? false;
+      if (_randomizeThemeOnLaunch) {
+        final options = [
+          ThemeAccent.purple,
+          ThemeAccent.cyan,
+          ThemeAccent.pink,
+          ThemeAccent.orange,
+          ThemeAccent.emerald,
+          ThemeAccent.amber,
+          ThemeAccent.sapphire,
+          ThemeAccent.sakura,
+          ThemeAccent.lava,
+          ThemeAccent.cyberpunk,
+          ThemeAccent.midnight,
+          ThemeAccent.mint,
+        ];
+        _themeAccent = options[Random().nextInt(options.length)];
+      }
+
       // Load sound enhancer
       final enhancerIdx = prefs.getInt(_enhancerKey);
       if (enhancerIdx != null &&
@@ -332,6 +374,13 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_accentKey, accent.index);
+  }
+
+  Future<void> setRandomizeThemeOnLaunch(bool enabled) async {
+    _randomizeThemeOnLaunch = enabled;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_randomizeThemeKey, enabled);
   }
 
   /// Material You maps to the wallpaper-derived [ThemeAccent.system].

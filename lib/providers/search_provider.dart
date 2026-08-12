@@ -42,11 +42,14 @@ class SearchProvider extends ChangeNotifier {
   String? get error => _error;
   bool get hasResults => _results.isNotEmpty;
 
-  /// Load recent searches from SharedPreferences
+  /// Load recent searches from SharedPreferences (top 5 max)
   Future<void> _loadRecentSearches() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _recentSearches = prefs.getStringList(_recentSearchesKey) ?? [];
+      if (_recentSearches.length > 5) {
+        _recentSearches = _recentSearches.sublist(0, 5);
+      }
       notifyListeners();
     } catch (_) {}
   }
@@ -59,14 +62,14 @@ class SearchProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Add a search query to history
+  /// Add a search query to history (keeps top 5 recent searches)
   void addToRecentSearches(String query) {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
     _recentSearches.removeWhere((item) => item.toLowerCase() == trimmed.toLowerCase());
     _recentSearches.insert(0, trimmed);
-    if (_recentSearches.length > 15) {
-      _recentSearches = _recentSearches.sublist(0, 15);
+    if (_recentSearches.length > 5) {
+      _recentSearches = _recentSearches.sublist(0, 5);
     }
     _saveRecentSearches();
     notifyListeners();

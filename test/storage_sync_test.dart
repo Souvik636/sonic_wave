@@ -33,6 +33,18 @@ void main() {
         return tempDir.path;
       },
     );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.sonicwave.sonic_wave/intent'),
+      (MethodCall methodCall) async => null,
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.sonicwave.sonic_wave/equalizer'),
+      (MethodCall methodCall) async => null,
+    );
   });
 
   tearDown(() async {

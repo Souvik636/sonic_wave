@@ -259,6 +259,9 @@ class SettingsScreen extends StatelessWidget {
     (accent: ThemeAccent.sapphire, name: 'Ocean', a: Color(0xFF448AFF), b: Color(0xFF18FFFF)),
     (accent: ThemeAccent.sakura, name: 'Sakura', a: Color(0xFFFF80AB), b: Color(0xFFEA80FC)),
     (accent: ThemeAccent.lava, name: 'Inferno', a: Color(0xFFFF4B2B), b: Color(0xFFFFAB40)),
+    (accent: ThemeAccent.cyberpunk, name: 'Cyberpunk', a: Color(0xFFD500F9), b: Color(0xFF00E5FF)),
+    (accent: ThemeAccent.midnight, name: 'Midnight', a: Color(0xFF651FFF), b: Color(0xFF7C4DFF)),
+    (accent: ThemeAccent.mint, name: 'Arctic Mint', a: Color(0xFF00BFA5), b: Color(0xFF64FFDA)),
   ];
 
   Widget _buildThemeSelector(BuildContext context) {
@@ -396,6 +399,44 @@ class SettingsScreen extends StatelessWidget {
                     }).toList(),
                   ),
                 ),
+              ),
+              const SizedBox(height: 16),
+              Divider(color: Colors.white.withValues(alpha: 0.08)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Random Theme on Launch',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Automatically pick a fresh theme accent every time you open SonicWave',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: settings.randomizeThemeOnLaunch,
+                    activeThumbColor: settings.accentColor,
+                    onChanged: (val) {
+                      AppHaptics.light();
+                      settings.setRandomizeThemeOnLaunch(val);
+                    },
+                  ),
+                ],
               ),
             ],
           ),
