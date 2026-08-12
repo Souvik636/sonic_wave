@@ -5,6 +5,7 @@ import 'package:sonic_wave/services/youtube_service.dart';
 import 'package:sonic_wave/providers/settings_provider.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('Real YouTube Link Performance & Android Audit Test Suite', () {
     test('1. Real Link Parsing Speed Benchmark (< 1ms per link)', () {
       final realYtLinks = [

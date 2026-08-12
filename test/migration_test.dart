@@ -24,17 +24,32 @@ void main() {
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('sonic_wave_test_');
+    SharedPreferences.setMockInitialValues({});
+
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('plugins.flutter.io/path_provider'),
       (MethodCall methodCall) async {
-        if (methodCall.method == 'getApplicationDocumentsDirectory') {
+        if (methodCall.method == 'getApplicationDocumentsDirectory' ||
+            methodCall.method == 'getApplicationSupportDirectory') {
           return tempDir.path;
         } else if (methodCall.method == 'getExternalStorageDirectories') {
           return [tempDir.path];
         }
-        return null;
+        return tempDir.path;
       },
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.sonicwave.sonic_wave/intent'),
+      (MethodCall methodCall) async => null,
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.sonicwave.sonic_wave/equalizer'),
+      (MethodCall methodCall) async => null,
     );
   });
 
@@ -73,6 +88,9 @@ void main() {
       'storage_location_type': StorageType.appInternal.index,
       'user_albums': mockAlbumsJson,
     });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('storage_location_type', StorageType.appInternal.index);
+    await prefs.setString('user_albums', mockAlbumsJson);
 
     final storageService = StorageLocationService();
     await storageService.initialize();

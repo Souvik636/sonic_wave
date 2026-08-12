@@ -4,6 +4,7 @@ import 'package:sonic_wave/services/ytdlp_runtime.dart';
 import 'package:sonic_wave/providers/settings_provider.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('yt-dlp Configuration & Option Tests', () {
     test('ytDlpFormatChain produces valid format filters for all qualities', () {
       final highFormat = YouTubeService.ytDlpFormatChain(AudioQuality.high);

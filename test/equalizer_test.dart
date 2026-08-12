@@ -3,6 +3,7 @@ import 'package:sonic_wave/providers/settings_provider.dart';
 
 // Standalone test for EQ calculations and profiles mapping.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('Equalizer and Sound Enhancer Profile Tests', () {
     // Simulated Android Equalizer min/max decibels (typically -15.0 to +15.0 dB on Android)
     const double minDecibels = -15.0;

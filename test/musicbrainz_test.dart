@@ -86,6 +86,7 @@ class TestHttpOverrides extends HttpOverrides {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     HttpOverrides.global = TestHttpOverrides();

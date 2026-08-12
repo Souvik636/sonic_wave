@@ -16,6 +16,7 @@ String asUtf16LeMojibake(String original) {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('EncodingSanitizer Tests', () {
     test('Leaves clean English text unmodified', () {
       expect(EncodingSanitizer.sanitize('Hotel California'), equals('Hotel California'));

@@ -5,6 +5,7 @@ import 'package:sonic_wave/services/download_service.dart';
 import 'package:sonic_wave/services/id3_tag_writer.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late Directory tempDir;
 
   setUp(() async {

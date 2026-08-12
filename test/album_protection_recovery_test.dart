@@ -15,6 +15,7 @@ void main() {
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('sonic_wave_recovery_test_');
+    SharedPreferences.setMockInitialValues({});
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
@@ -22,6 +23,18 @@ void main() {
       (MethodCall methodCall) async {
         return tempDir.path;
       },
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.sonicwave.sonic_wave/intent'),
+      (MethodCall methodCall) async => null,
+    );
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.sonicwave.sonic_wave/equalizer'),
+      (MethodCall methodCall) async => null,
     );
   });
 
@@ -63,6 +76,8 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'user_albums': json.encode([albumA.toJson(), albumB.toJson()]),
     });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_albums', json.encode([albumA.toJson(), albumB.toJson()]));
 
     final provider = PlayerProvider(MockAudioHandler());
     await Future.delayed(const Duration(milliseconds: 50));

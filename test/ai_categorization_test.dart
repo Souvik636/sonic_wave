@@ -6,6 +6,7 @@ import 'package:sonic_wave/services/categorization/models.dart';
 import 'package:sonic_wave/services/categorization/title_cleaner.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('AI Categorization Pipeline Internal Tests', () {
     late CategorizationPipeline pipeline;
 

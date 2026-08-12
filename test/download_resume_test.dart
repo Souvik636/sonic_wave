@@ -14,6 +14,7 @@ import 'package:sonic_wave/services/download_service.dart';
 /// mock so the `Range` / `Content-Range` / 206 / 416 handling is exercised as
 /// the server will actually deliver it.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late Directory tempDir;
   late HttpServer server;
 

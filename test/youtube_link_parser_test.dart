@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sonic_wave/services/youtube_link_parser.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   const id = 'dQw4w9WgXcQ';
 
   group('extracts the video id from every share format', () {

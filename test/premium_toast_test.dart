@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sonic_wave/widgets/premium_toast.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('classifyPlaybackError maps message context to icon/duration/retry', () {
     test('network errors get the wifi icon and the longest dwell', () {
       final ctx = classifyPlaybackError(

@@ -4,6 +4,7 @@ import 'package:sonic_wave/services/ytdlp_runtime.dart';
 import 'package:sonic_wave/providers/settings_provider.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('Native yt-dlp Deep Verification & Quality Test Suite', () {
     test('1. Real YouTube Video ID Format Chain Verification', () {
       final realVideoIds = ['dMMOBgUTMTo', 'OhomOtx0QXM', 'atdLxuJ6QhU', 'hRoeuPZakqs'];

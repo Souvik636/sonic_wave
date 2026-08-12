@@ -3,6 +3,7 @@ import 'package:sonic_wave/models/song.dart';
 import 'package:sonic_wave/services/recommendation_engine.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('Audio Infrastructure & Recommendation Engine Tests', () {
     final song1 = Song(
       id: '1',
