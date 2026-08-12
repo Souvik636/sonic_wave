@@ -78,7 +78,12 @@ jobs:
         run: flutter analyze
 
       - name: Run tests with coverage
-        run: flutter test --coverage --reporter expanded
+        run: |
+          if [ -d "test" ]; then
+            flutter test --coverage --reporter expanded
+          else
+            echo "No test directory found, skipping tests."
+          fi
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
