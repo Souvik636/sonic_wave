@@ -1,6 +1,6 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -135,6 +135,7 @@ class PlayerProvider extends ChangeNotifier {
   final List<Song> _favorites = [];
   final List<UserAlbum> _albums = [];
   final Map<String, double> _downloadProgress = {};
+  final Map<String, List<String>> _pendingAlbumDownloads = {};
 
   /// State of the link most recently shared into the app, or null when there is
   /// nothing to show. Only one is tracked: a share is a foreground, one-at-a-time
@@ -1596,6 +1597,18 @@ class PlayerProvider extends ChangeNotifier {
       sw.stop();
       _downloadProgress.remove(song.videoId);
       await loadDownloads();
+
+      // Process any pending album assignments for this downloaded song
+      if (_pendingAlbumDownloads.containsKey(song.videoId)) {
+        final albumIds = List<String>.from(_pendingAlbumDownloads.remove(song.videoId)!);
+        final freshIdx = _downloadedSongs.indexWhere((s) => s.videoId == song.videoId);
+        final downloadedSong = freshIdx >= 0 ? _downloadedSongs[freshIdx] : song;
+
+        for (final albumId in albumIds) {
+          await addSongToAlbum(albumId, downloadedSong);
+        }
+      }
+
       DiagnosticLogService().log(DiagnosticLogService.downloadComplete, {
         'videoId': song.videoId, 'title': song.title,
         'elapsed_ms': sw.elapsedMilliseconds,
@@ -1605,6 +1618,7 @@ class PlayerProvider extends ChangeNotifier {
       }
     } catch (e) {
       sw.stop();
+      _pendingAlbumDownloads.remove(song.videoId);
       _downloadProgress.remove(song.videoId);
       notifyListeners();
       debugPrint('Error downloading song in provider: $e');
@@ -1613,6 +1627,59 @@ class PlayerProvider extends ChangeNotifier {
         AppToast.show(context, 'Failed to download "${song.title}": $errText', type: ToastType.warning);
       }
     }
+  }
+
+  /// Downloads a song into local storage and automatically adds it to [targetAlbum].
+  /// If [targetAlbum] is a custom/folder-based album, the file is automatically
+  /// moved into that album's folder on disk upon download completion.
+  Future<void> downloadSongAndAddToAlbum(
+    Song song,
+    UserAlbum targetAlbum, {
+    BuildContext? context,
+  }) async {
+    // 1. Check if song is already downloaded
+    final existingIdx = _downloadedSongs.indexWhere((s) => s.videoId == song.videoId);
+    if (existingIdx >= 0) {
+      final downloadedSong = _downloadedSongs[existingIdx];
+      await addSongToAlbum(targetAlbum.id, downloadedSong);
+      if (context != null && context.mounted) {
+        AppToast.show(
+          context,
+          'Added "${song.title}" to album "${targetAlbum.name}"!',
+          type: ToastType.success,
+          icon: Icons.folder_special_rounded,
+        );
+      }
+      return;
+    }
+
+    // 2. Register pending album assignment for this videoId
+    _pendingAlbumDownloads.putIfAbsent(song.videoId, () => []).add(targetAlbum.id);
+
+    // 3. If download is already in progress, notify user
+    if (_downloadProgress.containsKey(song.videoId)) {
+      if (context != null && context.mounted) {
+        AppToast.show(
+          context,
+          'Download in progress. "${song.title}" will be saved to "${targetAlbum.name}" when finished.',
+          type: ToastType.info,
+          icon: Icons.downloading_rounded,
+        );
+      }
+      return;
+    }
+
+    // 4. Start the download
+    if (context != null && context.mounted) {
+      AppToast.show(
+        context,
+        'Downloading "${song.title}" for album "${targetAlbum.name}"...',
+        type: ToastType.info,
+        icon: Icons.download_for_offline_rounded,
+      );
+    }
+
+    await downloadSong(song);
   }
 
   void pauseDownload(String videoId) {

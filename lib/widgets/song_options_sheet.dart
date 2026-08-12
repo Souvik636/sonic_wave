@@ -217,6 +217,22 @@ void showSongOptionsSheet(BuildContext context, Song song) {
               },
             ),
 
+            // Option: Download & Add to Album
+            Consumer<PlayerProvider>(
+              builder: (context, provider, _) {
+                if (song.isLiveRadio) return const SizedBox.shrink();
+                return _buildOptionTile(
+                  icon: Icons.create_new_folder_rounded,
+                  title: 'Download & Add to Album',
+                  subtitle: 'Save & permanently move to an album folder',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showDownloadAndAddToAlbumDialog(context, song);
+                  },
+                );
+              },
+            ),
+
             // Option 4: Song Details
             _buildOptionTile(
               icon: Icons.info_outline_rounded,
@@ -918,4 +934,249 @@ String _formatDuration(Duration duration) {
   final minutes = duration.inMinutes;
   final seconds = duration.inSeconds % 60;
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
+}
+
+void _showDownloadAndAddToAlbumDialog(BuildContext context, Song song) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (context) {
+      return Consumer<PlayerProvider>(
+        builder: (context, provider, _) {
+          final albums = provider.albums;
+          final accentColor = context.watch<SettingsProvider>().accentColor;
+
+          return GlassmorphicCard(
+            borderRadius: 24,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.create_new_folder_rounded, color: accentColor, size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Download & Add to Album',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 17,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Choose an album folder to download and save "${song.title}"',
+                            style: GoogleFonts.inter(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Button: + Create New Album
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showCreateNewAlbumDialog(context, song);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.add_circle_outline_rounded, color: accentColor, size: 22),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Create New Album',
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                if (albums.isEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        'No custom albums created yet. Tap above to create your first album!',
+                        style: GoogleFonts.inter(
+                          color: AppColors.textTertiary,
+                          fontSize: 13,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  Text(
+                    'EXISTING ALBUMS',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.4,
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: albums.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final album = albums[index];
+                        final songCount = album.songs.length;
+                        final isAlreadyInAlbum = album.songs.any((s) => s.videoId == song.videoId);
+
+                        return Material(
+                          color: Colors.transparent,
+                          child: ListTile(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            tileColor: Colors.white.withValues(alpha: 0.05),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: accentColor.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.folder_rounded, color: accentColor, size: 20),
+                            ),
+                            title: Text(
+                              album.name,
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '$songCount song${songCount == 1 ? '' : 's'}${isAlreadyInAlbum ? ' • Already in album' : ''}',
+                              style: GoogleFonts.inter(
+                                color: isAlreadyInAlbum ? accentColor : AppColors.textTertiary,
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: Icon(
+                              isAlreadyInAlbum ? Icons.check_circle_rounded : Icons.download_for_offline_rounded,
+                              color: isAlreadyInAlbum ? accentColor : Colors.white70,
+                              size: 22,
+                            ),
+                            onTap: () {
+                              Navigator.pop(context);
+                              provider.downloadSongAndAddToAlbum(song, album, context: context);
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+void _showCreateNewAlbumDialog(BuildContext context, Song song) {
+  final controller = TextEditingController();
+  final provider = context.read<PlayerProvider>();
+
+  showDialog(
+    context: context,
+    builder: (context) {
+      final accentColor = context.watch<SettingsProvider>().accentColor;
+
+      return AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Create New Album',
+          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Album name...',
+            hintStyle: const TextStyle(color: AppColors.textTertiary),
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.06),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textTertiary)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.pop(context);
+                final newAlbum = await provider.createAlbum(name);
+                if (context.mounted) {
+                  await provider.downloadSongAndAddToAlbum(song, newAlbum, context: context);
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accentColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Create & Download', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      );
+    },
+  );
 }
