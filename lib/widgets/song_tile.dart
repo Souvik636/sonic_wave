@@ -17,6 +17,7 @@ class SongTile extends StatelessWidget {
   final bool showDuration;
   final int? index;
   final String? sourceTag;
+  final Widget? trailing;
 
   const SongTile({
     super.key,
@@ -25,6 +26,7 @@ class SongTile extends StatelessWidget {
     this.showDuration = true,
     this.index,
     this.sourceTag,
+    this.trailing,
   });
 
   @override
@@ -323,11 +325,13 @@ class SongTile extends StatelessWidget {
                         ),
                       ),
 
-                    // Context Menu button
-                    IconButton(
-                      icon: const Icon(Icons.more_vert_rounded, color: AppColors.textTertiary, size: 18),
-                      onPressed: () => _showSongContextMenu(context, playerProvider),
-                    ),
+                    if (trailing != null)
+                      trailing!
+                    else
+                      IconButton(
+                        icon: const Icon(Icons.more_vert_rounded, color: AppColors.textTertiary, size: 18),
+                        onPressed: () => _showSongContextMenu(context, playerProvider),
+                      ),
                   ],
                 ),
               ),

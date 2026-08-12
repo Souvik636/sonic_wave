@@ -6,6 +6,7 @@ import '../models/album.dart';
 import '../providers/player_provider.dart';
 import '../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
+import 'album_details_sheet.dart';
 import 'song_tile.dart';
 import 'app_toast.dart';
 
@@ -22,6 +23,7 @@ class _OfflineHubState extends State<OfflineHub> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _activeTab = 'All Offline';
+  String _selectedFolder = 'All Folders';
 
   final List<String> _tabs = [
     'All Offline',
@@ -29,6 +31,15 @@ class _OfflineHubState extends State<OfflineHub> {
     '📁 Local Storage',
     '❤️ Favorites',
     '📀 Albums',
+  ];
+
+  final List<String> _folderFilterOptions = [
+    'All Folders',
+    'Download',
+    'Music',
+    'WhatsApp',
+    'Bluetooth',
+    'DCIM',
   ];
 
   @override
@@ -47,6 +58,55 @@ class _OfflineHubState extends State<OfflineHub> {
     super.dispose();
   }
 
+  void _showCreateAlbumDialog(BuildContext context, PlayerProvider playerProvider) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Create New Album Folder', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'Album name (e.g. Chill Beats, Gym Focus)...',
+            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            filled: true,
+            fillColor: AppColors.surfaceVariant.withValues(alpha: 0.5),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.pop(ctx);
+                final album = await playerProvider.createAlbum(name);
+                if (context.mounted) {
+                  AppToast.show(context, 'Album "$name" created', type: ToastType.success);
+                  AlbumDetailsSheet.show(context, album.id);
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final playerProvider = Provider.of<PlayerProvider>(context);
@@ -57,12 +117,18 @@ class _OfflineHubState extends State<OfflineHub> {
     final favorites = playerProvider.favorites.where((s) => s.isLocalFile || downloads.any((d) => d.videoId == s.videoId)).toList();
     final albums = playerProvider.albums;
 
-    // Filter songs based on search query
+    // Filter songs based on active tab & search query
     List<Song> displaySongs = [];
     if (_activeTab == '📥 Downloads') {
       displaySongs = downloads;
     } else if (_activeTab == '📁 Local Storage') {
       displaySongs = allOffline.where((s) => s.id.startsWith('local_') || s.isLocalFile).toList();
+      if (_selectedFolder != 'All Folders') {
+        displaySongs = displaySongs.where((s) {
+          final path = (s.filePath ?? s.videoId).toLowerCase();
+          return path.contains(_selectedFolder.toLowerCase());
+        }).toList();
+      }
     } else if (_activeTab == '❤️ Favorites') {
       displaySongs = favorites;
     } else {
@@ -187,6 +253,50 @@ class _OfflineHubState extends State<OfflineHub> {
                       },
                     ),
                   ),
+
+                  // Sub-Folder Filter Row (Only for Local Storage Tab)
+                  if (_activeTab == '📁 Local Storage') ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 32,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        itemCount: _folderFilterOptions.length,
+                        itemBuilder: (context, idx) {
+                          final opt = _folderFilterOptions[idx];
+                          final isSel = _selectedFolder == opt;
+                          final primaryColor = Theme.of(context).colorScheme.primary;
+
+                          return GestureDetector(
+                            onTap: () => setState(() => _selectedFolder = opt),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isSel ? primaryColor.withValues(alpha: 0.2) : AppColors.surfaceVariant.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSel ? primaryColor.withValues(alpha: 0.6) : AppColors.glassBorder.withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Text(
+                                opt,
+                                style: TextStyle(
+                                  color: isSel ? Colors.white : AppColors.textTertiary,
+                                  fontSize: 11,
+                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 14),
                 ],
               ),
@@ -239,6 +349,24 @@ class _OfflineHubState extends State<OfflineHub> {
     String totalMb,
   ) {
     final primary = Theme.of(context).colorScheme.primary;
+
+    int mp3Count = 0;
+    int m4aCount = 0;
+    int flacCount = 0;
+    int otherCount = 0;
+
+    for (final s in allOffline) {
+      final p = (s.filePath ?? s.videoId).toLowerCase();
+      if (p.endsWith('.mp3')) {
+        mp3Count++;
+      } else if (p.endsWith('.m4a') || p.endsWith('.aac')) {
+        m4aCount++;
+      } else if (p.endsWith('.flac')) {
+        flacCount++;
+      } else {
+        otherCount++;
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -298,7 +426,7 @@ class _OfflineHubState extends State<OfflineHub> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'OFFLINE MODE ACTIVE',
+                      'OFFLINE MUSIC ENGINE',
                       style: GoogleFonts.outfit(
                         color: Colors.amberAccent,
                         fontSize: 10.5,
@@ -352,7 +480,7 @@ class _OfflineHubState extends State<OfflineHub> {
 
           // Title & Stats
           Text(
-            'Offline Music Hub',
+            'Offline Storage & Albums',
             style: GoogleFonts.outfit(
               color: Colors.white,
               fontSize: 24,
@@ -367,6 +495,19 @@ class _OfflineHubState extends State<OfflineHub> {
               color: AppColors.textSecondary,
               fontSize: 13,
             ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Audio Format Badges
+          Wrap(
+            spacing: 6,
+            children: [
+              _buildFormatBadge('MP3', mp3Count, const Color(0xFF6C63FF)),
+              _buildFormatBadge('M4A', m4aCount, const Color(0xFF00C9A7)),
+              if (flacCount > 0) _buildFormatBadge('FLAC', flacCount, const Color(0xFFFF6584)),
+              if (otherCount > 0) _buildFormatBadge('Other', otherCount, const Color(0xFFFFB74D)),
+            ],
           ),
 
           const SizedBox(height: 20),
@@ -418,11 +559,32 @@ class _OfflineHubState extends State<OfflineHub> {
     );
   }
 
+  Widget _buildFormatBadge(String label, int count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        '$label: $count',
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   Widget _buildAlbumsGrid(BuildContext context, PlayerProvider playerProvider, List<UserAlbum> albums) {
+    final primary = Theme.of(context).colorScheme.primary;
+
     if (albums.isEmpty) {
       return SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.all(40),
+          padding: const EdgeInsets.all(32),
           child: Column(
             children: [
               Icon(Icons.album_rounded, size: 54, color: AppColors.textTertiary.withValues(alpha: 0.5)),
@@ -437,93 +599,129 @@ class _OfflineHubState extends State<OfflineHub> {
                 style: GoogleFonts.inter(color: AppColors.textTertiary, fontSize: 12.5),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => _showCreateAlbumDialog(context, playerProvider),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Create New Album'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
             ],
           ),
         ),
       );
     }
 
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.1,
-        ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final album = albums[index];
-            final primary = Theme.of(context).colorScheme.primary;
-
-            return GestureDetector(
-              onTap: () {
-                if (album.songs.isNotEmpty) {
-                  playerProvider.playPlaylist(album.songs, startIndex: 0);
-                } else {
-                  AppToast.show(context, 'This album folder is empty', type: ToastType.warning);
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.glassBorder, width: 1),
+    return SliverMainAxisGroup(
+      slivers: [
+        // Header with "+ Create Album" button
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${albums.length} Custom Albums',
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
+                TextButton.icon(
+                  onPressed: () => _showCreateAlbumDialog(context, playerProvider),
+                  icon: Icon(Icons.add_circle_outline_rounded, color: primary, size: 18),
+                  label: Text('New Album', style: TextStyle(color: primary, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Grid
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.1,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final album = albums[index];
+
+                return GestureDetector(
+                  onTap: () {
+                    AlbumDetailsSheet.show(context, album.id);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.glassBorder, width: 1),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: primary.withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(Icons.folder_special_rounded, color: primary, size: 22),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: primary.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.folder_special_rounded, color: primary, size: 22),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${album.songs.length} Tracks',
+                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${album.songs.length} Tracks',
-                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              album.name,
+                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${album.isFolderBased ? 'Physical Folder' : 'Custom Album'} • ${album.formattedTotalSize}',
+                              style: GoogleFonts.inter(color: AppColors.textTertiary, fontSize: 11),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          album.name,
-                          style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          album.isFolderBased ? 'Physical Folder' : 'Smart Album',
-                          style: GoogleFonts.inter(color: AppColors.textTertiary, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-          childCount: albums.length,
+                  ),
+                );
+              },
+              childCount: albums.length,
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -583,3 +781,4 @@ class _OfflineHubState extends State<OfflineHub> {
     );
   }
 }
+

@@ -5,12 +5,13 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'download_service.dart';
 import 'storage_location_service.dart';
 import 'stream_cache_service.dart';
 
 /// Breakdown of disk usage across every storage category SonicWave owns.
 class StorageBreakdown {
-  /// Audio files in the Download folder.
+  /// Audio files in the Download folder & registered download index.
   final int downloadedSongs;
 
   /// Audio files inside custom album sub-folders.
@@ -19,11 +20,10 @@ class StorageBreakdown {
   /// Streamed audio cached by [StreamCacheService].
   final int streamCache;
 
-  /// `flutter_cache_manager` disk cache (cover art fetched over HTTP).
+  /// `flutter_cache_manager` disk cache & network image cache.
   final int imageCache;
 
-  /// Embedded / extracted cover art in `.sonicwave/covers/`, `localart/`,
-  /// and native fallback art in `cacheDir/native_art_*`.
+  /// Embedded / extracted cover art in `localart/` and native fallback art.
   final int coverArt;
 
   /// JSON metadata indices, local_meta_index, SharedPreferences, etc.
@@ -53,7 +53,7 @@ class StorageAnalyzer {
   StorageAnalyzer._();
   static final StorageAnalyzer instance = StorageAnalyzer._();
 
-  /// Walk every known storage location and sum file sizes.
+  /// Walk every known storage location and sum file sizes accurately.
   Future<StorageBreakdown> analyze() async {
     int downloadedSongs = 0;
     int albumFolders = 0;
@@ -63,15 +63,43 @@ class StorageAnalyzer {
     int metadataBytes = 0;
 
     final storage = StorageLocationService();
+    final countedPaths = <String>{};
 
-    // 1. Downloaded songs — <root>/Download/
+    // 1. Downloaded songs — sum indexed songs from DownloadService + files in <root>/Download/
     try {
-      final dlDir = await storage.getDownloadDir();
-      downloadedSongs = await _dirSize(dlDir);
+      final songs = await DownloadService().getDownloadedSongs();
+      for (final song in songs) {
+        if (song.filePath != null && song.filePath!.isNotEmpty) {
+          final normalized = song.filePath!.replaceAll('\\', '/').toLowerCase();
+          if (!countedPaths.contains(normalized)) {
+            final f = File(song.filePath!);
+            if (await f.exists()) {
+              downloadedSongs += await f.length();
+              countedPaths.add(normalized);
+            }
+          }
+        }
+      }
     } catch (_) {}
 
-    // 2. Album sub-folders — every visible child of root that isn't Download/
-    //    or .sonicwave/
+    try {
+      final dlDir = await storage.getDownloadDir();
+      if (await dlDir.exists()) {
+        await for (final entity in dlDir.list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            final normalized = entity.path.replaceAll('\\', '/').toLowerCase();
+            if (!countedPaths.contains(normalized)) {
+              try {
+                downloadedSongs += await entity.length();
+                countedPaths.add(normalized);
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Album sub-folders — every visible child of root that isn't Download/ or .sonicwave/
     try {
       final root = await storage.getAppRootDir();
       final dlName = StorageLocationService.downloadFolderName;
@@ -94,16 +122,12 @@ class StorageAnalyzer {
       streamCacheBytes = await StreamCacheService().size();
     } catch (_) {}
 
-    // 4. Image cache (flutter_cache_manager)
+    // 4. Image cache (flutter_cache_manager + disk image caches)
     try {
       imageCacheBytes = await _flutterCacheSize();
     } catch (_) {}
 
-    // 5. Cover art — .sonicwave/covers/ + localart/ + native_art_*
-    try {
-      final coverDir = await storage.getCoverDir();
-      coverArtBytes += await _dirSize(coverDir);
-    } catch (_) {}
+    // 5. Cover art — localart/ + native_art_* (temporary cover caches)
     try {
       final support = await getApplicationSupportDirectory();
       final localArt = Directory('${support.path}${Platform.pathSeparator}localart');
@@ -148,8 +172,8 @@ class StorageAnalyzer {
     );
   }
 
-  /// Clear ALL clearable caches (stream + image + cover art + metadata caches).
-  /// Does NOT touch downloaded songs or album folders.
+  /// Clear ALL clearable caches (stream + image + temporary cover art).
+  /// Does NOT touch downloaded songs, album folders, or downloaded song covers.
   Future<void> clearAllCaches() async {
     await clearStreamCache();
     await clearImageCache();
@@ -165,7 +189,7 @@ class StorageAnalyzer {
     }
   }
 
-  /// Clear all image caches (flutter_cache_manager + in-memory).
+  /// Clear all image caches (flutter_cache_manager + in-memory + physical disk files).
   Future<void> clearImageCache() async {
     try {
       PaintingBinding.instance.imageCache.clear();
@@ -174,11 +198,27 @@ class StorageAnalyzer {
     try {
       await DefaultCacheManager().emptyCache();
     } catch (e) {
-      debugPrint('[StorageAnalyzer] clearImageCache failed: $e');
+      debugPrint('[StorageAnalyzer] clearImageCache emptyCache failed: $e');
+    }
+    // Delete files physically from disk image cache folders to guarantee 0 B result
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final cacheDirs = [
+        Directory('${tempDir.path}${Platform.pathSeparator}libCachedImageData'),
+        Directory('${tempDir.path}${Platform.pathSeparator}flutter_cache_manager'),
+      ];
+      for (final dir in cacheDirs) {
+        if (await dir.exists()) {
+          await dir.delete(recursive: true);
+        }
+      }
+    } catch (e) {
+      debugPrint('[StorageAnalyzer] physical image cache directory delete failed: $e');
     }
   }
 
-  /// Clear extracted cover art (localart + native_art_*).
+  /// Clear temporary extracted cover art (localart + native_art_*).
+  /// Note: Keeps offline song covers in .sonicwave/covers/ safe.
   Future<void> clearCoverArt() async {
     try {
       final support = await getApplicationSupportDirectory();
@@ -203,19 +243,6 @@ class StorageAnalyzer {
     } catch (e) {
       debugPrint('[StorageAnalyzer] clearNativeArt failed: $e');
     }
-    // Also clear the cover dir managed by StorageLocationService
-    try {
-      final coverDir = await StorageLocationService().getCoverDir();
-      if (await coverDir.exists()) {
-        await for (final f in coverDir.list(followLinks: false)) {
-          if (f is File) {
-            try { await f.delete(); } catch (_) {}
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('[StorageAnalyzer] clearCoverDir failed: $e');
-    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -236,17 +263,20 @@ class StorageAnalyzer {
     return total;
   }
 
-  /// Size of flutter_cache_manager's on-disk cache.
+  /// Size of flutter_cache_manager's on-disk cache + temp image caches.
   static Future<int> _flutterCacheSize() async {
+    int total = 0;
     try {
       final tempDir = await getTemporaryDirectory();
-      // DefaultCacheManager uses <temp>/libCachedImageData by default
-      final cacheDir = Directory(
-          '${tempDir.path}${Platform.pathSeparator}libCachedImageData');
-      return _dirSize(cacheDir);
-    } catch (_) {
-      return 0;
-    }
+      final dirs = [
+        Directory('${tempDir.path}${Platform.pathSeparator}libCachedImageData'),
+        Directory('${tempDir.path}${Platform.pathSeparator}flutter_cache_manager'),
+      ];
+      for (final d in dirs) {
+        total += await _dirSize(d);
+      }
+    } catch (_) {}
+    return total;
   }
 
   /// Format bytes into a human-readable string.
@@ -260,3 +290,4 @@ class StorageAnalyzer {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 }
+

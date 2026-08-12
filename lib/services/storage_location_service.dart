@@ -109,6 +109,11 @@ class StorageLocationService {
   bool _usingFallback = false;
   String? _fallbackReason;
 
+  // Single-flight guard: the second concurrent caller awaits the first's work
+  // rather than racing it, preventing the _usingFallback flag from being set
+  // by two resolves running in parallel on different threads.
+  Future<void>? _initFuture;
+
   StorageType get storageType => _storageType;
   String? get customPath => _customPath;
   bool get isInitialized => _isInitialized;
@@ -123,10 +128,14 @@ class StorageLocationService {
 
   /// Initialize from persisted preferences.
   ///
-  /// Guarantees that, once complete, [resolvedRootPath] points at a real,
-  /// writable directory (never null) — even if the chosen location is
-  /// unavailable. Never throws.
-  Future<void> initialize() async {
+  /// Concurrent callers all await the same single run — the second call joins
+  /// the first rather than racing it, which previously let two parallel
+  /// initializations stomp each other's `_usingFallback` flag.
+  Future<void> initialize() {
+    return _initFuture ??= _doInitialize();
+  }
+
+  Future<void> _doInitialize() async {
     if (_isInitialized) return;
 
     // 1. Load persisted preferences (tolerant of corruption/out-of-range).
@@ -204,12 +213,75 @@ class StorageLocationService {
         normalizedFilePath == _resolvedRootPath!.replaceAll('\\', '/').toLowerCase();
   }
 
+  /// Resolve the root directory for a given [type] WITHOUT mutating the live
+  /// singleton's current type or cache.
+  ///
+  /// Used by migration: we need to know where the new root will be without
+  /// switching the singleton mid-migration, which would redirect all concurrent
+  /// storage calls (downloads, cover writes) to the wrong volume.
+  Future<Directory> resolveRootForType(
+    StorageType type, {
+    String? sdCardPath,
+  }) async {
+    final candidates = <_RootCandidate>[];
+
+    switch (type) {
+      case StorageType.appInternal:
+        candidates.add(_RootCandidate(await _appInternalDir()));
+        break;
+
+      case StorageType.deviceInternal:
+        if (Platform.isAndroid && await _hasManageStoragePermission()) {
+          candidates.add(_RootCandidate(Directory('/storage/emulated/0/$appFolderName')));
+        }
+        final ext = await _appExternalDir();
+        if (ext != null) {
+          candidates.add(_RootCandidate(
+            ext,
+            isFallback: true,
+            reason: 'Using the app storage folder (deviceInternal probe).',
+          ));
+        }
+        break;
+
+      case StorageType.sdCard:
+        final path = sdCardPath ?? _customPath;
+        if (path != null && path.isNotEmpty) {
+          candidates.add(_RootCandidate(Directory('$path/$appFolderName')));
+        }
+        final extSd = await _appExternalDir();
+        if (extSd != null) {
+          candidates.add(_RootCandidate(
+            extSd,
+            isFallback: true,
+            reason: 'SD card unavailable (probe).',
+          ));
+        }
+        break;
+    }
+
+    candidates.add(_RootCandidate(
+      await _appInternalDir(),
+      isFallback: type != StorageType.appInternal,
+      reason: 'Chosen storage unavailable — falling back to app-internal (probe).',
+    ));
+
+    // Return the first candidate that is writable, or the last resort.
+    for (final c in candidates) {
+      if (await _ensureWritable(c.dir)) return c.dir;
+    }
+    return candidates.last.dir;
+  }
+
   /// Get the app's root directory for the current storage type.
   ///
   /// Never throws; always returns a writable directory (see class docs for the
   /// fallback chain). Result is cached until the volume disappears or
   /// [setStorageType]/[requestStoragePermission] invalidate it.
   Future<Directory> getAppRootDir() async {
+    if (!_isInitialized) {
+      await initialize();
+    }
     // Reuse the cached root while it still exists on disk (cheap check).
     final cached = _activeRootDir;
     if (cached != null) {
@@ -327,6 +399,11 @@ class StorageLocationService {
   /// Probe whether we can create AND write into [dir]. Creates the directory
   /// (recursively) if missing, writes a tiny marker, then deletes it. Any
   /// failure (permission, read-only, full, missing volume) returns false.
+  ///
+  /// The probe file cleanup is best-effort: if the write succeeded the
+  /// directory is writable, regardless of whether the delete also succeeds —
+  /// a permissions model that allows write but denies delete would otherwise
+  /// leave a stale marker and return false for a usable directory.
   Future<bool> _ensureWritable(Directory dir) async {
     try {
       if (!await dir.exists()) {
@@ -334,7 +411,11 @@ class StorageLocationService {
       }
       final probe = File('${dir.path}${Platform.pathSeparator}$_writeProbeName');
       await probe.writeAsString('ok', flush: true);
-      await probe.delete();
+      try {
+        await probe.delete();
+      } catch (e) {
+        debugPrint('StorageLocationService: probe cleanup failed (${dir.path}): $e');
+      }
       return true;
     } catch (e) {
       debugPrint('StorageLocationService: not writable (${dir.path}): $e');
@@ -546,10 +627,10 @@ class StorageLocationService {
   /// Falls back to the root directory if the subfolder can't be created.
   Future<Directory> getAlbumDir(String albumName) async {
     final root = await getAppRootDir();
-    // Sanitize album name for filesystem; guard against empty/dot-only names.
-    var safeName = albumName.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_').trim();
-    safeName = safeName.replaceAll(RegExp(r'^\.+'), '').trim();
-    if (safeName.isEmpty) safeName = 'Album';
+    // sanitizeFileName applies the full set of filesystem rules: illegal chars,
+    // leading/trailing dots/spaces, reserved DOS names, and the 200-byte UTF-8
+    // cap that prevents ENAMETOOLONG on CJK/Devanagari album titles.
+    final safeName = sanitizeFileName(albumName, fallback: 'Album');
     final dir = Directory('${root.path}${Platform.pathSeparator}$safeName');
     try {
       if (!await dir.exists()) {
@@ -834,10 +915,14 @@ class StorageLocationService {
       // Perform stream byte copy
       await sourceFile.copy(targetPath);
 
-      // Verify destination file exists and byte size matches source 100%
+      // Verify destination file exists and byte sizes match.
+      // The sourceSize > 0 guard is intentionally absent: a zero-byte file
+      // (e.g. a .nomedia marker) satisfies targetSize == sourceSize perfectly —
+      // no data was lost. Blocking it caused every such move to be reported as
+      // failed while leaving the source intact.
       if (await targetFile.exists()) {
         final targetSize = await targetFile.length();
-        if (targetSize == sourceSize && sourceSize > 0) {
+        if (targetSize == sourceSize) {
           // Verification passed! Safely remove original source file.
           try {
             await sourceFile.delete();

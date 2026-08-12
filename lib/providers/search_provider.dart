@@ -5,6 +5,8 @@ import '../models/song.dart';
 import '../services/youtube_service.dart';
 import '../services/archive_org_service.dart';
 import '../services/jiosaavn_service.dart';
+import '../services/diagnostic_log_service.dart';
+import '../services/network_resilience_service.dart';
 
 class SearchProvider extends ChangeNotifier {
   final YouTubeService _youtubeService = YouTubeService();
@@ -135,13 +137,29 @@ class SearchProvider extends ChangeNotifier {
           return;
         }
 
-        final ytFuture = _youtubeService.searchSongs(q);
-        final archiveFuture = _archiveOrgService.searchSongs(q);
-        final jioFuture = _jioSaavnService.searchSongs(q);
+        DiagnosticLogService().log(DiagnosticLogService.searchStart, {'query': q});
+
+        final ytFuture = NetworkResilienceService().runWithAutoHeal(
+          () => _youtubeService.searchSongs(q).timeout(const Duration(seconds: 8)),
+          name: 'youtube_search',
+          maxAttempts: 3,
+        ).catchError((e) {
+          DiagnosticLogService().log(DiagnosticLogService.searchError, {'query': q, 'source': 'youtube', 'error': e.toString()});
+          return <Song>[];
+        });
+        final archiveFuture = _archiveOrgService.searchSongs(q).catchError((e) {
+          DiagnosticLogService().log(DiagnosticLogService.searchError, {'query': q, 'source': 'archive', 'error': e.toString()});
+          return <Song>[];
+        });
+        final jioFuture = _jioSaavnService.searchSongs(q).catchError((e) {
+          DiagnosticLogService().log(DiagnosticLogService.searchError, {'query': q, 'source': 'jiosaavn', 'error': e.toString()});
+          return <Song>[];
+        });
+
         final searchResults = await Future.wait([
-          ytFuture.catchError((_) => <Song>[]),
-          archiveFuture.catchError((_) => <Song>[]),
-          jioFuture.catchError((_) => <Song>[]),
+          ytFuture,
+          archiveFuture,
+          jioFuture,
         ]);
         final ytResults = searchResults[0];
         final archiveResults = searchResults[1];
@@ -151,12 +169,21 @@ class SearchProvider extends ChangeNotifier {
         final jioWithQuery = jioResults.map((s) => s.copyWith(searchQuery: q)).toList();
         _results = [...jioWithQuery, ...ytWithQuery, ...archiveResults];
 
+        DiagnosticLogService().log(DiagnosticLogService.searchResult, {
+          'query': q,
+          'total': _results.length,
+          'yt_count': ytResults.length,
+          'jio_count': jioResults.length,
+          'archive_count': archiveResults.length,
+        });
+
         // Store in cache
         _searchCache[cacheKey] = _CachedSearch(_results, DateTime.now());
       }
       _isLoading = false;
       notifyListeners();
     } catch (e) {
+      DiagnosticLogService().log(DiagnosticLogService.searchError, {'query': q, 'error': e.toString()});
       _error = 'Failed to search. Please try again.';
       _isLoading = false;
       notifyListeners();

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../providers/settings_provider.dart' show AudioQuality;
+import 'diagnostic_log_service.dart';
 import 'id3_tag_writer.dart';
 import 'youtube_service.dart';
 import 'ytdlp_runtime.dart';
@@ -76,6 +77,7 @@ class YtDlpDownloader {
   /// Download [videoId]'s audio at [quality].
   ///
   /// [onProgress] receives a 0..1 fraction. [onEta] receives yt-dlp's own
+  /// [onProgress] receives a 0..1 fraction. [onEta] receives yt-dlp's own
   /// estimate. Throws on failure so the caller can fall back to the HTTP path.
   static Future<YtDlpDownloadResult> download({
     required String videoId,
@@ -83,27 +85,27 @@ class YtDlpDownloader {
     ValueChanged<double>? onProgress,
     ValueChanged<Duration>? onEta,
   }) async {
+    final sw = Stopwatch()..start();
+
     if (!await YtDlpRuntime.ensureInitialized()) {
+      DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
+        'videoId': videoId, 'ok': false, 'reason': 'runtime_unavailable',
+      });
       throw Exception('yt-dlp runtime unavailable');
     }
 
     final dir = await stagingDir();
-    // Clear any leftovers for this id so the post-run glob can't pick up a
-    // stale artifact from an earlier cancelled attempt.
     await _cleanup(videoId, dir);
 
     final processId = 'dl_$videoId';
 
-    // yt-dlp reports progress on a stream keyed by processId, not per-call.
     StreamSubscription<DownloadProgress>? progressSub;
     if (onProgress != null || onEta != null) {
       progressSub = YoutubeDLFlutter.instance.onProgress.listen((event) {
         if (event.processId != processId) return;
-        // The native side emits -1 while it is still resolving formats.
         if (event.progress < 0) {
           onProgress?.call(0.04);
         } else {
-          // Smoothly scale raw download fraction (0.0..1.0) to 0.05..0.90
           final fraction = event.progressFraction.clamp(0.0, 1.0);
           final scaled = 0.05 + (fraction * 0.85);
           onProgress?.call(scaled);
@@ -115,68 +117,118 @@ class YtDlpDownloader {
     }
 
     try {
+      final formatChain = YouTubeService.ytDlpFormatChain(quality);
+      final sorter = YouTubeService.ytDlpAudioSorter(quality);
+
+      DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
+        'videoId': videoId, 'phase': 'start',
+        'quality': quality.name, 'format': formatChain,
+      });
+
       final request = DownloadRequest(
         url: 'https://www.youtube.com/watch?v=$videoId',
         outputPath: dir.path,
-        // Name by videoId so the result is findable without guessing the title.
         outputTemplate: '$videoId.%(ext)s',
         processId: processId,
         noPlaylist: true,
         extractAudio: true,
         audioFormat: audioFormat,
-        // Embed artwork + tags natively (needs FFmpeg, which YtDlpRuntime now
-        // initializes, and mutagen, which is bundled in the library's Python).
         embedThumbnail: true,
         embedMetadata: true,
-        format: YouTubeService.ytDlpFormatChain(quality),
+        format: formatChain,
         customOptions: {
           '--no-update': '',
-          // Low-internet resilience & speed optimization:
           '--force-ipv4': '',
           '--no-check-certificates': '',
           '--socket-timeout': '10',
           '-R': '3',
-          '--retry-sleep': 'linear=1::2',
+          // 'linear=1::2' is yt-dlp 2023.10+ syntax; older bundled binaries
+          // silently reject it and retry immediately, making the three retries
+          // fire in under a second and all hit the same rate-limit window.
+          // Plain integer is accepted by every version.
+          '--retry-sleep': '2',
           '--fragment-retries': '3',
           '--no-mtime': '',
-          // 2 concurrent fragments speeds up downloads by up to 50% on mobile links
           '--concurrent-fragments': '2',
-          '--buffersize': '64k',
-          '--http-chunk-size': '10M',
-          // Write cover as sidecar .jpg fallback.
+          '--buffer-size': '64k',
+          // 10M was too large for mobile: a 10 MB chunk that drops mid-flight
+          // restarts the whole chunk rather than continuing from the last byte.
+          // 1M keeps partial retries cheap without sacrificing throughput
+          // (--concurrent-fragments=2 still pulls two streams at once).
+          '--http-chunk-size': '1M',
           '--write-thumbnail': '',
           '--convert-thumbnails': 'jpg',
-          '-S': YouTubeService.ytDlpAudioSorter(quality),
-          // Seal's album tag rule: prefer a real album, else the track title.
+          '-S': sorter,
           '--parse-metadata': '%(album,title)s:%(meta_album)s',
+          // Skip HLS/DASH manifest and translated subtitles fetches — the
+          // player-client response already carries direct audio URLs, so these
+          // round-trips cost 1-3s with zero benefit for audio-only downloads.
+          '--extractor-args':
+              'youtube:player_client=mweb,android_vr,tv,ios;skip=hls,dash,translated_subs,webpage',
         },
       );
 
       onProgress?.call(0.05);
-      final result = await YoutubeDLFlutter.instance.download(request);
+
+      // Hard ceiling on the entire yt-dlp process. Without it a process that
+      // hangs in a bad network state (partial write, stalled fragment) will
+      // keep the download task alive indefinitely; the user sees a spinner that
+      // never moves and only a force-close clears it.
+      const downloadDeadline = Duration(minutes: 8);
+      final result = await YoutubeDLFlutter.instance
+          .download(request)
+          .timeout(downloadDeadline, onTimeout: () {
+        throw TimeoutException(
+            'yt-dlp download exceeded ${downloadDeadline.inMinutes} min',
+            downloadDeadline);
+      });
       onProgress?.call(0.95);
 
       if (result.status != OperationStatus.success) {
+        sw.stop();
+        DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
+          'videoId': videoId, 'ok': false, 'elapsed_ms': sw.elapsedMilliseconds,
+          'reason': 'bad_status',
+          'error': result.errorMessage ?? 'yt-dlp download failed',
+        });
         throw Exception(result.errorMessage ?? 'yt-dlp download failed');
       }
 
-      // Do NOT trust result.outputPath: the plugin returns the template with
-      // %(ext)s unexpanded. Find what actually landed on disk instead.
       final artifacts = await _collect(videoId, dir);
       final audioPath = artifacts.audio;
       if (audioPath == null) {
+        sw.stop();
+        DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
+          'videoId': videoId, 'ok': false, 'elapsed_ms': sw.elapsedMilliseconds,
+          'reason': 'no_audio_file',
+        });
         throw Exception('yt-dlp reported success but wrote no audio file');
       }
 
+      YtDlpRuntime.markHealthy();
       final embedded = await ID3TagWriter.hasEmbeddedCover(File(audioPath));
+      sw.stop();
       debugPrint('[yt-dlp] Downloaded $videoId -> $audioPath '
           '(embeddedArt=$embedded, sidecar=${artifacts.thumbnail != null})');
+      DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
+        'videoId': videoId, 'ok': true, 'elapsed_ms': sw.elapsedMilliseconds,
+        'embedded_art': embedded,
+        'has_sidecar': artifacts.thumbnail != null,
+        'ext': audioPath.split('.').last,
+      });
 
       return YtDlpDownloadResult(
         audioPath: audioPath,
         thumbnailPath: artifacts.thumbnail,
         thumbnailEmbedded: embedded,
       );
+    } catch (e) {
+      sw.stop();
+      DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
+        'videoId': videoId, 'ok': false, 'elapsed_ms': sw.elapsedMilliseconds,
+        'error': e.toString(),
+      });
+      rethrow;
     } finally {
       await progressSub?.cancel();
     }

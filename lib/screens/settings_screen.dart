@@ -1218,241 +1218,9 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildStorageLocationCard(BuildContext context) {
-    return Consumer<SettingsProvider>(
-      builder: (context, settings, _) {
-        final currentType = settings.storageType;
-        final storageLabels = {
-          StorageType.appInternal: 'App Internal',
-          StorageType.deviceInternal: 'Device Storage',
-          StorageType.sdCard: 'SD Card',
-        };
-        final storageIcons = {
-          StorageType.appInternal: Icons.phone_android_rounded,
-          StorageType.deviceInternal: Icons.folder_rounded,
-          StorageType.sdCard: Icons.sd_card_rounded,
-        };
-        final storageDescriptions = {
-          StorageType.appInternal: 'Files hidden in app data (default)',
-          StorageType.deviceInternal: 'Visible in /sonicWave/ folder',
-          StorageType.sdCard: 'Save to external SD card',
-        };
-
-        return GlassmorphicCard(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.storage_rounded,
-                      color: Theme.of(context).colorScheme.primary, size: 22),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Storage Location',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(fontSize: 15),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Where downloaded files are saved',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Path display
-              FutureBuilder<String>(
-                future: settings.getStoragePathDisplay(),
-                builder: (context, snapshot) {
-                  final path = snapshot.data ?? 'Loading...';
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.glassBorder.withValues(alpha: 0.15),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.folder_open_rounded,
-                            size: 14, color: AppColors.textTertiary),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            path,
-                            style: const TextStyle(
-                              color: AppColors.textTertiary,
-                              fontSize: 11,
-                              fontFamily: 'monospace',
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 14),
-              // Storage type options
-              ...StorageType.values.map((type) {
-                final isSelected = currentType == type;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _onStorageTypeSelected(context, settings, type),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.1)
-                            : AppColors.surfaceVariant.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withValues(alpha: 0.4)
-                              : AppColors.glassBorder.withValues(alpha: 0.1),
-                          width: isSelected ? 1.5 : 0.5,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            storageIcons[type] ?? Icons.storage_rounded,
-                            size: 20,
-                            color: isSelected
-                                ? Theme.of(context).colorScheme.primary
-                                : AppColors.textSecondary,
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  storageLabels[type] ?? '',
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : AppColors.textPrimary,
-                                    fontSize: 13,
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  storageDescriptions[type] ?? '',
-                                  style: const TextStyle(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (isSelected)
-                            Icon(
-                              Icons.check_circle_rounded,
-                              color: Theme.of(context).colorScheme.primary,
-                              size: 20,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ],
-          ),
-        );
-      },
-    );
+    return const _StorageLocationCard();
   }
 
-  void _onStorageTypeSelected(
-      BuildContext context, SettingsProvider settings, StorageType type) async {
-    if (type == settings.storageType) return;
-    final oldType = settings.storageType;
-    final player = context.read<PlayerProvider>();
-
-    String? sdPath;
-    if (type == StorageType.sdCard) {
-      final volumes = await settings.getAvailableStorageVolumes();
-      final sdVolumes = volumes.where((v) => v.type == StorageType.sdCard).toList();
-
-      if (sdVolumes.isEmpty) {
-        if (context.mounted) {
-          AppToast.show(
-            context,
-            'No SD card detected on this device',
-            type: ToastType.warning,
-          );
-        }
-        return;
-      }
-
-      sdPath = sdVolumes.first.path.replaceAll('/${StorageLocationService.appFolderName}', '');
-    }
-
-    if (context.mounted) {
-      AppToast.show(context, 'Migrating files & albums to new storage location...', type: ToastType.info);
-    }
-
-    final success = await player.migrateDownloadedFiles(oldType, type, sdCardPath: sdPath);
-    await settings.setStorageType(type, sdCardPath: sdPath);
-
-    if (type != StorageType.appInternal) {
-      final granted = await settings.storageService.requestStoragePermission();
-      if (!granted && context.mounted) {
-        AppToast.show(
-          context,
-          'Storage permission required. Please grant in app settings.',
-          type: ToastType.warning,
-        );
-        await player.migrateDownloadedFiles(type, StorageType.appInternal);
-        await settings.setStorageType(StorageType.appInternal);
-        return;
-      }
-    }
-
-    if (context.mounted) {
-      final label = type == StorageType.appInternal
-          ? 'App Internal'
-          : type == StorageType.deviceInternal
-              ? 'Device Storage'
-              : 'SD Card';
-      AppToast.show(
-        context,
-        success ? 'All files & albums moved to $label!' : 'Storage location changed to $label',
-        type: success ? ToastType.success : ToastType.info,
-      );
-    }
-  }
 
   Widget _buildAndroidAutoUpdaterCard(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
@@ -1546,5 +1314,287 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ─── Storage Location Card ───────────────────────────────────────────────────
+
+/// Stateful so it can hold a migration lock (H-2) and cache the path Future
+/// per storage type (M-2 — prevents "Loading…" flicker on every unrelated
+/// SettingsProvider.notifyListeners() call such as a volume-slider move).
+class _StorageLocationCard extends StatefulWidget {
+  const _StorageLocationCard();
+  @override
+  State<_StorageLocationCard> createState() => _StorageLocationCardState();
+}
+
+class _StorageLocationCardState extends State<_StorageLocationCard> {
+  bool _isMigrating = false;
+  StorageType? _cachedType;
+  Future<String>? _pathFuture;
+
+  /// Returns the cached path future, refreshing only when the type changed.
+  Future<String> _pathFor(SettingsProvider settings) {
+    if (_cachedType != settings.storageType) {
+      _cachedType = settings.storageType;
+      _pathFuture = settings.getStoragePathDisplay();
+    }
+    return _pathFuture!;
+  }
+
+  static const _labels = {
+    StorageType.appInternal: 'App Internal',
+    StorageType.deviceInternal: 'Device Storage',
+    StorageType.sdCard: 'SD Card',
+  };
+  static const _icons = {
+    StorageType.appInternal: Icons.phone_android_rounded,
+    StorageType.deviceInternal: Icons.folder_rounded,
+    StorageType.sdCard: Icons.sd_card_rounded,
+  };
+  static const _descriptions = {
+    StorageType.appInternal: 'Files hidden in app data (default)',
+    StorageType.deviceInternal: 'Visible in /sonicWave/ folder',
+    StorageType.sdCard: 'Save to external SD card',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<SettingsProvider>(
+      builder: (context, settings, _) {
+        final currentType = settings.storageType;
+        return GlassmorphicCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.storage_rounded,
+                      color: Theme.of(context).colorScheme.primary, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Storage Location',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontSize: 15)),
+                        const SizedBox(height: 2),
+                        Text('Where downloaded files are saved',
+                            style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                  // H-2: spinner visible while migrating
+                  if (_isMigrating)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // M-2: future is cached — no flicker on unrelated rebuilds
+              FutureBuilder<String>(
+                future: _pathFor(settings),
+                builder: (context, snapshot) {
+                  final path = snapshot.data ?? 'Loading...';
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color:
+                              AppColors.glassBorder.withValues(alpha: 0.15)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.folder_open_rounded,
+                            size: 14, color: AppColors.textTertiary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(path,
+                              style: const TextStyle(
+                                color: AppColors.textTertiary,
+                                fontSize: 11,
+                                fontFamily: 'monospace',
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 14),
+              ...StorageType.values.map((type) {
+                final isSelected = currentType == type;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    // H-2: tiles non-interactive during migration
+                    onTap: _isMigrating
+                        ? null
+                        : () => _onTypeSelected(context, settings, type),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.1)
+                            : AppColors.surfaceVariant.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.4)
+                              : AppColors.glassBorder.withValues(alpha: 0.1),
+                          width: isSelected ? 1.5 : 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(_icons[type] ?? Icons.storage_rounded,
+                              size: 20,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : AppColors.textSecondary),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_labels[type] ?? '',
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppColors.textPrimary,
+                                      fontSize: 13,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w500,
+                                    )),
+                                const SizedBox(height: 2),
+                                Text(_descriptions[type] ?? '',
+                                    style: const TextStyle(
+                                        color: AppColors.textTertiary,
+                                        fontSize: 10)),
+                              ],
+                            ),
+                          ),
+                          if (isSelected)
+                            Icon(Icons.check_circle_rounded,
+                                color:
+                                    Theme.of(context).colorScheme.primary,
+                                size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _onTypeSelected(
+      BuildContext context, SettingsProvider settings, StorageType type) async {
+    if (type == settings.storageType || _isMigrating) return;
+
+    final oldType = settings.storageType;
+    final player = context.read<PlayerProvider>();
+
+    // C-1: request permission BEFORE touching any files — a denied dialog
+    // after the copy+delete had already run left the library inaccessible.
+    if (type != StorageType.appInternal) {
+      final granted =
+          await settings.storageService.requestStoragePermission();
+      if (!granted) {
+        if (context.mounted) {
+          AppToast.show(
+              context,
+              'Storage permission required. Please grant in app settings.',
+              type: ToastType.warning);
+        }
+        return;
+      }
+    }
+
+    // H-1: safe sdPath strip — replaceAll was fragile on volume paths that
+    // contained the app folder name more than once.
+    String? sdPath;
+    if (type == StorageType.sdCard) {
+      final volumes = await settings.getAvailableStorageVolumes();
+      final sdVolumes =
+          volumes.where((v) => v.type == StorageType.sdCard).toList();
+      if (sdVolumes.isEmpty) {
+        if (context.mounted) {
+          AppToast.show(context, 'No SD card detected on this device',
+              type: ToastType.warning);
+        }
+        return;
+      }
+      final raw = sdVolumes.first.path;
+      const suffix = '/${StorageLocationService.appFolderName}';
+      sdPath = raw.endsWith(suffix)
+          ? raw.substring(0, raw.length - suffix.length)
+          : raw;
+    }
+
+    setState(() => _isMigrating = true);
+    if (context.mounted) {
+      AppToast.show(context,
+          'Migrating files to ${_labels[type]}…', type: ToastType.info);
+    }
+
+    try {
+      final success = await player.migrateDownloadedFiles(
+        oldType, type,
+        sdCardPath: sdPath,
+      );
+      await settings.setStorageType(type, sdCardPath: sdPath);
+      // Invalidate the cached path so the FutureBuilder refreshes.
+      if (mounted) setState(() => _cachedType = null);
+
+      if (context.mounted) {
+        AppToast.show(
+          context,
+          success
+              ? 'All files moved to ${_labels[type]}!'
+              : 'Storage location changed to ${_labels[type]}',
+          type: success ? ToastType.success : ToastType.info,
+        );
+      }
+    } catch (e) {
+      // C-2: roll back to oldType, not always appInternal — if the user was on
+      // deviceInternal and the sdCard migration failed, dropping to appInternal
+      // meant their library silently moved to a third location they didn't pick.
+      debugPrint('[StorageCard] migration failed: $e');
+      await settings.setStorageType(oldType);
+      if (context.mounted) {
+        AppToast.show(context, 'Migration failed — location not changed.',
+            type: ToastType.warning);
+      }
+    } finally {
+      if (mounted) setState(() => _isMigrating = false);
+    }
   }
 }

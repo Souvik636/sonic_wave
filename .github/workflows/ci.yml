@@ -3,6 +3,17 @@ name: CI
 # Continuous integration for SonicWave.
 # Runs static analysis, tests, and a debug build sanity check on every
 # push to main branches and on every pull request.
+#
+# VERSION SYNC — Single source of truth: pubspec.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# The "Sync & verify version" step below regenerates lib/constants/app_version.dart
+# from pubspec.yaml via `dart run tool/sync_version.dart`, then fails CI if the
+# committed file does not already match.
+#
+# To bump the version locally:
+#   dart run tool/bump_version.dart patch   # or minor / major / set X.Y.Z
+# This updates pubspec.yaml AND app_version.dart in one command.
+# ─────────────────────────────────────────────────────────────────────────────
 
 on:
   push:
@@ -49,6 +60,16 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
+
+      - name: Sync & verify version
+        run: |
+          dart run tool/sync_version.dart
+          git diff --exit-code lib/constants/app_version.dart || (
+            echo ""
+            echo "ERROR: lib/constants/app_version.dart is out of sync with pubspec.yaml."
+            echo "Run 'dart run tool/sync_version.dart' locally and commit the result."
+            exit 1
+          )
 
       - name: Verify formatting
         run: dart format --output=none .

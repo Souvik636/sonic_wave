@@ -11,6 +11,7 @@ import 'providers/settings_provider.dart';
 import 'screens/splash_screen.dart';
 import 'services/app_messenger.dart';
 import 'services/audio_handler.dart';
+import 'services/diagnostic_log_service.dart';
 import 'services/jamendo_service.dart';
 import 'services/ytdlp_runtime.dart';
 import 'theme/app_theme.dart';
@@ -57,7 +58,11 @@ Future<void> main() async {
   // Explode/Invidious/Piped, none of which need yt-dlp, and getYtDlpStreamUrl
   // shares this same single-flight future when it does.
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    YtDlpRuntime.initLifecycleObserver();
     YtDlpRuntime.ensureInitialized();
+    // Start the diagnostic log after the first frame so storage paths are
+    // resolvable and the init cost is off the cold-start critical path.
+    DiagnosticLogService().init();
   });
 }
 

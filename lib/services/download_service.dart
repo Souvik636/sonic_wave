@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song.dart';
 import '../providers/settings_provider.dart';
+import 'diagnostic_log_service.dart';
+import 'local_metadata_service.dart';
 import 'storage_location_service.dart';
 import 'stream_resolver_service.dart';
 import 'id3_tag_writer.dart';
@@ -21,6 +23,68 @@ enum DownloadStatus {
   failed,
   cancelled,
   retrying,
+}
+
+/// Represents a group of duplicate audio files found on storage
+class DuplicateAudioGroup {
+  final String songTitle;
+  final String artist;
+  final List<File> candidateFiles;
+
+  DuplicateAudioGroup({
+    required this.songTitle,
+    required this.artist,
+    required this.candidateFiles,
+  });
+
+  int get totalRedundantBytes {
+    if (candidateFiles.length <= 1) return 0;
+    int redundant = 0;
+    for (int i = 1; i < candidateFiles.length; i++) {
+      try {
+        if (candidateFiles[i].existsSync()) {
+          redundant += candidateFiles[i].lengthSync();
+        }
+      } catch (_) {}
+    }
+    return redundant;
+  }
+
+  String get formattedRedundantSize {
+    final bytes = totalRedundantBytes;
+    if (bytes == 0) return '0 B';
+    final mb = bytes / (1024 * 1024);
+    if (mb >= 1024) {
+      return '${(mb / 1024).toStringAsFixed(1)} GB';
+    }
+    return '${mb.toStringAsFixed(1)} MB';
+  }
+}
+
+/// Structured outcome of a storage diagnostic & repair pipeline run
+class StorageRepairResult {
+  final int repairedContainers;
+  final int recoveredUnindexedSongs;
+  final int prunedGhosts;
+  final int cleanedTempFiles;
+  final int repairedCovers;
+  final List<DuplicateAudioGroup> duplicatesFound;
+
+  const StorageRepairResult({
+    this.repairedContainers = 0,
+    this.recoveredUnindexedSongs = 0,
+    this.prunedGhosts = 0,
+    this.cleanedTempFiles = 0,
+    this.repairedCovers = 0,
+    this.duplicatesFound = const [],
+  });
+
+  int get totalFixed =>
+      repairedContainers +
+      recoveredUnindexedSongs +
+      prunedGhosts +
+      cleanedTempFiles +
+      repairedCovers;
 }
 
 /// Rich download item model exposed to UI
@@ -1064,6 +1128,7 @@ class DownloadService {
   Future<void> loadDownloads({bool force = false}) async {
     if (_isLoaded && !force) return;
     try {
+      await _storageService.initialize();
       final dir = await _downloadDir;
       _cachedDownloadDirPath = dir.path;
 
@@ -1185,8 +1250,9 @@ class DownloadService {
   }
 
   /// Self-healing repair for existing downloaded tracks on disk.
-  Future<void> repairCorruptedDownloads() async {
-    bool changed = false;
+  /// Repair container-extension mismatches (e.g. an M4A file saved as .mp3).
+  Future<int> repairCorruptedDownloads() async {
+    int repaired = 0;
     for (int i = 0; i < _downloadedSongs.length; i++) {
       final song = _downloadedSongs[i];
       if (song.filePath != null && song.filePath!.isNotEmpty) {
@@ -1195,14 +1261,245 @@ class DownloadService {
           final repairedPath = await detectAndFixAudioContainer(f);
           if (repairedPath != song.filePath) {
             _downloadedSongs[i] = song.copyWith(filePath: repairedPath);
-            changed = true;
+            repaired++;
           }
         }
       }
     }
-    if (changed) {
+    if (repaired > 0) {
       await _saveMetadata();
     }
+    return repaired;
+  }
+
+  /// Comprehensive diagnostic & repair pipeline:
+  /// 1. Cleans orphan .part / .tmp / 0-byte temporary download files.
+  /// 2. Discovers & adopts unindexed audio files in Download folder into library.
+  /// 3. Detects & fixes container/extension mismatches (.m4a mislabeled as .mp3).
+  /// 4. Verifies physical existence of indexed songs & prunes ghost entries.
+  /// 5. Cleans orphan cover art files & restores missing artwork links.
+  Future<StorageRepairResult> runComprehensiveStorageDiagnostics() async {
+    await loadDownloads();
+
+    int cleanedTemp = 0;
+    int recoveredSongs = 0;
+    int repairedContainers = 0;
+    int prunedGhosts = 0;
+    int repairedCovers = 0;
+
+    // 1. Clean temp / part / 0-byte files
+    try {
+      final dlDir = await _storageService.getDownloadDir();
+      if (await dlDir.exists()) {
+        await for (final entity in dlDir.list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            final name = entity.path.toLowerCase();
+            if (name.endsWith('.part') || name.endsWith('.tmp') || name.endsWith('.download')) {
+              try {
+                await entity.delete();
+                cleanedTemp++;
+              } catch (_) {}
+            } else if (await entity.length() == 0 && !name.endsWith('.nomedia')) {
+              try {
+                await entity.delete();
+                cleanedTemp++;
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[DownloadService] Temp cleanup error: $e');
+    }
+
+    // 2. Discover & adopt unindexed audio files in Download directory
+    try {
+      final dlDir = await _storageService.getDownloadDir();
+      if (await dlDir.exists()) {
+        final audioExts = {'.mp3', '.m4a', '.aac', '.flac', '.ogg', '.opus', '.wav', '.webm'};
+        final indexedPaths = _downloadedSongs
+            .where((s) => s.filePath != null && s.filePath!.isNotEmpty)
+            .map((s) => s.filePath!.replaceAll('\\', '/').toLowerCase())
+            .toSet();
+
+        await for (final entity in dlDir.list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            final path = entity.path;
+            final ext = _extensionOf(path).toLowerCase();
+            if (audioExts.contains('.$ext')) {
+              final normPath = path.replaceAll('\\', '/').toLowerCase();
+              if (!indexedPaths.contains(normPath)) {
+                final fileLen = await entity.length();
+                if (fileLen > 1024) {
+                  final stem = _stemOf(_basenameOf(path));
+                  final videoId = 'local_${entity.statSync().modified.millisecondsSinceEpoch}_${stem.hashCode.abs()}';
+                  Song orphanSong = Song(
+                    id: videoId,
+                    videoId: videoId,
+                    title: stem,
+                    artist: 'Local Audio',
+                    thumbnailUrl: '',
+                    highResThumbnailUrl: '',
+                    duration: Duration.zero,
+                    filePath: path,
+                    albumFolderName: 'Downloads',
+                  );
+                  try {
+                    orphanSong = await LocalMetadataService().enrichSong(orphanSong);
+                  } catch (_) {}
+                  _downloadedSongs.add(orphanSong);
+                  indexedPaths.add(normPath);
+                  recoveredSongs++;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[DownloadService] Unindexed audio scan error: $e');
+    }
+
+    // 3. Container & Extension Mismatches
+    try {
+      repairedContainers = await repairCorruptedDownloads();
+    } catch (e) {
+      debugPrint('[DownloadService] Container repair error: $e');
+    }
+
+    // 4. Verify storage integrity & prune ghosts
+    try {
+      final hadGhosts = await verifyStorageIntegrity();
+      if (hadGhosts) {
+        prunedGhosts++;
+      }
+    } catch (e) {
+      debugPrint('[DownloadService] Integrity verification error: $e');
+    }
+
+    // 5. Cover Art Maintenance & Orphan Cleanup
+    try {
+      final coverDir = await _storageService.getCoverDir();
+      final validIds = _downloadedSongs.map((s) => s.videoId).toSet();
+
+      if (await coverDir.exists()) {
+        await for (final f in coverDir.list(followLinks: false)) {
+          if (f is File) {
+            final name = _stemOf(_basenameOf(f.path));
+            if (!validIds.contains(name) && !f.path.contains('.nomedia')) {
+              try {
+                await f.delete();
+                repairedCovers++;
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[DownloadService] Cover art maintenance error: $e');
+    }
+
+    // 6. Duplicate Audio Files Scan
+    List<DuplicateAudioGroup> duplicatesFound = [];
+    try {
+      duplicatesFound = await findDuplicateAudioFiles();
+    } catch (e) {
+      debugPrint('[DownloadService] Duplicate audio scan error: $e');
+    }
+
+    await _saveMetadata();
+
+    return StorageRepairResult(
+      repairedContainers: repairedContainers,
+      recoveredUnindexedSongs: recoveredSongs,
+      prunedGhosts: prunedGhosts,
+      cleanedTempFiles: cleanedTemp,
+      repairedCovers: repairedCovers,
+      duplicatesFound: duplicatesFound,
+    );
+  }
+
+  /// Scans storage directories and groups duplicate audio files by stem/size.
+  Future<List<DuplicateAudioGroup>> findDuplicateAudioFiles() async {
+    final Map<String, List<File>> groups = {};
+    final Map<String, String> titles = {};
+
+    try {
+      final dlDir = await _storageService.getDownloadDir();
+      final audioExts = {'.mp3', '.m4a', '.aac', '.flac', '.ogg', '.opus', '.wav', '.webm'};
+
+      final candidates = <File>[];
+
+      if (await dlDir.exists()) {
+        await for (final entity in dlDir.list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            final ext = _extensionOf(entity.path).toLowerCase();
+            if (audioExts.contains('.$ext')) {
+              candidates.add(entity);
+            }
+          }
+        }
+      }
+
+      // Group candidates by key: clean stem + file size in bytes
+      for (final file in candidates) {
+        try {
+          final len = file.lengthSync();
+          if (len < 2048) continue; // Skip tiny fragments
+
+          final basename = _basenameOf(file.path);
+          final stem = _cleanTitleKey(_stemOf(basename));
+          if (stem.isEmpty) continue;
+
+          final key = '${stem}_$len';
+
+          groups.putIfAbsent(key, () => []).add(file);
+          titles.putIfAbsent(key, () => _stemOf(basename));
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('[DownloadService] findDuplicateAudioFiles error: $e');
+    }
+
+    final List<DuplicateAudioGroup> result = [];
+    groups.forEach((key, files) {
+      if (files.length > 1) {
+        result.add(DuplicateAudioGroup(
+          songTitle: titles[key] ?? 'Audio Track',
+          artist: 'Storage File',
+          candidateFiles: files,
+        ));
+      }
+    });
+
+    return result;
+  }
+
+  static String _cleanTitleKey(String input) {
+    return input
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '')
+        .trim();
+  }
+
+  /// Deletes selected duplicate files from disk and purges their metadata index entries.
+  Future<int> deleteSelectedDuplicateFiles(List<String> filePathsToDelete) async {
+    int freedBytes = 0;
+    for (final path in filePathsToDelete) {
+      try {
+        final f = File(path);
+        if (await f.exists()) {
+          freedBytes += await f.length();
+          await f.delete();
+        }
+        final normPath = path.replaceAll('\\', '/').toLowerCase();
+        _downloadedSongs.removeWhere((s) => s.filePath?.replaceAll('\\', '/').toLowerCase() == normPath);
+      } catch (e) {
+        debugPrint('[DownloadService] Error deleting duplicate file $path: $e');
+      }
+    }
+    await _saveMetadata();
+    return freedBytes;
   }
 
   /// Verify physical existence of all downloaded tracks.
@@ -1211,14 +1508,34 @@ class DownloadService {
     bool changed = false;
     final List<Song> valid = [];
 
-    for (final song in _downloadedSongs) {
-      final path = song.filePath ?? (_cachedDownloadDirPath != null ? '$_cachedDownloadDirPath/${song.videoId}.mp3' : null);
-      if (path != null && File(path).existsSync()) {
+    for (var song in _downloadedSongs) {
+      String? path = song.filePath;
+      bool exists = false;
+
+      if (path != null && path.isNotEmpty) {
+        if (File(path).existsSync()) {
+          exists = true;
+        } else {
+          final normalized = path.replaceAll('\\', '/');
+          if (File(normalized).existsSync()) {
+            exists = true;
+            song = song.copyWith(filePath: normalized);
+          }
+        }
+      }
+
+      if (!exists) {
+        final probed = getCachedLocalPathSync(song.videoId);
+        if (probed != null && File(probed).existsSync()) {
+          exists = true;
+          song = song.copyWith(filePath: probed);
+        }
+      }
+
+      if (exists) {
         valid.add(song);
       } else {
         changed = true;
-        // The audio is gone, so its cached cover is an orphan no index entry
-        // will ever point at again.
         await _removeArtCache(song.videoId);
         debugPrint('[DownloadService] Purged ghost download: ${song.title} ($path)');
       }
@@ -1234,7 +1551,11 @@ class DownloadService {
 
   Future<List<Song>> getDownloadedSongs() async {
     await loadDownloads();
-    await verifyStorageIntegrity();
+    // verifyStorageIntegrity is already called inside loadDownloads() —
+    // calling it again here doubled every disk-walk on startup and on every
+    // download completion. loadDownloads guards on _isLoaded so it returns
+    // immediately on the second call, but verifyStorageIntegrity does not,
+    // meaning TWO full filesystem-scans fired unconditionally on every call.
     return List.unmodifiable(_downloadedSongs);
   }
 
@@ -1340,7 +1661,11 @@ class DownloadService {
       throw Exception('Live radio streams cannot be downloaded for offline playback.');
     }
 
-    // Check network first
+    DiagnosticLogService().log(DiagnosticLogService.downloadStart, {
+      'videoId': song.videoId, 'title': song.title,
+      'quality': quality.name, 'queued': _runningCount >= maxConcurrent,
+    });
+
     final hasNetwork = await isNetworkAvailable();
     if (!hasNetwork) {
       throw Exception('No network connection. Please check your internet and try again.');
@@ -1867,6 +2192,12 @@ class DownloadService {
       // Retry logic
       if (attempt < maxRetries - 1) {
         debugPrint('Download attempt ${attempt + 1} failed for ${song.title}, retrying...');
+        DiagnosticLogService().log(DiagnosticLogService.downloadRetry, {
+          'videoId': song.videoId, 'title': song.title,
+          'attempt': attempt + 1, 'max': maxRetries,
+          'error': e.toString(),
+          'resume_bytes': _resumeHints[song.videoId]?.total ?? 0,
+        });
         final task = _activeTasks[song.videoId];
         if (task != null) {
           task.status = DownloadStatus.retrying;
@@ -1875,7 +2206,6 @@ class DownloadService {
           if (onStateChanged != null) onStateChanged();
         }
         await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
-        // The reserved name goes with it: see [reservedAudioFile].
         return _executeDownload(song, onProgress,
             onStateChanged: onStateChanged,
             attempt: attempt + 1,
@@ -1883,10 +2213,7 @@ class DownloadService {
             reservedAudioFile: audioFile);
       }
 
-      // Final failure. The `.part` file is dropped here rather than left to
-      // occupy storage indefinitely — a hint that survives the last attempt has
-      // nothing left to be used by, since a user-initiated re-download starts a
-      // fresh chain with attempt 0.
+      // Final failure.
       _resumeHints.remove(song.videoId);
       try {
         final leftover = File('${audioFile.path}.part');
@@ -1901,6 +2228,10 @@ class DownloadService {
         if (onStateChanged != null) onStateChanged();
       }
       debugPrint('Download error after $maxRetries attempts: $e');
+      DiagnosticLogService().log(DiagnosticLogService.downloadError, {
+        'videoId': song.videoId, 'title': song.title,
+        'attempts': attempt + 1, 'error': e.toString(),
+      });
       rethrow;
     }
   }

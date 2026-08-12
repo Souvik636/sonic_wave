@@ -6,6 +6,7 @@ import 'jamendo_service.dart';
 import 'jiosaavn_service.dart';
 import 'radio_service.dart';
 import 'youtube_service.dart';
+import 'network_resilience_service.dart';
 
 /// The result of resolving a Song into something the audio player can open.
 class ResolvedStream {
@@ -129,16 +130,20 @@ class StreamResolverService {
 
     // 6. YouTube song (default catalog fallback)
     debugPrint('[StreamResolver] Resolving YouTube song exclusively: $id');
-    try {
-      final ytUrl =
-          await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
-      if (ytUrl.startsWith('http')) {
-        return ResolvedStream(ytUrl, source: 'youtube');
-      }
-    } catch (e) {
-      debugPrint('[StreamResolver] YouTube resolution failed: $e');
-    }
-
-    return null;
+    return await NetworkResilienceService().runWithAutoHeal<ResolvedStream?>(
+      () async {
+        final ytUrl =
+            await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
+        if (ytUrl.startsWith('http')) {
+          return ResolvedStream(ytUrl, source: 'youtube');
+        }
+        throw Exception('Resolved YouTube URL was empty');
+      },
+      name: 'resolve_youtube_stream',
+      maxAttempts: 3,
+    ).catchError((e) {
+      debugPrint('[StreamResolver] YouTube resolution failed after self-healing: $e');
+      return null;
+    });
   }
 }

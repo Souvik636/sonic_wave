@@ -2,35 +2,30 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:extractor/extractor.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'diagnostic_log_service.dart';
+import 'youtube_service.dart';
 import 'ytdlp_downloader.dart';
 
+class _YtDlpLifecycleObserver with WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    DiagnosticLogService().log(
+      DiagnosticLogService.appLifecycle,
+      {'state': state.name},
+    );
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[yt-dlp] App resumed from background — checking native process health');
+      YtDlpRuntime.onAppResumed();
+    } else if (state == AppLifecycleState.paused) {
+      debugPrint('[yt-dlp] App paused/backgrounded');
+    }
+  }
+}
+
 /// Single-flight guard + binary auto-update for YoutubeDLFlutter (yt-dlp).
-///
-/// Two reliability problems this centralizes (both learned from JunkFood02/Seal):
-///
-/// 1. **Double-init race** — youtubedl-android's init runs on the main thread
-///    and is NOT reentrant. App startup fires initialize() without awaiting;
-///    if a song plays before that finishes, a second initialize() used to hang
-///    the native side. Every caller now shares ONE in-flight init future.
-///
-/// 2. **Stale binary** — the bundled yt-dlp goes out of date within weeks and
-///    YouTube extraction silently breaks (signature / nsig changes). Seal fixes
-///    this by updating the yt-dlp binary. [maybeUpdate] does the same: once
-///    per [_updateInterval], in the background, after init succeeds.
-///
-/// FFmpeg is enabled here because it is required by every post-processing flag
-/// the download path uses: `-x`, `--audio-format`, `--embed-thumbnail`,
-/// `--embed-metadata`. It costs nothing to switch on — the ffmpeg AAR is
-/// already packaged in the APK (android/app/build.gradle.kts keeps
-/// `**/libffmpeg.zip.so`); `enableFFmpeg: false` only skipped unpacking it at
-/// runtime, so the ~65MB shipped unused. Cover art embedding works because
-/// mutagen is bundled inside the library's Python payload.
-///
-/// aria2c stays off: it is excluded from packaging, so `--concurrent-fragments`
-/// is the throughput lever instead.
 class YtDlpRuntime {
   YtDlpRuntime._();
 
@@ -38,6 +33,42 @@ class YtDlpRuntime {
   static Future<void>? _updateInFlight;
   static bool _updateCheckedThisRun = false;
   static bool _ready = false;
+  static bool _observerRegistered = false;
+
+  /// Register app lifecycle listener for Android Doze mode & background process recovery.
+  static void initLifecycleObserver() {
+    if (_observerRegistered) return;
+    _observerRegistered = true;
+    WidgetsBinding.instance.addObserver(_YtDlpLifecycleObserver());
+  }
+
+  /// Handle Android App Resume from background.
+  static void onAppResumed() async {
+    _consecutiveFailures = 0;
+    YouTubeService.clearStreamCacheOnResume();
+
+    try {
+      final isInit = await YoutubeDLFlutter.instance
+          .isInitialized()
+          .timeout(const Duration(seconds: 3));
+      if (!isInit) {
+        debugPrint('[yt-dlp] Native process died in background — force re-initializing');
+        forceReinitialize();
+      } else {
+        _ready = true;
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp] Native process error on resume ($e) — force re-initializing');
+      forceReinitialize();
+    }
+  }
+
+  /// Force a fresh native initialization sequence.
+  static Future<bool> forceReinitialize() async {
+    _ready = false;
+    _inFlight = null;
+    return ensureInitialized();
+  }
 
   /// Whether the runtime is warm RIGHT NOW, without awaiting anything.
   ///
@@ -53,55 +84,49 @@ class YtDlpRuntime {
   static int _consecutiveFailures = 0;
 
   /// Failures in a row before the runtime is treated as broken.
-  ///
-  /// Three, not one: a single failure is far more likely to be a private or
-  /// region-locked video, or one bad player client, than a sick runtime. Three
-  /// in a row with no success in between is a pattern.
-  static const int _unhealthyThreshold = 3;
+  /// Set to 5 so transient mobile network timeouts do not trip unhealthy resets.
+  static const int _unhealthyThreshold = 5;
 
   /// Report that yt-dlp produced a usable result. Resets the failure streak.
   static void markHealthy() {
+    if (_consecutiveFailures > 0) {
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime,
+          {'detail': 'healthy', 'streak_cleared': _consecutiveFailures});
+    }
     _consecutiveFailures = 0;
   }
 
   /// Report that a yt-dlp extraction produced nothing.
-  ///
-  /// After [_unhealthyThreshold] consecutive failures the runtime is torn back
-  /// down to its uninitialized state so the NEXT call re-runs `initialize()`.
-  ///
-  /// This is the other half of the "force-close the app and it works again"
-  /// report. [_ready] was a one-way latch — set true on the first successful
-  /// init and never cleared — and [_inFlight] held the completed future forever,
-  /// so `ensureInitialized()` kept answering true from cache. If the native side
-  /// degraded mid-session (Android reclaiming native memory, the Python payload
-  /// evicted, a bad binary update), every later extraction failed and there was
-  /// no path back short of killing the process. Now the app can recover on its
-  /// own, which is all the restart was ever doing.
+  /// After [_unhealthyThreshold] consecutive failures the runtime resets so
+  /// the next call re-runs initialize() and heals automatically.
   static void markExtractionFailed() {
     _consecutiveFailures++;
+    DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
+      'detail': 'extraction_failed',
+      'consecutive': _consecutiveFailures,
+      'threshold': _unhealthyThreshold,
+    });
     if (_consecutiveFailures < _unhealthyThreshold) return;
-    debugPrint('[yt-dlp] $_consecutiveFailures consecutive extraction failures '
-        '— dropping the runtime so the next call re-initializes');
+    debugPrint('[yt-dlp] $_consecutiveFailures consecutive failures '
+        '— resetting runtime for self-recovery');
+    DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime,
+        {'detail': 'unhealthy_reset', 'consecutive': _consecutiveFailures});
     _consecutiveFailures = 0;
-    _ready = false;
     _inFlight = null;
-    // Nothing on the streaming path awaits init — it only reads [isReady] — so
-    // clearing the flag alone would retire yt-dlp for the rest of the session
-    // instead of recovering it. Kick the re-init off here, unawaited, so the
-    // runtime heals in the background while the fast chain keeps serving songs.
     unawaited(_recover());
   }
 
   /// Rebuild the runtime after it was marked unhealthy.
-  ///
-  /// Deliberately fire-and-forget and never throws: this runs off the back of a
-  /// failed playback attempt that has already fallen through to another source.
   static Future<void> _recover() async {
     try {
       final ok = await ensureInitialized();
-      debugPrint('[yt-dlp] Recovery re-initialization: $ok');
+      debugPrint('[yt-dlp] Recovery re-initialization: ');
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime,
+          {'detail': 'recover', 'ok': ok});
     } catch (e) {
-      debugPrint('[yt-dlp] Recovery re-initialization failed: $e');
+      debugPrint('[yt-dlp] Recovery re-initialization failed: ');
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime,
+          {'detail': 'recover_failed', 'error': e.toString()});
     }
   }
 
@@ -119,33 +144,44 @@ class YtDlpRuntime {
   }
 
   static Future<bool> _doInit() async {
+    final sw = Stopwatch()..start();
     try {
       if (await YoutubeDLFlutter.instance.isInitialized()) {
         _ready = true;
+        sw.stop();
+        DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
+          'detail': 'already_initialized', 'elapsed_ms': sw.elapsedMilliseconds,
+        });
         _scheduleUpdateCheck();
         return true;
       }
-      // 25s, not 45s: nothing on the playback path waits on this any more (it
-      // is kicked off from main.dart's post-frame callback and streaming falls
-      // back to [isReady]), so a long ceiling only delayed the retry.
       final result = await YoutubeDLFlutter.instance
           .initialize(enableFFmpeg: true, enableAria2c: false)
           .timeout(const Duration(seconds: 25));
+      sw.stop();
       debugPrint(
           '[yt-dlp] Initialization: ${result.success} ${result.errorMessage ?? ""}');
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
+        'detail': 'init',
+        'ok': result.success,
+        'elapsed_ms': sw.elapsedMilliseconds,
+        if (result.errorMessage != null) 'error': result.errorMessage,
+      });
       if (!result.success) {
-        // Allow a later call to retry a failed init (transient IO/storage).
         _inFlight = null;
         return false;
       }
       _ready = true;
       _scheduleUpdateCheck();
-      // Clean orphaned staging files from a previous crash/kill — fire and
-      // forget so init isn't delayed.
       _cleanStagingDir();
       return true;
     } catch (e) {
+      sw.stop();
       debugPrint('[yt-dlp] Initialization failed: $e');
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
+        'detail': 'init_exception', 'elapsed_ms': sw.elapsedMilliseconds,
+        'error': e.toString(),
+      });
       _inFlight = null;
       return false;
     }
@@ -183,11 +219,20 @@ class YtDlpRuntime {
       }
 
       debugPrint('[yt-dlp] Checking for binary update...');
+      final sw = Stopwatch()..start();
       final result = await YoutubeDLFlutter.instance
           .updateYoutubeDL()
           .timeout(const Duration(seconds: 60));
+      sw.stop();
       debugPrint(
           '[yt-dlp] Update: ${result.status} ${result.version ?? ""} ${result.errorMessage ?? ""}');
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
+        'detail': 'update',
+        'status': result.status.toString(),
+        'version': result.version,
+        'elapsed_ms': sw.elapsedMilliseconds,
+        if (result.errorMessage != null) 'error': result.errorMessage,
+      });
 
       // Record the attempt time regardless of up-to-date vs updated, so we
       // don't hammer the network on every launch. On hard error we still
@@ -197,6 +242,9 @@ class YtDlpRuntime {
           _lastUpdateKey, DateTime.now().millisecondsSinceEpoch);
     } catch (e) {
       debugPrint('[yt-dlp] Update check failed: $e');
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
+        'detail': 'update_exception', 'error': e.toString(),
+      });
     } finally {
       _updateInFlight = null;
     }

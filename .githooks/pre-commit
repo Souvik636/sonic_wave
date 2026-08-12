@@ -1,0 +1,29 @@
+#!/bin/sh
+# .githooks/pre-commit
+#
+# Auto-syncs lib/constants/app_version.dart from pubspec.yaml before every commit.
+# Install once with:
+#   git config core.hooksPath .githooks
+#
+# After that, every `git commit` will automatically keep app_version.dart in
+# sync — you never have to remember to run sync_version manually.
+
+set -e
+
+SYNC_SCRIPT="tool/sync_version.dart"
+
+if [ ! -f "$SYNC_SCRIPT" ]; then
+  echo "[pre-commit] sync_version.dart not found — skipping version sync"
+  exit 0
+fi
+
+echo "[pre-commit] Syncing app_version.dart from pubspec.yaml..."
+dart run "$SYNC_SCRIPT"
+
+# Stage app_version.dart if it changed so the commit includes the updated file
+if ! git diff --quiet lib/constants/app_version.dart; then
+  git add lib/constants/app_version.dart
+  echo "[pre-commit] app_version.dart updated and staged."
+fi
+
+exit 0

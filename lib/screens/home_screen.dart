@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/song.dart';
 import '../models/album.dart';
 import '../providers/home_provider.dart';
@@ -43,6 +44,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentNavIndex = 0;
   String _albumSearchQuery = '';
   String _albumSortType = 'name'; // 'name', 'size', 'date', 'songs'
+  String _localSearchQuery = '';
+  String _localFilterCategory = 'all'; // 'all', 'local', 'downloaded', 'edited'
+  String _localSortType = 'title'; // 'title', 'artist', 'size', 'duration'
+  late final TextEditingController _localSearchController;
+  late final TextEditingController _albumSearchController;
   late AnimationController _fadeController;
 
   String _formatDate(DateTime dt) {
@@ -54,6 +60,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _localSearchController = TextEditingController();
+    _albumSearchController = TextEditingController();
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -102,6 +110,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _localSearchController.dispose();
+    _albumSearchController.dispose();
     _fadeController.dispose();
     super.dispose();
   }
@@ -1880,7 +1890,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _showSongDetailsSheet(BuildContext context, Song song, PlayerProvider provider) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final isFav = provider.isFavorite(song.videoId);
 
     showModalBottomSheet(
       context: context,
@@ -2019,17 +2028,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       icon: const Icon(Icons.queue_music_rounded, size: 20),
                       tooltip: 'Add to Queue',
                     ),
-                    IconButton.filledTonal(
-                      onPressed: () {
-                        provider.toggleFavorite(song);
-                        (ctx as Element).markNeedsBuild();
+                    Consumer<PlayerProvider>(
+                      builder: (context, p, _) {
+                        final isFav = p.isFavorite(song.videoId);
+                        return IconButton.filledTonal(
+                          onPressed: () {
+                            p.toggleFavorite(song);
+                          },
+                          icon: Icon(
+                            isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                            color: isFav ? Colors.redAccent : Colors.white,
+                            size: 20,
+                          ),
+                          tooltip: 'Favorite',
+                        );
                       },
-                      icon: Icon(
-                        isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        color: isFav ? Colors.redAccent : Colors.white,
-                        size: 20,
-                      ),
-                      tooltip: 'Favorite',
                     ),
                   ],
                 ),
@@ -2359,12 +2372,93 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final primaryColor = Theme.of(context).colorScheme.primary;
         final hasExternal = localSongs.any((s) => s.isLocalFile && s.filePath != null && !StorageLocationService().isFileInAppFolderSync(s.filePath!));
 
+        // Filter and sort local songs
+        final searchQuery = _localSearchQuery.trim().toLowerCase();
+        final filteredLocalSongs = localSongs.where((song) {
+          if (_localFilterCategory == 'local' && !song.id.startsWith('local_')) {
+            return false;
+          }
+          if (_localFilterCategory == 'downloaded' && song.id.startsWith('local_')) {
+            return false;
+          }
+          if (_localFilterCategory == 'edited' && !song.isEdited) {
+            return false;
+          }
+
+          if (searchQuery.isEmpty) return true;
+          final titleMatch = song.title.toLowerCase().contains(searchQuery);
+          final artistMatch = song.artist.toLowerCase().contains(searchQuery);
+          final pathMatch = (song.filePath ?? '').toLowerCase().contains(searchQuery);
+          return titleMatch || artistMatch || pathMatch;
+        }).toList();
+
+        if (_localSortType == 'title') {
+          filteredLocalSongs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        } else if (_localSortType == 'artist') {
+          filteredLocalSongs.sort((a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()));
+        } else if (_localSortType == 'size') {
+          filteredLocalSongs.sort((a, b) => b.fileSizeInBytes.compareTo(a.fileSizeInBytes));
+        } else if (_localSortType == 'duration') {
+          filteredLocalSongs.sort((a, b) => b.duration.compareTo(a.duration));
+        }
+
+        int totalBytes = 0;
+        for (final song in filteredLocalSongs) {
+          totalBytes += song.fileSizeInBytes;
+        }
+        final formattedTotalSize = totalBytes > 0
+            ? '${(totalBytes / (1024 * 1024)).toStringAsFixed(1)} MB'
+            : '';
+
         return CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
             const SliverToBoxAdapter(
               child: SizedBox(height: 12),
             ),
+
+            if (playerProvider.scanPermissionDenied)
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFB74D).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFFFB74D).withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFB74D), size: 24),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Storage Permission Required',
+                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Permission was denied. Grant storage access in app settings to scan audio files on your device.',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => openAppSettings(),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFFFFB74D),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        ),
+                        child: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             // Premium Glass Header & Quick Actions Bar
             SliverToBoxAdapter(
@@ -2400,7 +2494,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${localSongs.length} track(s) indexed',
+                                '${filteredLocalSongs.length} track(s)${formattedTotalSize.isNotEmpty ? ' • $formattedTotalSize' : ''}',
                                 style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
                               ),
                             ],
@@ -2413,7 +2507,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            '${localSongs.length}',
+                            '${filteredLocalSongs.length}',
                             style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -2492,7 +2586,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
 
-            if (localSongs.isEmpty)
+            if (localSongs.isNotEmpty)
+              SliverToBoxAdapter(
+                child: _buildLocalFilterBar(context, playerProvider, filteredLocalSongs),
+              ),
+
+            if (filteredLocalSongs.isEmpty)
               SliverFillRemaining(
                 child: Center(
                   child: Padding(
@@ -2515,7 +2614,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         const SizedBox(height: 20),
                         Text(
-                          'No Local Music Found',
+                          localSongs.isEmpty ? 'No Local Music Found' : 'No Matching Tracks',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                 color: Colors.white,
@@ -2523,16 +2622,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'Scanned local audio files and offline downloads will appear here.',
+                        Text(
+                          localSongs.isEmpty
+                              ? 'Scanned local audio files and offline downloads will appear here.'
+                              : 'Try adjusting your search query or filter chips.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: AppColors.textTertiary, fontSize: 13, height: 1.4),
+                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 13, height: 1.4),
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
-                          onPressed: () => playerProvider.scanLocalSongs(),
-                          icon: const Icon(Icons.search_rounded, size: 18),
-                          label: const Text('Scan Storage Now'),
+                          onPressed: () {
+                            if (localSongs.isEmpty) {
+                              playerProvider.scanLocalSongs();
+                            } else {
+                              _localSearchController.clear();
+                              setState(() {
+                                _localSearchQuery = '';
+                                _localFilterCategory = 'all';
+                              });
+                            }
+                          },
+                          icon: Icon(localSongs.isEmpty ? Icons.search_rounded : Icons.filter_alt_off_rounded, size: 18),
+                          label: Text(localSongs.isEmpty ? 'Scan Storage Now' : 'Clear Filters'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryColor,
                             foregroundColor: Colors.white,
@@ -2549,7 +2660,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final localSong = localSongs[index];
+                    final localSong = filteredLocalSongs[index];
                     return _StaggeredListSlideIn(
                       index: index < 15 ? index : 15,
                       child: SongTile(
@@ -2557,12 +2668,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         index: index,
                         sourceTag: localSong.id.startsWith('local_') ? 'local' : 'downloaded',
                         onTap: () {
-                          playerProvider.playPlaylist(localSongs, startIndex: index);
+                          playerProvider.playPlaylist(filteredLocalSongs, startIndex: index);
                         },
                       ),
                     );
                   },
-                  childCount: localSongs.length,
+                  childCount: filteredLocalSongs.length,
                 ),
               ),
             const SliverToBoxAdapter(
@@ -2571,6 +2682,151 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildLocalFilterBar(BuildContext context, PlayerProvider playerProvider, List<Song> filteredSongs) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _localSearchController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  onChanged: (val) {
+                    setState(() {
+                      _localSearchQuery = val;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search title, artist or path...',
+                    hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                    prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 18),
+                    suffixIcon: _localSearchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, color: AppColors.textTertiary, size: 18),
+                            onPressed: () {
+                              _localSearchController.clear();
+                              setState(() {
+                                _localSearchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              PopupMenuButton<String>(
+                initialValue: _localSortType,
+                onSelected: (val) {
+                  setState(() {
+                    _localSortType = val;
+                  });
+                },
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.sort_rounded, color: Colors.white, size: 18),
+                ),
+                itemBuilder: (ctx) => const [
+                  PopupMenuItem(value: 'title', child: Text('Sort by Title (A-Z)')),
+                  PopupMenuItem(value: 'artist', child: Text('Sort by Artist (A-Z)')),
+                  PopupMenuItem(value: 'size', child: Text('Sort by File Size')),
+                  PopupMenuItem(value: 'duration', child: Text('Sort by Duration')),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: [
+                      _buildLocalCategoryChip('All', 'all', primaryColor),
+                      const SizedBox(width: 6),
+                      _buildLocalCategoryChip('Scanned', 'local', primaryColor),
+                      const SizedBox(width: 6),
+                      _buildLocalCategoryChip('Downloads', 'downloaded', primaryColor),
+                      const SizedBox(width: 6),
+                      _buildLocalCategoryChip('Edited', 'edited', primaryColor),
+                    ],
+                  ),
+                ),
+              ),
+              if (filteredSongs.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () => playerProvider.playPlaylist(filteredSongs, startIndex: 0),
+                  icon: const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 28),
+                  tooltip: 'Play All',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () {
+                    final list = List<Song>.from(filteredSongs)..shuffle();
+                    playerProvider.playPlaylist(list, startIndex: 0);
+                  },
+                  icon: Icon(Icons.shuffle_rounded, color: primaryColor, size: 24),
+                  tooltip: 'Shuffle All',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocalCategoryChip(String label, String categoryKey, Color primaryColor) {
+    final isSelected = _localFilterCategory == categoryKey;
+    return FilterChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected ? Colors.white : AppColors.textSecondary,
+        ),
+      ),
+      selected: isSelected,
+      onSelected: (_) {
+        setState(() {
+          _localFilterCategory = categoryKey;
+        });
+      },
+      backgroundColor: AppColors.surfaceVariant.withValues(alpha: 0.3),
+      selectedColor: primaryColor.withValues(alpha: 0.4),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      side: BorderSide(
+        color: isSelected ? primaryColor : AppColors.glassBorder,
+        width: isSelected ? 1.2 : 0.5,
+      ),
+      showCheckmark: false,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     );
   }
 
@@ -2630,6 +2886,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         children: [
           Expanded(
             child: TextField(
+              controller: _albumSearchController,
               style: const TextStyle(color: Colors.white, fontSize: 13),
               onChanged: (val) {
                 setState(() {
@@ -2640,6 +2897,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 hintText: 'Search albums...',
                 hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                 prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 18),
+                suffixIcon: _albumSearchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, color: AppColors.textTertiary, size: 18),
+                        onPressed: () {
+                          _albumSearchController.clear();
+                          setState(() {
+                            _albumSearchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
                 filled: true,
                 fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

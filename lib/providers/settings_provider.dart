@@ -236,22 +236,30 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> _loadSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
-      // Load audio quality
+
+      // Load audio quality — guard the index: a downgrade can produce an
+      // out-of-range value and a bare list[] throws RangeError, which the outer
+      // catch would swallow, leaving the app permanently uninitialized.
       final qualityIdx = prefs.getInt(_qualityKey);
-      if (qualityIdx != null) {
+      if (qualityIdx != null &&
+          qualityIdx >= 0 &&
+          qualityIdx < AudioQuality.values.length) {
         _audioQuality = AudioQuality.values[qualityIdx];
       }
 
       // Load theme accent
       final accentIdx = prefs.getInt(_accentKey);
-      if (accentIdx != null) {
+      if (accentIdx != null &&
+          accentIdx >= 0 &&
+          accentIdx < ThemeAccent.values.length) {
         _themeAccent = ThemeAccent.values[accentIdx];
       }
 
       // Load sound enhancer
       final enhancerIdx = prefs.getInt(_enhancerKey);
-      if (enhancerIdx != null) {
+      if (enhancerIdx != null &&
+          enhancerIdx >= 0 &&
+          enhancerIdx < SoundEnhancer.values.length) {
         _soundEnhancer = SoundEnhancer.values[enhancerIdx];
       }
 
@@ -301,11 +309,14 @@ class SettingsProvider extends ChangeNotifier {
 
       // Initialize stream cache service (loads persisted size limit)
       await StreamCacheService().initialize();
-
-      _isInitialized = true;
-      notifyListeners();
     } catch (e) {
       debugPrint('Error loading settings: $e');
+    } finally {
+      // Always mark initialized and notify — even on partial load. Consumers
+      // gated on isInitialized would hang permanently if a RangeError or any
+      // other exception prevented these two lines from running.
+      _isInitialized = true;
+      notifyListeners();
     }
   }
 

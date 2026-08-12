@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import '../models/song.dart';
 
 /// Whether an album is purely virtual (in-memory) or backed by a physical folder
@@ -46,13 +48,24 @@ class UserAlbum {
   AlbumStorageType get storageType =>
       (folderPath != null && folderPath!.isNotEmpty) ? AlbumStorageType.physical : AlbumStorageType.virtual;
 
-  int get totalSizeInBytes {
+  /// Total size of all audio files in this album, in bytes.
+  ///
+  /// Cached as a `late final` so the computation runs at most once per album
+  /// instance rather than on every sort comparison. Previously each comparison
+  /// during "Sort by size" triggered a `File.lengthSync()` call per song,
+  /// blocking the UI on every sort rebuild.
+  late final int totalSizeInBytes = () {
     int total = 0;
     for (final song in songs) {
-      total += song.fileSizeInBytes;
+      if (song.filePath != null && song.filePath!.isNotEmpty) {
+        try {
+          final f = File(song.filePath!);
+          if (f.existsSync()) total += f.lengthSync();
+        } catch (_) {}
+      }
     }
     return total;
-  }
+  }();
 
   String get formattedTotalSize {
     final bytes = totalSizeInBytes;
