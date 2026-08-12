@@ -11,11 +11,11 @@ class AppVersion {
   AppVersion._();
 
   /// Semantic version string (e.g. "1.3.0").  Matches the GitHub release tag.
-  static const String current = '1.2.4';
+  static const String current = '1.2.5';
 
   /// Build number — the +N suffix from pubspec.yaml.
-  static const int buildNumber = 2;
+  static const int buildNumber = 3;
 
   /// Full version string including build number (e.g. "1.3.0+1").
-  static const String full = '1.2.4+2';
+  static const String full = '1.2.5+3';
 }
