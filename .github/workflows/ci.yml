@@ -113,11 +113,22 @@ jobs:
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
 
+      - name: Setup Gradle Cache
+        uses: gradle/actions/setup-gradle@v3
+
       - name: Install dependencies
         run: flutter pub get
 
       - name: Build debug APK
-        run: flutter build apk --debug
+        run: |
+          for i in 1 2 3; do
+            echo "Attempt $i: Building APK..."
+            flutter build apk --debug && break || {
+              if [ $i -eq 3 ]; then exit 1; fi
+              echo "Build failed. Retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
