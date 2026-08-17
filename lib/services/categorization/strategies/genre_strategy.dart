@@ -22,11 +22,13 @@ class GenreStrategy extends CategorizationStrategy {
     final songs = unclaimed(ctx, classifiedIds);
     if (songs.isEmpty || ctx.mbClient == null) return [];
 
-    onProgress(StageProgress(
-      label: 'Analyzing genre metadata',
-      done: 0,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(
+        label: 'Analyzing genre metadata',
+        done: 0,
+        total: songs.length,
+      ),
+    );
 
     // Groups based on normalized genre: genre -> list of song IDs
     final Map<String, List<String>> groups = {};
@@ -42,29 +44,35 @@ class GenreStrategy extends CategorizationStrategy {
         maxLookups: ctx.request.maxMetadataLookups,
       );
 
-      if (result.found && result.genre != null && result.genre!.trim().isNotEmpty) {
+      if (result.found &&
+          result.genre != null &&
+          result.genre!.trim().isNotEmpty) {
         final normalized = _normalizeGenre(result.genre!);
         groups.putIfAbsent(normalized, () => []).add(song.videoId);
       }
 
-      onProgress(StageProgress(
-        label: 'Analyzing genre metadata',
-        done: i + 1,
-        total: songs.length,
-      ));
+      onProgress(
+        StageProgress(
+          label: 'Analyzing genre metadata',
+          done: i + 1,
+          total: songs.length,
+        ),
+      );
     }
 
     final proposals = <AiProposedAlbum>[];
     groups.forEach((genre, songIds) {
-      proposals.add(AiProposedAlbum(
-        id: _uuid.v4(),
-        name: '$genre Collection',
-        description: 'Songs tagged as "$genre" by the MusicBrainz community.',
-        songIds: List.unmodifiable(songIds),
-        action: ProposalAction.createNew,
-        source: ProposalSource.genre,
-        confidence: 0.75,
-      ));
+      proposals.add(
+        AiProposedAlbum(
+          id: _uuid.v4(),
+          name: '$genre Collection',
+          description: 'Songs tagged as "$genre" by the MusicBrainz community.',
+          songIds: List.unmodifiable(songIds),
+          action: ProposalAction.createNew,
+          source: ProposalSource.genre,
+          confidence: 0.75,
+        ),
+      );
     });
 
     return proposals;
@@ -112,9 +120,12 @@ class GenreStrategy extends CategorizationStrategy {
     }
 
     // Title Case default
-    return raw.split(' ').map((w) {
-      if (w.isEmpty) return w;
-      return w[0].toUpperCase() + w.substring(1).toLowerCase();
-    }).join(' ');
+    return raw
+        .split(' ')
+        .map((w) {
+          if (w.isEmpty) return w;
+          return w[0].toUpperCase() + w.substring(1).toLowerCase();
+        })
+        .join(' ');
   }
 }

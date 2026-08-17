@@ -10,8 +10,8 @@ class AiProposedAlbum {
   String description;
   final List<String> songIds;
   final String? existingAlbumId;
-  final String source;       // Badge label: "Existing", "Folder", "Artist", "Mood"
-  final double confidence;   // 0.0–1.0
+  final String source; // Badge label: "Existing", "Folder", "Artist", "Mood"
+  final double confidence; // 0.0–1.0
 
   AiProposedAlbum({
     required this.name,
@@ -52,7 +52,9 @@ class AiCategorizationService {
     ];
     final List<String> categories = [...existingNames];
     for (final sug in standardSuggestions) {
-      if (!existingNames.any((name) => name.toLowerCase() == sug.toLowerCase())) {
+      if (!existingNames.any(
+        (name) => name.toLowerCase() == sug.toLowerCase(),
+      )) {
         categories.add(sug);
       }
     }
@@ -84,25 +86,30 @@ class AiCategorizationService {
     // Convert pipeline proposals to mutable AiProposedAlbum for the review UI
     final proposals = <AiProposedAlbum>[];
     for (final p in result.proposals) {
-      proposals.add(AiProposedAlbum(
-        name: p.name,
-        description: p.description,
-        songIds: List.from(p.songIds), // Mutable copy for review UI
-        existingAlbumId: p.existingAlbumId,
-        source: _sourceLabel(p.source),
-        confidence: p.confidence,
-      ));
+      proposals.add(
+        AiProposedAlbum(
+          name: p.name,
+          description: p.description,
+          songIds: List.from(p.songIds), // Mutable copy for review UI
+          existingAlbumId: p.existingAlbumId,
+          source: _sourceLabel(p.source),
+          confidence: p.confidence,
+        ),
+      );
     }
 
     // Add unassigned songs as "Needs Your Decision" group
     if (result.unassignedSongIds.isNotEmpty) {
-      proposals.add(AiProposedAlbum(
-        name: 'Needs Your Decision',
-        description: '${result.unassignedSongIds.length} songs couldn\'t be automatically grouped. Assign them manually.',
-        songIds: List.from(result.unassignedSongIds),
-        source: 'Unassigned',
-        confidence: 0.0,
-      ));
+      proposals.add(
+        AiProposedAlbum(
+          name: 'Needs Your Decision',
+          description:
+              '${result.unassignedSongIds.length} songs couldn\'t be automatically grouped. Assign them manually.',
+          songIds: List.from(result.unassignedSongIds),
+          source: 'Unassigned',
+          confidence: 0.0,
+        ),
+      );
     }
 
     return proposals;
@@ -110,15 +117,24 @@ class AiCategorizationService {
 
   String _sourceLabel(cat.ProposalSource source) {
     switch (source) {
-      case cat.ProposalSource.existingMatch: return 'Existing Album';
-      case cat.ProposalSource.musicbrainz: return 'MusicBrainz';
-      case cat.ProposalSource.folder: return 'Folder';
-      case cat.ProposalSource.artist: return 'Artist';
-      case cat.ProposalSource.genre: return 'Genre';
-      case cat.ProposalSource.mood: return 'Mood';
-      case cat.ProposalSource.userCategory: return 'Your Category';
-      case cat.ProposalSource.similarity: return 'Similar';
-      case cat.ProposalSource.fallback: return 'Discovery';
+      case cat.ProposalSource.existingMatch:
+        return 'Existing Album';
+      case cat.ProposalSource.musicbrainz:
+        return 'MusicBrainz';
+      case cat.ProposalSource.folder:
+        return 'Folder';
+      case cat.ProposalSource.artist:
+        return 'Artist';
+      case cat.ProposalSource.genre:
+        return 'Genre';
+      case cat.ProposalSource.mood:
+        return 'Mood';
+      case cat.ProposalSource.userCategory:
+        return 'Your Category';
+      case cat.ProposalSource.similarity:
+        return 'Similar';
+      case cat.ProposalSource.fallback:
+        return 'Discovery';
     }
   }
 }

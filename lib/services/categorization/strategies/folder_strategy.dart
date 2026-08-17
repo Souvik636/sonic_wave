@@ -17,9 +17,23 @@ class FolderStrategy extends CategorizationStrategy {
 
   /// Folders that are generic containers and should not be used as album names.
   static const Set<String> _genericFolders = {
-    '0', 'music', 'download', 'downloads', 'audio', 'storage',
-    'emulated', 'documents', 'raw', 'cache', 'temp', 'media',
-    'sdcard', 'internal', 'external', 'files', 'data',
+    '0',
+    'music',
+    'download',
+    'downloads',
+    'audio',
+    'storage',
+    'emulated',
+    'documents',
+    'raw',
+    'cache',
+    'temp',
+    'media',
+    'sdcard',
+    'internal',
+    'external',
+    'files',
+    'data',
   };
 
   @override
@@ -38,11 +52,9 @@ class FolderStrategy extends CategorizationStrategy {
     final songs = unclaimed(ctx, classifiedIds);
     if (songs.isEmpty) return [];
 
-    onProgress(StageProgress(
-      label: 'Grouping by folder',
-      done: 0,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(label: 'Grouping by folder', done: 0, total: songs.length),
+    );
 
     // Group songs by parent directory
     final Map<String, List<Song>> folderGroups = {};
@@ -78,34 +90,41 @@ class FolderStrategy extends CategorizationStrategy {
       final match = AlbumMatchScorer.bestMatch(humanName, ctx.albums);
 
       if (match != null) {
-        proposals.add(AiProposedAlbum(
-          id: _uuid.v4(),
-          name: match.album.name,
-          description: 'Songs from your "$folderName" folder matched to this album.',
-          songIds: List.unmodifiable(folderSongs.map((s) => s.videoId)),
-          existingAlbumId: match.album.id,
-          action: ProposalAction.addToExisting,
-          source: ProposalSource.folder,
-          confidence: match.score,
-        ));
+        proposals.add(
+          AiProposedAlbum(
+            id: _uuid.v4(),
+            name: match.album.name,
+            description:
+                'Songs from your "$folderName" folder matched to this album.',
+            songIds: List.unmodifiable(folderSongs.map((s) => s.videoId)),
+            existingAlbumId: match.album.id,
+            action: ProposalAction.addToExisting,
+            source: ProposalSource.folder,
+            confidence: match.score,
+          ),
+        );
       } else if (ctx.request.createMissingAlbums) {
-        proposals.add(AiProposedAlbum(
-          id: _uuid.v4(),
-          name: humanName,
-          description: 'Songs found in your "$folderName" folder.',
-          songIds: List.unmodifiable(folderSongs.map((s) => s.videoId)),
-          action: ProposalAction.createNew,
-          source: ProposalSource.folder,
-          confidence: 0.8,
-        ));
+        proposals.add(
+          AiProposedAlbum(
+            id: _uuid.v4(),
+            name: humanName,
+            description: 'Songs found in your "$folderName" folder.',
+            songIds: List.unmodifiable(folderSongs.map((s) => s.videoId)),
+            action: ProposalAction.createNew,
+            source: ProposalSource.folder,
+            confidence: 0.8,
+          ),
+        );
       }
     }
 
-    onProgress(StageProgress(
-      label: 'Grouping by folder',
-      done: songs.length,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(
+        label: 'Grouping by folder',
+        done: songs.length,
+        total: songs.length,
+      ),
+    );
 
     return proposals;
   }

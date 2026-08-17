@@ -58,30 +58,45 @@ class _OfflineHubState extends State<OfflineHub> {
     super.dispose();
   }
 
-  void _showCreateAlbumDialog(BuildContext context, PlayerProvider playerProvider) {
+  void _showCreateAlbumDialog(
+    BuildContext context,
+    PlayerProvider playerProvider,
+  ) {
     final controller = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Create New Album Folder', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Create New Album Folder',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
             hintText: 'Album name (e.g. Chill Beats, Gym Focus)...',
-            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            hintStyle: const TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 12,
+            ),
             filled: true,
             fillColor: AppColors.surfaceVariant.withValues(alpha: 0.5),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -90,7 +105,11 @@ class _OfflineHubState extends State<OfflineHub> {
                 Navigator.pop(ctx);
                 final album = await playerProvider.createAlbum(name);
                 if (context.mounted) {
-                  AppToast.show(context, 'Album "$name" created', type: ToastType.success);
+                  AppToast.show(
+                    context,
+                    'Album "$name" created',
+                    type: ToastType.success,
+                  );
                   AlbumDetailsSheet.show(context, album.id);
                 }
               }
@@ -98,7 +117,9 @@ class _OfflineHubState extends State<OfflineHub> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Create'),
           ),
@@ -114,7 +135,11 @@ class _OfflineHubState extends State<OfflineHub> {
 
     final allOffline = playerProvider.localSongsMerged;
     final downloads = playerProvider.downloadedSongs;
-    final favorites = playerProvider.favorites.where((s) => s.isLocalFile || downloads.any((d) => d.videoId == s.videoId)).toList();
+    final favorites = playerProvider.favorites
+        .where(
+          (s) => s.isLocalFile || downloads.any((d) => d.videoId == s.videoId),
+        )
+        .toList();
     final albums = playerProvider.albums;
 
     // Filter songs based on active tab & search query
@@ -122,7 +147,9 @@ class _OfflineHubState extends State<OfflineHub> {
     if (_activeTab == '📥 Downloads') {
       displaySongs = downloads;
     } else if (_activeTab == '📁 Local Storage') {
-      displaySongs = allOffline.where((s) => s.id.startsWith('local_') || s.isLocalFile).toList();
+      displaySongs = allOffline
+          .where((s) => s.id.startsWith('local_') || s.isLocalFile)
+          .toList();
       if (_selectedFolder != 'All Folders') {
         displaySongs = displaySongs.where((s) {
           final path = (s.filePath ?? s.videoId).toLowerCase();
@@ -143,7 +170,10 @@ class _OfflineHubState extends State<OfflineHub> {
       }).toList();
     }
 
-    final totalStorageBytes = allOffline.fold<int>(0, (sum, s) => sum + s.fileSizeInBytes);
+    final totalStorageBytes = allOffline.fold<int>(
+      0,
+      (sum, s) => sum + s.fileSizeInBytes,
+    );
     final totalMb = (totalStorageBytes / (1024 * 1024)).toStringAsFixed(1);
 
     return Scaffold(
@@ -172,22 +202,35 @@ class _OfflineHubState extends State<OfflineHub> {
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                     child: TextField(
                       controller: _searchController,
-                      style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
                       decoration: InputDecoration(
                         hintText: 'Search offline tracks, artists, albums...',
                         hintStyle: GoogleFonts.inter(
                           color: AppColors.textTertiary.withValues(alpha: 0.6),
                           fontSize: 13,
                         ),
-                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 20),
+                        prefixIcon: const Icon(
+                          Icons.search_rounded,
+                          color: AppColors.textTertiary,
+                          size: 20,
+                        ),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.close_rounded, color: AppColors.textTertiary, size: 18),
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  color: AppColors.textTertiary,
+                                  size: 18,
+                                ),
                                 onPressed: () => _searchController.clear(),
                               )
                             : null,
                         filled: true,
-                        fillColor: AppColors.surfaceVariant.withValues(alpha: 0.5),
+                        fillColor: AppColors.surfaceVariant.withValues(
+                          alpha: 0.5,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
@@ -199,7 +242,10 @@ class _OfflineHubState extends State<OfflineHub> {
                             width: 1.5,
                           ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
@@ -215,25 +261,38 @@ class _OfflineHubState extends State<OfflineHub> {
                       itemBuilder: (context, idx) {
                         final tab = _tabs[idx];
                         final isSelected = _activeTab == tab;
-                        final primaryColor = Theme.of(context).colorScheme.primary;
+                        final primaryColor = Theme.of(
+                          context,
+                        ).colorScheme.primary;
 
                         return GestureDetector(
                           onTap: () => setState(() => _activeTab = tab),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             margin: const EdgeInsets.symmetric(horizontal: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
-                              color: isSelected ? primaryColor : AppColors.surfaceVariant.withValues(alpha: 0.5),
+                              color: isSelected
+                                  ? primaryColor
+                                  : AppColors.surfaceVariant.withValues(
+                                      alpha: 0.5,
+                                    ),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: isSelected ? primaryColor : AppColors.glassBorder,
+                                color: isSelected
+                                    ? primaryColor
+                                    : AppColors.glassBorder,
                                 width: 1,
                               ),
                               boxShadow: isSelected
                                   ? [
                                       BoxShadow(
-                                        color: primaryColor.withValues(alpha: 0.3),
+                                        color: primaryColor.withValues(
+                                          alpha: 0.3,
+                                        ),
                                         blurRadius: 10,
                                         spreadRadius: 1,
                                       ),
@@ -243,9 +302,13 @@ class _OfflineHubState extends State<OfflineHub> {
                             child: Text(
                               tab,
                               style: GoogleFonts.inter(
-                                color: isSelected ? Colors.white : AppColors.textSecondary,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
                                 fontSize: 12.5,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
                               ),
                             ),
                           ),
@@ -267,27 +330,44 @@ class _OfflineHubState extends State<OfflineHub> {
                         itemBuilder: (context, idx) {
                           final opt = _folderFilterOptions[idx];
                           final isSel = _selectedFolder == opt;
-                          final primaryColor = Theme.of(context).colorScheme.primary;
+                          final primaryColor = Theme.of(
+                            context,
+                          ).colorScheme.primary;
 
                           return GestureDetector(
                             onTap: () => setState(() => _selectedFolder = opt),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 150),
                               margin: const EdgeInsets.only(right: 6),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
-                                color: isSel ? primaryColor.withValues(alpha: 0.2) : AppColors.surfaceVariant.withValues(alpha: 0.3),
+                                color: isSel
+                                    ? primaryColor.withValues(alpha: 0.2)
+                                    : AppColors.surfaceVariant.withValues(
+                                        alpha: 0.3,
+                                      ),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: isSel ? primaryColor.withValues(alpha: 0.6) : AppColors.glassBorder.withValues(alpha: 0.2),
+                                  color: isSel
+                                      ? primaryColor.withValues(alpha: 0.6)
+                                      : AppColors.glassBorder.withValues(
+                                          alpha: 0.2,
+                                        ),
                                 ),
                               ),
                               child: Text(
                                 opt,
                                 style: TextStyle(
-                                  color: isSel ? Colors.white : AppColors.textTertiary,
+                                  color: isSel
+                                      ? Colors.white
+                                      : AppColors.textTertiary,
                                   fontSize: 11,
-                                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                                  fontWeight: isSel
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                 ),
                               ),
                             ),
@@ -312,29 +392,29 @@ class _OfflineHubState extends State<OfflineHub> {
               ),
             ] else ...[
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final song = displaySongs[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: SongTile(
-                        song: song,
-                        index: index,
-                        sourceTag: song.id.startsWith('local_') ? 'local' : 'downloaded',
-                        onTap: () {
-                          playerProvider.playPlaylist(displaySongs, startIndex: index);
-                        },
-                      ),
-                    );
-                  },
-                  childCount: displaySongs.length,
-                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final song = displaySongs[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: SongTile(
+                      song: song,
+                      index: index,
+                      sourceTag: song.id.startsWith('local_')
+                          ? 'local'
+                          : 'downloaded',
+                      onTap: () {
+                        playerProvider.playPlaylist(
+                          displaySongs,
+                          startIndex: index,
+                        );
+                      },
+                    ),
+                  );
+                }, childCount: displaySongs.length),
               ),
             ],
 
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 140),
-            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 140)),
           ],
         ),
       ),
@@ -382,10 +462,7 @@ class _OfflineHubState extends State<OfflineHub> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(
-          color: primary.withValues(alpha: 0.4),
-          width: 1.2,
-        ),
+        border: Border.all(color: primary.withValues(alpha: 0.4), width: 1.2),
         boxShadow: [
           BoxShadow(
             color: primary.withValues(alpha: 0.15),
@@ -404,11 +481,17 @@ class _OfflineHubState extends State<OfflineHub> {
             children: [
               // Badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.amberAccent.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.4), width: 1),
+                  border: Border.all(
+                    color: Colors.amberAccent.withValues(alpha: 0.4),
+                    width: 1,
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -420,7 +503,11 @@ class _OfflineHubState extends State<OfflineHub> {
                         color: Colors.amberAccent,
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: Colors.amberAccent, blurRadius: 6, spreadRadius: 1),
+                          BoxShadow(
+                            color: Colors.amberAccent,
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
                         ],
                       ),
                     ),
@@ -450,11 +537,17 @@ class _OfflineHubState extends State<OfflineHub> {
                   );
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: primary.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: primary.withValues(alpha: 0.5), width: 1),
+                    border: Border.all(
+                      color: primary.withValues(alpha: 0.5),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -505,8 +598,10 @@ class _OfflineHubState extends State<OfflineHub> {
             children: [
               _buildFormatBadge('MP3', mp3Count, const Color(0xFF6C63FF)),
               _buildFormatBadge('M4A', m4aCount, const Color(0xFF00C9A7)),
-              if (flacCount > 0) _buildFormatBadge('FLAC', flacCount, const Color(0xFFFF6584)),
-              if (otherCount > 0) _buildFormatBadge('Other', otherCount, const Color(0xFFFFB74D)),
+              if (flacCount > 0)
+                _buildFormatBadge('FLAC', flacCount, const Color(0xFFFF6584)),
+              if (otherCount > 0)
+                _buildFormatBadge('Other', otherCount, const Color(0xFFFFB74D)),
             ],
           ),
 
@@ -520,7 +615,8 @@ class _OfflineHubState extends State<OfflineHub> {
                   onPressed: allOffline.isEmpty
                       ? null
                       : () {
-                          final shuffled = List<Song>.from(allOffline)..shuffle();
+                          final shuffled = List<Song>.from(allOffline)
+                            ..shuffle();
                           playerProvider.playPlaylist(shuffled, startIndex: 0);
                         },
                   icon: const Icon(Icons.shuffle_rounded, size: 18),
@@ -529,7 +625,9 @@ class _OfflineHubState extends State<OfflineHub> {
                     backgroundColor: primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 4,
                   ),
                 ),
@@ -540,15 +638,23 @@ class _OfflineHubState extends State<OfflineHub> {
                   onPressed: allOffline.isEmpty
                       ? null
                       : () {
-                          playerProvider.playPlaylist(allOffline, startIndex: 0);
+                          playerProvider.playPlaylist(
+                            allOffline,
+                            startIndex: 0,
+                          );
                         },
                   icon: const Icon(Icons.play_arrow_rounded, size: 20),
                   label: const Text('Play All'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1.2),
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      width: 1.2,
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                 ),
               ),
@@ -578,7 +684,11 @@ class _OfflineHubState extends State<OfflineHub> {
     );
   }
 
-  Widget _buildAlbumsGrid(BuildContext context, PlayerProvider playerProvider, List<UserAlbum> albums) {
+  Widget _buildAlbumsGrid(
+    BuildContext context,
+    PlayerProvider playerProvider,
+    List<UserAlbum> albums,
+  ) {
     final primary = Theme.of(context).colorScheme.primary;
 
     if (albums.isEmpty) {
@@ -587,27 +697,41 @@ class _OfflineHubState extends State<OfflineHub> {
           padding: const EdgeInsets.all(32),
           child: Column(
             children: [
-              Icon(Icons.album_rounded, size: 54, color: AppColors.textTertiary.withValues(alpha: 0.5)),
+              Icon(
+                Icons.album_rounded,
+                size: 54,
+                color: AppColors.textTertiary.withValues(alpha: 0.5),
+              ),
               const SizedBox(height: 12),
               Text(
                 'No offline album folders created',
-                style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
                 'Create custom albums to organize your offline audio files.',
-                style: GoogleFonts.inter(color: AppColors.textTertiary, fontSize: 12.5),
+                style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 12.5,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                onPressed: () => _showCreateAlbumDialog(context, playerProvider),
+                onPressed: () =>
+                    _showCreateAlbumDialog(context, playerProvider),
                 icon: const Icon(Icons.add_rounded, size: 18),
                 label: const Text('Create New Album'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ],
@@ -634,9 +758,21 @@ class _OfflineHubState extends State<OfflineHub> {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: () => _showCreateAlbumDialog(context, playerProvider),
-                  icon: Icon(Icons.add_circle_outline_rounded, color: primary, size: 18),
-                  label: Text('New Album', style: TextStyle(color: primary, fontSize: 12, fontWeight: FontWeight.bold)),
+                  onPressed: () =>
+                      _showCreateAlbumDialog(context, playerProvider),
+                  icon: Icon(
+                    Icons.add_circle_outline_rounded,
+                    color: primary,
+                    size: 18,
+                  ),
+                  label: Text(
+                    'New Album',
+                    style: TextStyle(
+                      color: primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -653,72 +789,87 @@ class _OfflineHubState extends State<OfflineHub> {
               mainAxisSpacing: 12,
               childAspectRatio: 1.1,
             ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final album = albums[index];
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final album = albums[index];
 
-                return GestureDetector(
-                  onTap: () {
-                    AlbumDetailsSheet.show(context, album.id);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.glassBorder, width: 1),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: primary.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(Icons.folder_special_rounded, color: primary, size: 22),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.surface,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '${album.songs.length} Tracks',
-                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              album.name,
-                              style: GoogleFonts.outfit(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${album.isFolderBased ? 'Physical Folder' : 'Custom Album'} • ${album.formattedTotalSize}',
-                              style: GoogleFonts.inter(color: AppColors.textTertiary, fontSize: 11),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+              return GestureDetector(
+                onTap: () {
+                  AlbumDetailsSheet.show(context, album.id);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.glassBorder, width: 1),
                   ),
-                );
-              },
-              childCount: albums.length,
-            ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: primary.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.folder_special_rounded,
+                              color: primary,
+                              size: 22,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${album.songs.length} Tracks',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            album.name,
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${album.isFolderBased ? 'Physical Folder' : 'Custom Album'} • ${album.formattedTotalSize}',
+                            style: GoogleFonts.inter(
+                              color: AppColors.textTertiary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }, childCount: albums.length),
           ),
         ),
       ],
@@ -738,7 +889,10 @@ class _OfflineHubState extends State<OfflineHub> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: primary.withValues(alpha: 0.12),
-              border: Border.all(color: primary.withValues(alpha: 0.3), width: 1.5),
+              border: Border.all(
+                color: primary.withValues(alpha: 0.3),
+                width: 1.5,
+              ),
             ),
             child: Icon(Icons.offline_pin_rounded, size: 48, color: primary),
           ),
@@ -765,7 +919,11 @@ class _OfflineHubState extends State<OfflineHub> {
           ElevatedButton.icon(
             onPressed: () {
               playerProvider.scanLocalSongs();
-              AppToast.show(context, 'Scanning storage for audio files...', type: ToastType.info);
+              AppToast.show(
+                context,
+                'Scanning storage for audio files...',
+                type: ToastType.info,
+              );
             },
             icon: const Icon(Icons.search_rounded, size: 18),
             label: const Text('Scan Storage Now'),
@@ -773,7 +931,9 @@ class _OfflineHubState extends State<OfflineHub> {
               backgroundColor: primary,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
           ),
         ],
@@ -781,4 +941,3 @@ class _OfflineHubState extends State<OfflineHub> {
     );
   }
 }
-

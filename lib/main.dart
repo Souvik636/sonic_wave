@@ -25,12 +25,14 @@ Future<void> main() async {
   JamendoService().clientId = '3dce8b55';
 
   // Set system UI style
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: Color(0xFF0D0D1A),
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: Color(0xFF0D0D1A),
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
   // Initialize audio service (non-blocking — app starts even if this fails)
   try {
@@ -72,19 +74,14 @@ class SonicWaveApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => SettingsProvider(),
-        ),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProxyProvider<SettingsProvider, PlayerProvider>(
           create: (context) => PlayerProvider(_audioHandler!),
-          update: (context, settings, player) => player!..updateSettings(settings),
+          update: (context, settings, player) =>
+              player!..updateSettings(settings),
         ),
-        ChangeNotifierProvider(
-          create: (_) => SearchProvider(),
-        ),
-        ChangeNotifierProvider(
-          create: (_) => HomeProvider(),
-        ),
+        ChangeNotifierProvider(create: (_) => SearchProvider()),
+        ChangeNotifierProvider(create: (_) => HomeProvider()),
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {
@@ -92,8 +89,9 @@ class SonicWaveApp extends StatelessWidget {
             builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
               // Material You: use the wallpaper-derived palette when the user
               // enabled it and the platform provides one (Android 12+).
-              final dynamicScheme =
-                  settings.useMaterialYou ? darkDynamic : null;
+              final dynamicScheme = settings.useMaterialYou
+                  ? darkDynamic
+                  : null;
               return MaterialApp(
                 title: 'SonicWave',
                 debugShowCheckedModeBanner: false,

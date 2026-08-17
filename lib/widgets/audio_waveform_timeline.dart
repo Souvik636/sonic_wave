@@ -120,7 +120,11 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                         cursor: SystemMouseCursors.click,
                         child: Padding(
                           padding: EdgeInsets.all(6.0),
-                          child: Icon(Icons.zoom_out_rounded, color: Colors.white70, size: 18),
+                          child: Icon(
+                            Icons.zoom_out_rounded,
+                            color: Colors.white70,
+                            size: 18,
+                          ),
                         ),
                       ),
                     ),
@@ -130,8 +134,12 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                         activeTrackColor: primaryColor,
                         inactiveTrackColor: Colors.white12,
                         thumbColor: Colors.white,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 5,
+                        ),
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 8,
+                        ),
                       ),
                       child: SizedBox(
                         width: 65,
@@ -157,7 +165,11 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                         cursor: SystemMouseCursors.click,
                         child: Padding(
                           padding: EdgeInsets.all(6.0),
-                          child: Icon(Icons.zoom_in_rounded, color: Colors.white70, size: 18),
+                          child: Icon(
+                            Icons.zoom_in_rounded,
+                            color: Colors.white70,
+                            size: 18,
+                          ),
                         ),
                       ),
                     ),
@@ -174,7 +186,10 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
               },
               onScaleUpdate: (details) {
                 setState(() {
-                  _zoomFactor = (_baseZoomFactor * details.scale).clamp(1.0, 10.0);
+                  _zoomFactor = (_baseZoomFactor * details.scale).clamp(
+                    1.0,
+                    10.0,
+                  );
                 });
               },
               child: Container(
@@ -202,25 +217,37 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: List.generate(barCount, (index) {
-                                final double barPosSecs = (index / barCount) * totalDuration;
-                                final bool isInTrimRange = barPosSecs >= widget.startVal && barPosSecs <= widget.endVal;
+                                final double barPosSecs =
+                                    (index / barCount) * totalDuration;
+                                final bool isInTrimRange =
+                                    barPosSecs >= widget.startVal &&
+                                    barPosSecs <= widget.endVal;
 
-                                final bool isInFadeIn = isInTrimRange &&
+                                final bool isInFadeIn =
+                                    isInTrimRange &&
                                     widget.fadeInVal > 0 &&
-                                    (barPosSecs < widget.startVal + widget.fadeInVal);
+                                    (barPosSecs <
+                                        widget.startVal + widget.fadeInVal);
 
-                                final bool isInFadeOut = isInTrimRange &&
+                                final bool isInFadeOut =
+                                    isInTrimRange &&
                                     widget.fadeOutVal > 0 &&
-                                    (barPosSecs > widget.endVal - widget.fadeOutVal);
+                                    (barPosSecs >
+                                        widget.endVal - widget.fadeOutVal);
 
-                                final double heightFactor = _baseHeights[index % _baseHeights.length];
+                                final double heightFactor =
+                                    _baseHeights[index % _baseHeights.length];
 
                                 Color barColor = Colors.white24;
                                 if (isInTrimRange) {
                                   if (isInFadeIn) {
-                                    barColor = Colors.tealAccent.withValues(alpha: 0.8);
+                                    barColor = Colors.tealAccent.withValues(
+                                      alpha: 0.8,
+                                    );
                                   } else if (isInFadeOut) {
-                                    barColor = Colors.orangeAccent.withValues(alpha: 0.8);
+                                    barColor = Colors.orangeAccent.withValues(
+                                      alpha: 0.8,
+                                    );
                                   } else {
                                     barColor = primaryColor;
                                   }
@@ -228,7 +255,9 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
 
                                 return Expanded(
                                   child: Container(
-                                    margin: const EdgeInsets.symmetric(horizontal: 1.0),
+                                    margin: const EdgeInsets.symmetric(
+                                      horizontal: 1.0,
+                                    ),
                                     height: 70 * heightFactor,
                                     decoration: BoxDecoration(
                                       color: barColor,
@@ -236,9 +265,11 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                                       boxShadow: isInTrimRange
                                           ? [
                                               BoxShadow(
-                                                color: barColor.withValues(alpha: 0.2),
+                                                color: barColor.withValues(
+                                                  alpha: 0.2,
+                                                ),
                                                 blurRadius: 2,
-                                              )
+                                              ),
                                             ]
                                           : null,
                                     ),
@@ -256,10 +287,14 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               final double w = constraints.maxWidth;
-                              final double startPct = widget.startVal / totalDuration;
-                              final double endPct = widget.endVal / totalDuration;
-                              final double fadeInPct = widget.fadeInVal / totalDuration;
-                              final double fadeOutPct = widget.fadeOutVal / totalDuration;
+                              final double startPct =
+                                  widget.startVal / totalDuration;
+                              final double endPct =
+                                  widget.endVal / totalDuration;
+                              final double fadeInPct =
+                                  widget.fadeInVal / totalDuration;
+                              final double fadeOutPct =
+                                  widget.fadeOutVal / totalDuration;
 
                               return Stack(
                                 children: [
@@ -270,7 +305,9 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                                       top: 0,
                                       bottom: 0,
                                       child: CustomPaint(
-                                        painter: _FadeEnvelopePainter(isFadeIn: true),
+                                        painter: _FadeEnvelopePainter(
+                                          isFadeIn: true,
+                                        ),
                                       ),
                                     ),
                                   if (widget.fadeOutVal > 0)
@@ -280,7 +317,9 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                                       top: 0,
                                       bottom: 0,
                                       child: CustomPaint(
-                                        painter: _FadeEnvelopePainter(isFadeIn: false),
+                                        painter: _FadeEnvelopePainter(
+                                          isFadeIn: false,
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -294,7 +333,10 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                           Positioned(
                             top: 4,
                             bottom: 22,
-                            left: (widget.currentPosition / totalDuration) * (scrollableWidth - 20) + 10,
+                            left:
+                                (widget.currentPosition / totalDuration) *
+                                    (scrollableWidth - 20) +
+                                10,
                             child: Column(
                               children: [
                                 Container(
@@ -305,10 +347,12 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.amber.withValues(alpha: 0.6),
+                                        color: Colors.amber.withValues(
+                                          alpha: 0.6,
+                                        ),
                                         blurRadius: 4,
                                         spreadRadius: 1,
-                                      )
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -325,11 +369,16 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                         // TIMELINE TICK LABELS - Positioned individually to prevent horizontal overflow
                         ...List.generate(ticks.length, (index) {
                           final double tickSecs = ticks[index];
-                          final double leftOffset = (tickSecs / totalDuration) * (scrollableWidth - 20) + 10;
+                          final double leftOffset =
+                              (tickSecs / totalDuration) *
+                                  (scrollableWidth - 20) +
+                              10;
 
                           return Positioned(
                             bottom: 2,
-                            left: leftOffset - 15, // Centered horizontally at the marker location
+                            left:
+                                leftOffset -
+                                15, // Centered horizontally at the marker location
                             width: 30,
                             child: Text(
                               _formatTimelineTime(tickSecs),
@@ -359,7 +408,9 @@ class _AudioWaveformTimelineState extends State<AudioWaveformTimeline> {
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
                 overlayColor: primaryColor.withValues(alpha: 0.2),
                 overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-                rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 8),
+                rangeThumbShape: const RoundRangeSliderThumbShape(
+                  enabledThumbRadius: 8,
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -385,8 +436,7 @@ class _FadeEnvelopePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.fill;
+    final paint = Paint()..style = PaintingStyle.fill;
 
     final path = Path();
     if (isFadeIn) {
@@ -422,7 +472,9 @@ class _FadeEnvelopePainter extends CustomPainter {
     canvas.drawPath(path, paint);
 
     final linePaint = Paint()
-      ..color = isFadeIn ? Colors.tealAccent.withValues(alpha: 0.4) : Colors.orangeAccent.withValues(alpha: 0.4)
+      ..color = isFadeIn
+          ? Colors.tealAccent.withValues(alpha: 0.4)
+          : Colors.orangeAccent.withValues(alpha: 0.4)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
 

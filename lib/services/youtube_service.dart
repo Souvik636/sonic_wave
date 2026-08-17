@@ -15,7 +15,9 @@ class YouTubeService {
 
   static void refreshExplodeClient() {
     try {
-      debugPrint('[YT] Refreshing YoutubeExplode client socket connection pool');
+      debugPrint(
+        '[YT] Refreshing YoutubeExplode client socket connection pool',
+      );
       _yt.close();
     } catch (_) {}
     _yt = YoutubeExplode();
@@ -88,8 +90,10 @@ class YouTubeService {
       if (_streamCache.remove(key) != null) removed.add(quality.name);
     }
     if (removed.isNotEmpty) {
-      debugPrint('[YT] Dropped cached stream url for $videoId '
-          '(${removed.join(", ")}) after a playback failure');
+      debugPrint(
+        '[YT] Dropped cached stream url for $videoId '
+        '(${removed.join(", ")}) after a playback failure',
+      );
     }
   }
 
@@ -102,9 +106,7 @@ class YouTubeService {
   ];
 
   // Pool of Piped API instances (alternative YouTube frontend)
-  static List<String> _pipedInstances = [
-    'https://api.piped.private.coffee',
-  ];
+  static List<String> _pipedInstances = ['https://api.piped.private.coffee'];
 
   static bool _instancesLoaded = false;
 
@@ -160,7 +162,8 @@ class YouTubeService {
       title: 'Starboy',
       artist: 'The Weeknd',
       thumbnailUrl: 'https://img.youtube.com/vi/dMMOBgUTMTo/mqdefault.jpg',
-      highResThumbnailUrl: 'https://img.youtube.com/vi/dMMOBgUTMTo/hqdefault.jpg',
+      highResThumbnailUrl:
+          'https://img.youtube.com/vi/dMMOBgUTMTo/hqdefault.jpg',
       duration: Duration(minutes: 3, seconds: 50),
     ),
     const Song(
@@ -169,7 +172,8 @@ class YouTubeService {
       title: 'Perfect',
       artist: 'Ed Sheeran',
       thumbnailUrl: 'https://img.youtube.com/vi/2Vv-BfVoq4g/mqdefault.jpg',
-      highResThumbnailUrl: 'https://img.youtube.com/vi/2Vv-BfVoq4g/hqdefault.jpg',
+      highResThumbnailUrl:
+          'https://img.youtube.com/vi/2Vv-BfVoq4g/hqdefault.jpg',
       duration: Duration(minutes: 4, seconds: 23),
     ),
     const Song(
@@ -178,7 +182,8 @@ class YouTubeService {
       title: 'Blinding Lights',
       artist: 'The Weeknd',
       thumbnailUrl: 'https://img.youtube.com/vi/4NRXx6U8ABQ/mqdefault.jpg',
-      highResThumbnailUrl: 'https://img.youtube.com/vi/4NRXx6U8ABQ/hqdefault.jpg',
+      highResThumbnailUrl:
+          'https://img.youtube.com/vi/4NRXx6U8ABQ/hqdefault.jpg',
       duration: Duration(minutes: 3, seconds: 20),
     ),
     const Song(
@@ -187,7 +192,8 @@ class YouTubeService {
       title: 'Shape of You',
       artist: 'Ed Sheeran',
       thumbnailUrl: 'https://img.youtube.com/vi/JGwWNGJdvx8/mqdefault.jpg',
-      highResThumbnailUrl: 'https://img.youtube.com/vi/JGwWNGJdvx8/hqdefault.jpg',
+      highResThumbnailUrl:
+          'https://img.youtube.com/vi/JGwWNGJdvx8/hqdefault.jpg',
       duration: Duration(minutes: 3, seconds: 53),
     ),
     const Song(
@@ -196,7 +202,8 @@ class YouTubeService {
       title: 'Faded',
       artist: 'Alan Walker',
       thumbnailUrl: 'https://img.youtube.com/vi/60ItHLz5WEA/mqdefault.jpg',
-      highResThumbnailUrl: 'https://img.youtube.com/vi/60ItHLz5WEA/hqdefault.jpg',
+      highResThumbnailUrl:
+          'https://img.youtube.com/vi/60ItHLz5WEA/hqdefault.jpg',
       duration: Duration(minutes: 3, seconds: 32),
     ),
   ];
@@ -209,7 +216,8 @@ class YouTubeService {
         title: 'As It Was',
         artist: 'Harry Styles',
         thumbnailUrl: 'https://img.youtube.com/vi/H5v3kku4y6Q/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/H5v3kku4y6Q/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/H5v3kku4y6Q/hqdefault.jpg',
         duration: Duration(minutes: 2, seconds: 47),
       ),
       const Song(
@@ -218,7 +226,8 @@ class YouTubeService {
         title: 'Stay',
         artist: 'The Kid LAROI & Justin Bieber',
         thumbnailUrl: 'https://img.youtube.com/vi/kTJczUoc26U/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/kTJczUoc26U/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/kTJczUoc26U/hqdefault.jpg',
         duration: Duration(minutes: 2, seconds: 21),
       ),
       const Song(
@@ -227,7 +236,8 @@ class YouTubeService {
         title: 'Flowers',
         artist: 'Miley Cyrus',
         thumbnailUrl: 'https://img.youtube.com/vi/G7KNmW9a75Y/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/G7KNmW9a75Y/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/G7KNmW9a75Y/hqdefault.jpg',
         duration: Duration(minutes: 3, seconds: 20),
       ),
     ],
@@ -238,7 +248,8 @@ class YouTubeService {
         title: "God's Plan",
         artist: 'Drake',
         thumbnailUrl: 'https://img.youtube.com/vi/xpVfcZ0ZcFM/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/xpVfcZ0ZcFM/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/xpVfcZ0ZcFM/hqdefault.jpg',
         duration: Duration(minutes: 3, seconds: 18),
       ),
       const Song(
@@ -247,7 +258,8 @@ class YouTubeService {
         title: 'HUMBLE.',
         artist: 'Kendrick Lamar',
         thumbnailUrl: 'https://img.youtube.com/vi/tvTRZJ-4EyI/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/tvTRZJ-4EyI/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/tvTRZJ-4EyI/hqdefault.jpg',
         duration: Duration(minutes: 2, seconds: 57),
       ),
       const Song(
@@ -256,7 +268,8 @@ class YouTubeService {
         title: 'SICKO MODE',
         artist: 'Travis Scott',
         thumbnailUrl: 'https://img.youtube.com/vi/d-JBBPbC3yA/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/d-JBBPbC3yA/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/d-JBBPbC3yA/hqdefault.jpg',
         duration: Duration(minutes: 5, seconds: 12),
       ),
     ],
@@ -267,7 +280,8 @@ class YouTubeService {
         title: 'lofi hip hop radio - beats to relax/study to',
         artist: 'Lofi Girl',
         thumbnailUrl: 'https://img.youtube.com/vi/jfKfPfyJRdk/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/jfKfPfyJRdk/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/jfKfPfyJRdk/hqdefault.jpg',
         duration: Duration(minutes: 3, seconds: 0),
       ),
       const Song(
@@ -276,7 +290,8 @@ class YouTubeService {
         title: 'Chill Lofi Beats',
         artist: 'Lofi Keepers',
         thumbnailUrl: 'https://img.youtube.com/vi/5yx6GY50_7g/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/5yx6GY50_7g/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/5yx6GY50_7g/hqdefault.jpg',
         duration: Duration(minutes: 2, seconds: 45),
       ),
     ],
@@ -287,7 +302,8 @@ class YouTubeService {
         title: 'Kesariya',
         artist: 'Arijit Singh',
         thumbnailUrl: 'https://img.youtube.com/vi/BddP6PYo2gs/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/BddP6PYo2gs/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/BddP6PYo2gs/hqdefault.jpg',
         duration: Duration(minutes: 4, seconds: 28),
       ),
       const Song(
@@ -296,7 +312,8 @@ class YouTubeService {
         title: 'Tum Hi Ho',
         artist: 'Arijit Singh',
         thumbnailUrl: 'https://img.youtube.com/vi/Umqb9M08yxs/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/Umqb9M08yxs/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/Umqb9M08yxs/hqdefault.jpg',
         duration: Duration(minutes: 4, seconds: 22),
       ),
     ],
@@ -307,7 +324,8 @@ class YouTubeService {
         title: 'Wake Me Up',
         artist: 'Avicii',
         thumbnailUrl: 'https://img.youtube.com/vi/IcrbM1l_BoI/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/IcrbM1l_BoI/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/IcrbM1l_BoI/hqdefault.jpg',
         duration: Duration(minutes: 4, seconds: 7),
       ),
       const Song(
@@ -316,7 +334,8 @@ class YouTubeService {
         title: 'Clarity',
         artist: 'Zedd ft. Foxes',
         thumbnailUrl: 'https://img.youtube.com/vi/IxxstCcJlps/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/IxxstCcJlps/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/IxxstCcJlps/hqdefault.jpg',
         duration: Duration(minutes: 4, seconds: 31),
       ),
     ],
@@ -327,7 +346,8 @@ class YouTubeService {
         title: 'Believer',
         artist: 'Imagine Dragons',
         thumbnailUrl: 'https://img.youtube.com/vi/7wtfhZwyrcc/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/7wtfhZwyrcc/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/7wtfhZwyrcc/hqdefault.jpg',
         duration: Duration(minutes: 3, seconds: 24),
       ),
       const Song(
@@ -336,7 +356,8 @@ class YouTubeService {
         title: 'Bohemian Rhapsody',
         artist: 'Queen',
         thumbnailUrl: 'https://img.youtube.com/vi/fJ9rUzIMcZQ/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/fJ9rUzIMcZQ/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/fJ9rUzIMcZQ/hqdefault.jpg',
         duration: Duration(minutes: 5, seconds: 55),
       ),
     ],
@@ -347,7 +368,8 @@ class YouTubeService {
         title: 'Blinding Lights (R&B Mix)',
         artist: 'The Weeknd',
         thumbnailUrl: 'https://img.youtube.com/vi/fHI8X4OXluQ/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/fHI8X4OXluQ/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/fHI8X4OXluQ/hqdefault.jpg',
         duration: Duration(minutes: 3, seconds: 21),
       ),
       const Song(
@@ -356,7 +378,8 @@ class YouTubeService {
         title: 'Adorn',
         artist: 'Miguel',
         thumbnailUrl: 'https://img.youtube.com/vi/8dM5QeC0JfA/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/8dM5QeC0JfA/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/8dM5QeC0JfA/hqdefault.jpg',
         duration: Duration(minutes: 3, seconds: 13),
       ),
     ],
@@ -367,7 +390,8 @@ class YouTubeService {
         title: 'Fly Me To The Moon',
         artist: 'Frank Sinatra',
         thumbnailUrl: 'https://img.youtube.com/vi/Y2rDb4Ur2dw/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/Y2rDb4Ur2dw/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/Y2rDb4Ur2dw/hqdefault.jpg',
         duration: Duration(minutes: 2, seconds: 27),
       ),
       const Song(
@@ -376,7 +400,8 @@ class YouTubeService {
         title: 'Take Five',
         artist: 'Dave Brubeck',
         thumbnailUrl: 'https://img.youtube.com/vi/vmDDOFXSgAs/mqdefault.jpg',
-        highResThumbnailUrl: 'https://img.youtube.com/vi/vmDDOFXSgAs/hqdefault.jpg',
+        highResThumbnailUrl:
+            'https://img.youtube.com/vi/vmDDOFXSgAs/hqdefault.jpg',
         duration: Duration(minutes: 5, seconds: 24),
       ),
     ],
@@ -384,15 +409,21 @@ class YouTubeService {
 
   Future<void> _loadWorkingInstances() async {
     if (_instancesLoaded) return;
-    _instancesLoaded = true; // Mark as true immediately to prevent concurrent calls
+    _instancesLoaded =
+        true; // Mark as true immediately to prevent concurrent calls
     Future.microtask(() async {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 3);
 
       // Load Invidious instances
       try {
         final uri = Uri.parse('https://api.invidious.io/instances.json');
-        final request = await client.getUrl(uri).timeout(const Duration(seconds: 3));
-        final response = await request.close().timeout(const Duration(seconds: 3));
+        final request = await client
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 3));
+        final response = await request.close().timeout(
+          const Duration(seconds: 3),
+        );
         if (response.statusCode == 200) {
           final body = await response.transform(utf8.decoder).join();
           final List<dynamic> data = json.decode(body);
@@ -412,7 +443,9 @@ class YouTubeService {
             loaded.shuffle();
             final merged = <String>{...loaded, ..._invidiousInstances}.toList();
             _invidiousInstances = merged;
-            debugPrint('[YT] Loaded ${loaded.length} Invidious instances dynamically.');
+            debugPrint(
+              '[YT] Loaded ${loaded.length} Invidious instances dynamically.',
+            );
           }
         }
       } catch (e) {
@@ -422,8 +455,12 @@ class YouTubeService {
       // Load Piped instances
       try {
         final uri = Uri.parse('https://piped-instances.kavin.rocks/');
-        final request = await client.getUrl(uri).timeout(const Duration(seconds: 3));
-        final response = await request.close().timeout(const Duration(seconds: 3));
+        final request = await client
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 3));
+        final response = await request.close().timeout(
+          const Duration(seconds: 3),
+        );
         if (response.statusCode == 200) {
           final body = await response.transform(utf8.decoder).join();
           final List<dynamic> data = json.decode(body);
@@ -441,7 +478,9 @@ class YouTubeService {
             loaded.shuffle();
             final merged = <String>{...loaded, ..._pipedInstances}.toList();
             _pipedInstances = merged;
-            debugPrint('[YT] Loaded ${loaded.length} Piped instances dynamically.');
+            debugPrint(
+              '[YT] Loaded ${loaded.length} Piped instances dynamically.',
+            );
           }
         }
       } catch (e) {
@@ -457,7 +496,7 @@ class YouTubeService {
   Future<void> testAndSortYoutubeStreaming() async {
     final testVideoId = 'dMMOBgUTMTo'; // Starboy (verified video ID)
     debugPrint('[YT Test] Starting YouTube streaming server benchmarking...');
-    
+
     // 1. Test YouTube explode clients
     final scoredClients = <MapEntry<YoutubeApiClient, int>>[];
     for (final client in [
@@ -480,7 +519,7 @@ class YouTubeService {
         scoredClients.add(MapEntry(client, 999999));
       }
     }
-    
+
     scoredClients.sort((a, b) => a.value.compareTo(b.value));
     _clientPriority.clear();
     for (final entry in scoredClients) {
@@ -496,18 +535,25 @@ class YouTubeService {
         YoutubeApiClient.androidVr,
       ]);
     }
-    
+
     // 2. Test Invidious instances (limit to a subset to avoid stalling startup)
     final invidiousToTest = _invidiousInstances.take(5).toList();
     final scoredInvidious = <MapEntry<String, int>>[];
-    final httpClient = HttpClient()..connectionTimeout = const Duration(seconds: 2);
-    
+    final httpClient = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 2);
+
     for (final instance in invidiousToTest) {
       final sw = Stopwatch()..start();
       try {
-        final uri = Uri.https(instance, '/api/v1/videos/$testVideoId', {'local': 'true'});
-        final request = await httpClient.getUrl(uri).timeout(const Duration(seconds: 2));
-        final response = await request.close().timeout(const Duration(seconds: 2));
+        final uri = Uri.https(instance, '/api/v1/videos/$testVideoId', {
+          'local': 'true',
+        });
+        final request = await httpClient
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 2));
+        final response = await request.close().timeout(
+          const Duration(seconds: 2),
+        );
         sw.stop();
         if (response.statusCode == 200) {
           scoredInvidious.add(MapEntry(instance, sw.elapsedMilliseconds));
@@ -519,7 +565,7 @@ class YouTubeService {
         scoredInvidious.add(MapEntry(instance, 999999));
       }
     }
-    
+
     scoredInvidious.sort((a, b) => a.value.compareTo(b.value));
     final List<String> workingInvidious = [];
     final List<String> failedInvidious = [];
@@ -530,11 +576,15 @@ class YouTubeService {
         failedInvidious.add(entry.key);
       }
     }
-    
+
     final untestedInvidious = _invidiousInstances
         .where((i) => !invidiousToTest.contains(i))
         .toList();
-    _invidiousInstances = [...workingInvidious, ...untestedInvidious, ...failedInvidious];
+    _invidiousInstances = [
+      ...workingInvidious,
+      ...untestedInvidious,
+      ...failedInvidious,
+    ];
     // Ordering already demotes these; the cooldown keeps them out of the next
     // few resolutions without exiling them for the life of the process.
     final now = DateTime.now();
@@ -548,10 +598,16 @@ class YouTubeService {
       final sw = Stopwatch()..start();
       try {
         final uri = Uri.parse('$apiUrl/streams/$testVideoId');
-        final request = await httpClient.getUrl(uri).timeout(const Duration(seconds: 2));
-        request.headers.set(HttpHeaders.userAgentHeader,
-            'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36');
-        final response = await request.close().timeout(const Duration(seconds: 2));
+        final request = await httpClient
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 2));
+        request.headers.set(
+          HttpHeaders.userAgentHeader,
+          'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36',
+        );
+        final response = await request.close().timeout(
+          const Duration(seconds: 2),
+        );
         sw.stop();
         if (response.statusCode == 200) {
           scoredPiped.add(MapEntry(apiUrl, sw.elapsedMilliseconds));
@@ -563,7 +619,7 @@ class YouTubeService {
         scoredPiped.add(MapEntry(apiUrl, 999999));
       }
     }
-    
+
     scoredPiped.sort((a, b) => a.value.compareTo(b.value));
     final List<String> workingPiped = [];
     final List<String> failedPiped = [];
@@ -574,7 +630,7 @@ class YouTubeService {
         failedPiped.add(entry.key);
       }
     }
-    
+
     final untestedPiped = _pipedInstances
         .where((p) => !_pipedInstances.take(3).contains(p))
         .toList();
@@ -583,11 +639,13 @@ class YouTubeService {
     for (final apiUrl in failedPiped) {
       _pipedCooldown[apiUrl] = pipedFailedAt;
     }
-    
+
     httpClient.close();
-    
+
     debugPrint('[YT Test] Benchmarking complete.');
-    debugPrint('[YT Test] Client Priority: ${_clientPriority.map((c) => c.toString().split('.').last).join(', ')}');
+    debugPrint(
+      '[YT Test] Client Priority: ${_clientPriority.map((c) => c.toString().split('.').last).join(', ')}',
+    );
     if (workingInvidious.isNotEmpty) {
       debugPrint('[YT Test] Top Invidious instance: ${workingInvidious.first}');
     }
@@ -599,7 +657,7 @@ class YouTubeService {
   Future<List<Song>?> _fetchInvidiousSearch(String query) async {
     _loadWorkingInstances();
     final client = HttpClient();
-    
+
     // Scan instances that are not cooling down after a recent failure
     for (final instance in _invidiousInstances) {
       if (_isCoolingDown(_instanceCooldown, instance)) continue;
@@ -609,9 +667,13 @@ class YouTubeService {
           'q': query,
           'type': 'video',
         });
-        final request = await client.getUrl(uri).timeout(const Duration(seconds: 4));
-        final response = await request.close().timeout(const Duration(seconds: 4));
-        
+        final request = await client
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 4));
+        final response = await request.close().timeout(
+          const Duration(seconds: 4),
+        );
+
         if (response.statusCode == 200) {
           final body = await response.transform(utf8.decoder).join();
           final data = json.decode(body);
@@ -623,10 +685,11 @@ class YouTubeService {
                 final title = item['title'] as String? ?? 'Unknown';
                 final author = item['author'] as String? ?? 'Unknown';
                 final durationSecs = item['lengthSeconds'] as int? ?? 180;
-                
+
                 if (videoId != null && videoId.isNotEmpty) {
-                  String thumb = item['videoThumbnails']?.first['url'] as String? ?? '';
-                  
+                  String thumb =
+                      item['videoThumbnails']?.first['url'] as String? ?? '';
+
                   // Normalize thumbnail URL
                   if (thumb.isNotEmpty) {
                     thumb = Uri.decodeFull(thumb);
@@ -638,16 +701,18 @@ class YouTubeService {
                   } else {
                     thumb = 'https://img.youtube.com/vi/$videoId/mqdefault.jpg';
                   }
-                  
-                  songs.add(Song(
-                    id: videoId,
-                    title: title,
-                    artist: author,
-                    thumbnailUrl: thumb,
-                    highResThumbnailUrl: thumb,
-                    duration: Duration(seconds: durationSecs),
-                    videoId: videoId,
-                  ));
+
+                  songs.add(
+                    Song(
+                      id: videoId,
+                      title: title,
+                      artist: author,
+                      thumbnailUrl: thumb,
+                      highResThumbnailUrl: thumb,
+                      duration: Duration(seconds: durationSecs),
+                      videoId: videoId,
+                    ),
+                  );
                 }
               }
             }
@@ -672,8 +737,10 @@ class YouTubeService {
   /// resolution it belongs to has been won elsewhere — without it, a losing
   /// branch of the race kept dialling mirrors for another dozen seconds after
   /// the user's song had already started playing.
-  Future<String?> _fetchInvidiousStreamUrl(String videoId,
-      {bool Function()? shouldAbort}) async {
+  Future<String?> _fetchInvidiousStreamUrl(
+    String videoId, {
+    bool Function()? shouldAbort,
+  }) async {
     _loadWorkingInstances();
     final client = HttpClient();
     var attempts = 0;
@@ -685,10 +752,16 @@ class YouTubeService {
       attempts++;
 
       try {
-        final uri = Uri.https(instance, '/api/v1/videos/$videoId', {'local': 'true'});
-        final request = await client.getUrl(uri).timeout(const Duration(seconds: 4));
-        final response = await request.close().timeout(const Duration(seconds: 4));
-        
+        final uri = Uri.https(instance, '/api/v1/videos/$videoId', {
+          'local': 'true',
+        });
+        final request = await client
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 4));
+        final response = await request.close().timeout(
+          const Duration(seconds: 4),
+        );
+
         if (response.statusCode == 200) {
           final body = await response.transform(utf8.decoder).join();
           final data = json.decode(body);
@@ -698,14 +771,14 @@ class YouTubeService {
               final type = item['type'] as String? ?? '';
               return type.startsWith('audio/');
             }).toList();
-            
+
             if (audioStreams.isNotEmpty) {
               audioStreams.sort((a, b) {
                 final aBit = int.tryParse(a['bitrate']?.toString() ?? '0') ?? 0;
                 final bBit = int.tryParse(b['bitrate']?.toString() ?? '0') ?? 0;
                 return aBit.compareTo(bBit);
               });
-              
+
               final bestStream = audioStreams.last;
               final streamUrl = bestStream['url'] as String?;
               if (streamUrl != null && streamUrl.isNotEmpty) {
@@ -726,8 +799,10 @@ class YouTubeService {
 
   /// Fetch stream URL from Piped API instances.
   /// Piped uses a different API format: /streams/{videoId} → audioStreams[].url
-  Future<String?> _fetchPipedStreamUrl(String videoId,
-      {bool Function()? shouldAbort}) async {
+  Future<String?> _fetchPipedStreamUrl(
+    String videoId, {
+    bool Function()? shouldAbort,
+  }) async {
     _loadWorkingInstances();
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
     var attempts = 0;
@@ -740,11 +815,17 @@ class YouTubeService {
 
       try {
         final uri = Uri.parse('$apiUrl/streams/$videoId');
-        final request = await client.getUrl(uri).timeout(const Duration(seconds: 5));
-        request.headers.set(HttpHeaders.userAgentHeader,
-            'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36');
-        final response = await request.close().timeout(const Duration(seconds: 5));
+        final request = await client
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 5));
+        request.headers.set(
+          HttpHeaders.userAgentHeader,
+          'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 '
+          '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        );
+        final response = await request.close().timeout(
+          const Duration(seconds: 5),
+        );
 
         if (response.statusCode == 200) {
           final body = await response.transform(utf8.decoder).join();
@@ -753,8 +834,11 @@ class YouTubeService {
           final audioStreams = data['audioStreams'] as List?;
           if (audioStreams != null && audioStreams.isNotEmpty) {
             // Sort by bitrate and pick the best audio stream
-            audioStreams.sort((a, b) =>
-                (a['bitrate'] as int? ?? 0).compareTo(b['bitrate'] as int? ?? 0));
+            audioStreams.sort(
+              (a, b) => (a['bitrate'] as int? ?? 0).compareTo(
+                b['bitrate'] as int? ?? 0,
+              ),
+            );
             final best = audioStreams.last;
             final streamUrl = best['url'] as String?;
             if (streamUrl != null && streamUrl.isNotEmpty) {
@@ -802,7 +886,9 @@ class YouTubeService {
     try {
       final List<Song> trending = [];
       // PL4fGSI1pDJn5kI81J1fYxT5M838p9c58A is YouTube Music's official Trending playlist
-      final playlistVideos = _yt.playlists.getVideos('PL4fGSI1pDJn5kI81J1fYxT5M838p9c58A');
+      final playlistVideos = _yt.playlists.getVideos(
+        'PL4fGSI1pDJn5kI81J1fYxT5M838p9c58A',
+      );
       await for (final video in playlistVideos.take(20)) {
         trending.add(_videoToSong(video));
       }
@@ -815,8 +901,10 @@ class YouTubeService {
   }
 
   /// Get songs by genre/mood (Static offline-first layout, zero startup server calls)
-  Future<List<Song>> getSongsByCategory(String category,
-      {bool forceRefresh = false}) async {
+  Future<List<Song>> getSongsByCategory(
+    String category, {
+    bool forceRefresh = false,
+  }) async {
     // Category listings come from the static catalog, so [forceRefresh] is a
     // no-op here; it exists for API parity with the live fetch paths.
     if (_staticCatalog.containsKey(category)) {
@@ -838,8 +926,10 @@ class YouTubeService {
   /// Handing the same one back made every retry fail identically — with the
   /// 90-minute TTL that is a much longer window than the old 5-minute one, so
   /// the bypass is what keeps the longer TTL safe.
-  Future<String> getAudioStreamUrl(String videoId,
-      {bool forceRefresh = false}) async {
+  Future<String> getAudioStreamUrl(
+    String videoId, {
+    bool forceRefresh = false,
+  }) async {
     final cacheKey = _cacheKey(videoId);
     if (forceRefresh) {
       _streamCache.remove(cacheKey);
@@ -854,17 +944,24 @@ class YouTubeService {
     // yt-dlp correctly decrypts N-sig & handles PO-tokens, matching download speed and reliability.
     if (YtDlpRuntime.isReady) {
       try {
-        debugPrint('[YT] Primary resolution via native yt-dlp engine for $videoId');
-        final ytdlpUrl = await getYtDlpStreamUrl(videoId)
-            .timeout(const Duration(seconds: 15));
+        debugPrint(
+          '[YT] Primary resolution via native yt-dlp engine for $videoId',
+        );
+        final ytdlpUrl = await getYtDlpStreamUrl(
+          videoId,
+        ).timeout(const Duration(seconds: 15));
         if (ytdlpUrl != null && ytdlpUrl.startsWith('http')) {
-          debugPrint('[YT] Native yt-dlp primary resolution succeeded for $videoId');
+          debugPrint(
+            '[YT] Native yt-dlp primary resolution succeeded for $videoId',
+          );
           _evictExpiredCache();
           _streamCache[cacheKey] = _CachedUrl(ytdlpUrl, DateTime.now());
           return ytdlpUrl;
         }
       } catch (e) {
-        debugPrint('[YT] Native yt-dlp primary failed for $videoId: $e — trying fallback sources');
+        debugPrint(
+          '[YT] Native yt-dlp primary failed for $videoId: $e — trying fallback sources',
+        );
       }
     }
 
@@ -881,8 +978,9 @@ class YouTubeService {
     // Step 3: Final extended yt-dlp attempt if cold initialization finished in background
     try {
       await YtDlpRuntime.ensureInitialized();
-      final ytdlpUrl = await getYtDlpStreamUrl(videoId)
-          .timeout(const Duration(seconds: 25));
+      final ytdlpUrl = await getYtDlpStreamUrl(
+        videoId,
+      ).timeout(const Duration(seconds: 25));
       if (ytdlpUrl != null && ytdlpUrl.startsWith('http')) {
         debugPrint('[YT] Final yt-dlp retry resolved stream for $videoId');
         _evictExpiredCache();
@@ -916,9 +1014,12 @@ class YouTubeService {
     }
 
     void failIfBothExhausted() {
-      if (!completer.isCompleted && fastChainDone && (ytDlpDone || !ytDlpStarted)) {
+      if (!completer.isCompleted &&
+          fastChainDone &&
+          (ytDlpDone || !ytDlpStarted)) {
         completer.completeError(
-            fastError ?? Exception('All sources exhausted.'));
+          fastError ?? Exception('All sources exhausted.'),
+        );
       }
     }
 
@@ -955,7 +1056,8 @@ class YouTubeService {
             if (url != null) {
               if (completer.isCompleted) return;
               completeWith(url);
-              if (_clientPriority.isNotEmpty && _clientPriority.first != client) {
+              if (_clientPriority.isNotEmpty &&
+                  _clientPriority.first != client) {
                 _clientPriority.remove(client);
                 _clientPriority.insert(0, client);
               }
@@ -981,7 +1083,9 @@ class YouTubeService {
             );
             if (invidiousUrl != null) completeWith(invidiousUrl);
           } catch (e) {
-            debugPrint('[YT] Invidious stream fallback failed for $videoId: $e');
+            debugPrint(
+              '[YT] Invidious stream fallback failed for $videoId: $e',
+            );
           }
         }
 
@@ -1019,8 +1123,9 @@ class YouTubeService {
     return completer.future.timeout(
       _resolveDeadline,
       onTimeout: () => throw TimeoutException(
-          'Stream resolution timed out after ${_resolveDeadline.inSeconds}s',
-          _resolveDeadline),
+        'Stream resolution timed out after ${_resolveDeadline.inSeconds}s',
+        _resolveDeadline,
+      ),
     );
   }
 
@@ -1035,7 +1140,9 @@ class YouTubeService {
     if (audioStreams.isEmpty) return null;
 
     // Sort by bitrate ascending
-    audioStreams.sort((a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond));
+    audioStreams.sort(
+      (a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond),
+    );
 
     final AudioOnlyStreamInfo picked;
     switch (streamingQuality) {
@@ -1058,8 +1165,10 @@ class YouTubeService {
         );
     }
 
-    debugPrint('[YT] Explode picked quality=${streamingQuality.name} '
-        '${picked.bitrate.bitsPerSecond ~/ 1000}kbps ${picked.container.name}');
+    debugPrint(
+      '[YT] Explode picked quality=${streamingQuality.name} '
+      '${picked.bitrate.bitsPerSecond ~/ 1000}kbps ${picked.container.name}',
+    );
     return picked.url.toString();
   }
 
@@ -1159,7 +1268,9 @@ class YouTubeService {
   /// Clear stream cache on app resume to prevent 403 Forbidden errors
   /// on URLs resolved before backgrounding/network switch.
   static void clearStreamCacheOnResume() {
-    debugPrint('[YT] App resumed — invalidating cached stream URLs & refreshing Explode socket pool');
+    debugPrint(
+      '[YT] App resumed — invalidating cached stream URLs & refreshing Explode socket pool',
+    );
     _streamCache.clear();
     refreshExplodeClient();
   }
@@ -1226,9 +1337,11 @@ class YouTubeService {
             debugPrint('[YT] Promoted $client to primary yt-dlp player client');
           }
 
-          debugPrint('[YT] yt-dlp resolved via player_client=$client '
-              'quality=${streamingQuality.name} '
-              'ext=${info.ext ?? "?"} acodec=${info.acodec ?? "?"}');
+          debugPrint(
+            '[YT] yt-dlp resolved via player_client=$client '
+            'quality=${streamingQuality.name} '
+            'ext=${info.ext ?? "?"} acodec=${info.acodec ?? "?"}',
+          );
           YtDlpRuntime.markHealthy();
           _evictExpiredCache();
           _streamCache[_cacheKey(videoId)] = _CachedUrl(url, DateTime.now());
@@ -1243,7 +1356,9 @@ class YouTubeService {
             e.toString().toLowerCase().contains('nullpointer') ||
             e.toString().toLowerCase().contains('broken pipe') ||
             e.toString().toLowerCase().contains('uninitialized')) {
-          debugPrint('[YT] Native yt-dlp process error detected ($e) — triggering re-initialization');
+          debugPrint(
+            '[YT] Native yt-dlp process error detected ($e) — triggering re-initialization',
+          );
           YtDlpRuntime.forceReinitialize();
         }
       } finally {
@@ -1262,8 +1377,10 @@ class YouTubeService {
     try {
       return await completer.future.timeout(_ytDlpOverallTimeout);
     } on TimeoutException {
-      debugPrint('[YT] yt-dlp race exceeded ${_ytDlpOverallTimeout.inSeconds}s '
-          'for $videoId');
+      debugPrint(
+        '[YT] yt-dlp race exceeded ${_ytDlpOverallTimeout.inSeconds}s '
+        'for $videoId',
+      );
       return null;
     }
   }
@@ -1278,21 +1395,26 @@ class YouTubeService {
   String? _pickYtDlpAudioUrl(List<VideoFormat?>? formats) {
     if (formats == null || formats.isEmpty) return null;
 
-    final audioOnly = formats.where((f) {
-      if (f == null) return false;
-      final acodec = f.acodec?.toLowerCase();
-      final vcodec = f.vcodec?.toLowerCase();
-      return acodec != null &&
-          acodec != 'none' &&
-          (vcodec == null || vcodec == 'none' || vcodec.isEmpty);
-    }).cast<VideoFormat>().toList();
+    final audioOnly = formats
+        .where((f) {
+          if (f == null) return false;
+          final acodec = f.acodec?.toLowerCase();
+          final vcodec = f.vcodec?.toLowerCase();
+          return acodec != null &&
+              acodec != 'none' &&
+              (vcodec == null || vcodec == 'none' || vcodec.isEmpty);
+        })
+        .cast<VideoFormat>()
+        .toList();
 
     VideoFormat? selected;
     if (audioOnly.isNotEmpty) {
       final m4aAudio = audioOnly.where((f) {
         final ext = f.ext?.toLowerCase() ?? '';
         final acodec = f.acodec?.toLowerCase() ?? '';
-        return ext == 'm4a' || acodec.contains('mp4a') || acodec.contains('aac');
+        return ext == 'm4a' ||
+            acodec.contains('mp4a') ||
+            acodec.contains('aac');
       }).toList();
 
       final pool = m4aAudio.isNotEmpty ? m4aAudio : audioOnly;
@@ -1316,11 +1438,14 @@ class YouTubeService {
           break;
       }
     } else {
-      final anyAudio = formats.where((f) {
-        if (f == null) return false;
-        final acodec = f.acodec?.toLowerCase();
-        return acodec != null && acodec != 'none';
-      }).cast<VideoFormat>().toList();
+      final anyAudio = formats
+          .where((f) {
+            if (f == null) return false;
+            final acodec = f.acodec?.toLowerCase();
+            return acodec != null && acodec != 'none';
+          })
+          .cast<VideoFormat>()
+          .toList();
       if (anyAudio.isNotEmpty) {
         anyAudio.sort((a, b) => (a.tbr ?? 0).compareTo(b.tbr ?? 0));
         selected = anyAudio.last;
@@ -1403,8 +1528,9 @@ class YouTubeService {
   /// "resolving" for well over a minute before anything was even downloaded.
   Future<Song> getVideoDetails(String videoId) async {
     try {
-      final video =
-          await _yt.videos.get(videoId).timeout(_metadataExplodeTimeout);
+      final video = await _yt.videos
+          .get(videoId)
+          .timeout(_metadataExplodeTimeout);
       return Song(
         id: video.id.value,
         title: video.title,
@@ -1417,8 +1543,10 @@ class YouTubeService {
         videoId: video.id.value,
       );
     } catch (e) {
-      debugPrint('[YT] Explode metadata failed for $videoId: $e '
-          '— falling back to yt-dlp');
+      debugPrint(
+        '[YT] Explode metadata failed for $videoId: $e '
+        '— falling back to yt-dlp',
+      );
       final viaYtDlp = await getVideoDetailsViaYtDlp(videoId);
       if (viaYtDlp != null) return viaYtDlp;
       throw Exception('Failed to get video details: $e');
@@ -1432,14 +1560,14 @@ class YouTubeService {
   /// the download runs. yt-dlp overwrites all of this with the real tags when it
   /// writes the file.
   static Song placeholderSong(String videoId) => Song(
-        id: videoId,
-        videoId: videoId,
-        title: 'YouTube video',
-        artist: 'Unknown artist',
-        thumbnailUrl: 'https://i.ytimg.com/vi/$videoId/mqdefault.jpg',
-        highResThumbnailUrl: 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
-        duration: Duration.zero,
-      );
+    id: videoId,
+    videoId: videoId,
+    title: 'YouTube video',
+    artist: 'Unknown artist',
+    thumbnailUrl: 'https://i.ytimg.com/vi/$videoId/mqdefault.jpg',
+    highResThumbnailUrl: 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+    duration: Duration.zero,
+  );
 
   /// Metadata for [videoId] that ALWAYS returns something usable.
   ///
@@ -1453,8 +1581,10 @@ class YouTubeService {
     try {
       return await getVideoDetails(videoId);
     } catch (e) {
-      debugPrint('[YT] Metadata unavailable for $videoId ($e) — proceeding with '
-          'a placeholder so the download can still run');
+      debugPrint(
+        '[YT] Metadata unavailable for $videoId ($e) — proceeding with '
+        'a placeholder so the download can still run',
+      );
       return placeholderSong(videoId);
     }
   }
@@ -1500,9 +1630,11 @@ class YouTubeService {
             })
             // Whichever is shorter: this client's own slice, or what is left of
             // the overall budget.
-            .timeout(remaining < const Duration(seconds: 10)
-                ? remaining
-                : const Duration(seconds: 10));
+            .timeout(
+              remaining < const Duration(seconds: 10)
+                  ? remaining
+                  : const Duration(seconds: 10),
+            );
 
         final title = info.title?.trim();
         if (title == null || title.isEmpty) continue;
@@ -1514,7 +1646,9 @@ class YouTubeService {
             ? info.thumbnail!
             : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
 
-        debugPrint('[YT] yt-dlp metadata for $videoId via player_client=$client');
+        debugPrint(
+          '[YT] yt-dlp metadata for $videoId via player_client=$client',
+        );
         return Song(
           id: videoId,
           title: title,
@@ -1555,7 +1689,9 @@ class YouTubeService {
     final highThumb = EncodingSanitizer.sanitizeThumbnailUrl(
       video.thumbnails.standardResUrl.isNotEmpty
           ? video.thumbnails.standardResUrl
-          : (video.thumbnails.maxResUrl.isNotEmpty ? video.thumbnails.maxResUrl : video.thumbnails.mediumResUrl),
+          : (video.thumbnails.maxResUrl.isNotEmpty
+                ? video.thumbnails.maxResUrl
+                : video.thumbnails.mediumResUrl),
       videoId: video.id.value,
     );
 

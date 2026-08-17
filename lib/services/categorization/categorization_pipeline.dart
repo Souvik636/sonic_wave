@@ -85,7 +85,9 @@ class CategorizationPipeline {
 
         final strategy = strategyMap[strategyType];
         if (strategy == null) {
-          debugPrint('[Pipeline] No implementation for $strategyType, skipping');
+          debugPrint(
+            '[Pipeline] No implementation for $strategyType, skipping',
+          );
           continue;
         }
 
@@ -95,7 +97,9 @@ class CategorizationPipeline {
             (!request.allowNetwork ||
                 (strategyType == GroupingStrategy.byUserCategories &&
                     geminiClient == null))) {
-          debugPrint('[Pipeline] Skipping $strategyType (network/API unavailable)');
+          debugPrint(
+            '[Pipeline] Skipping $strategyType (network/API unavailable)',
+          );
           continue;
         }
 
@@ -135,9 +139,9 @@ class CategorizationPipeline {
                   stash.addAll(candidate.songIds);
                   break;
                 case MergeMode.keepAnyway:
-                  accepted.add(candidate.copyWith(
-                    confidence: candidate.confidence * 0.6,
-                  ));
+                  accepted.add(
+                    candidate.copyWith(confidence: candidate.confidence * 0.6),
+                  );
                   break;
               }
             }
@@ -193,8 +197,7 @@ class CategorizationPipeline {
 
     // Hint the user when their own category labels were the only thing missing
     // (Gemini classifies into them). No HF/embedding involvement anymore.
-    final infoMessage = (request.allowNetwork &&
-            request.userCategories.isEmpty)
+    final infoMessage = (request.allowNetwork && request.userCategories.isEmpty)
         ? 'Add your own category labels in Settings to let Gemini sort songs into them.'
         : null;
 
@@ -249,8 +252,9 @@ class CategorizationPipeline {
         final existingSet = existing.songIds.toSet();
 
         final overlapCount = candSet.intersection(existingSet).length;
-        final minSize =
-            candSet.length < existingSet.length ? candSet.length : existingSet.length;
+        final minSize = candSet.length < existingSet.length
+            ? candSet.length
+            : existingSet.length;
 
         if (minSize > 0 && overlapCount / minSize >= 0.8) {
           // High overlap — keep higher confidence

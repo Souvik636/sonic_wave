@@ -21,8 +21,9 @@ import 'package:permission_handler/permission_handler.dart';
 class DownloadNotificationService {
   DownloadNotificationService._();
 
-  static const MethodChannel _channel =
-      MethodChannel('com.sonicwave.sonic_wave/downloads');
+  static const MethodChannel _channel = MethodChannel(
+    'com.sonicwave.sonic_wave/downloads',
+  );
 
   /// Invoked by the native side when the user taps Cancel on the notification.
   /// Wired by PlayerProvider so the tap reaches the real cancel path.

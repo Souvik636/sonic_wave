@@ -13,8 +13,14 @@ class ArtistStrategy extends CategorizationStrategy {
 
   /// Artist names that are too generic to form meaningful groups.
   static const Set<String> _skipArtists = {
-    'local audio', 'unknown', 'various artists', 'various',
-    'unknown artist', 'music', 'audio', '',
+    'local audio',
+    'unknown',
+    'various artists',
+    'various',
+    'unknown artist',
+    'music',
+    'audio',
+    '',
   };
 
   @override
@@ -33,11 +39,9 @@ class ArtistStrategy extends CategorizationStrategy {
     final songs = unclaimed(ctx, classifiedIds);
     if (songs.isEmpty) return [];
 
-    onProgress(StageProgress(
-      label: 'Grouping by artist',
-      done: 0,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(label: 'Grouping by artist', done: 0, total: songs.length),
+    );
 
     // Group by cleaned artist name (with smart fallback parsing)
     final Map<String, List<Song>> artistGroups = {};
@@ -70,22 +74,27 @@ class ArtistStrategy extends CategorizationStrategy {
     for (final entry in artistGroups.entries) {
       if (token.isCancelled) break;
 
-      proposals.add(AiProposedAlbum(
-        id: _uuid.v4(),
-        name: '${entry.key} Essentials',
-        description: 'Curated collection of ${entry.value.length} tracks by ${entry.key}.',
-        songIds: List.unmodifiable(entry.value.map((s) => s.videoId)),
-        action: ProposalAction.createNew,
-        source: ProposalSource.artist,
-        confidence: 0.75,
-      ));
+      proposals.add(
+        AiProposedAlbum(
+          id: _uuid.v4(),
+          name: '${entry.key} Essentials',
+          description:
+              'Curated collection of ${entry.value.length} tracks by ${entry.key}.',
+          songIds: List.unmodifiable(entry.value.map((s) => s.videoId)),
+          action: ProposalAction.createNew,
+          source: ProposalSource.artist,
+          confidence: 0.75,
+        ),
+      );
     }
 
-    onProgress(StageProgress(
-      label: 'Grouping by artist',
-      done: songs.length,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(
+        label: 'Grouping by artist',
+        done: songs.length,
+        total: songs.length,
+      ),
+    );
 
     return proposals;
   }

@@ -68,9 +68,6 @@ class GlassmorphicCard extends StatelessWidget {
 
     // Tappable glass cards get a premium spring-press + haptic instead of a
     // dead GestureDetector.
-    return PremiumTap(
-      onTap: onTap,
-      child: card,
-    );
+    return PremiumTap(onTap: onTap, child: card);
   }
 }

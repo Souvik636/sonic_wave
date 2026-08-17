@@ -33,14 +33,18 @@ class SongTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<PlayerProvider>(
       builder: (context, playerProvider, _) {
-        final isCurrentSong = playerProvider.currentSong?.videoId == song.videoId;
+        final isCurrentSong =
+            playerProvider.currentSong?.videoId == song.videoId;
         final isLoading = playerProvider.loadingSong?.videoId == song.videoId;
         final isPlaying = isCurrentSong && playerProvider.isPlaying;
-        final isBufferingOrLoading = (isCurrentSong && playerProvider.isBuffering) || isLoading;
+        final isBufferingOrLoading =
+            (isCurrentSong && playerProvider.isBuffering) || isLoading;
 
         final primaryColor = Theme.of(context).colorScheme.primary;
 
-        final isDownloaded = playerProvider.downloadedSongs.any((s) => s.videoId == song.videoId);
+        final isDownloaded = playerProvider.downloadedSongs.any(
+          (s) => s.videoId == song.videoId,
+        );
 
         return Container(
           margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
@@ -81,7 +85,10 @@ class SongTile extends StatelessWidget {
               splashColor: primaryColor.withValues(alpha: 0.15),
               highlightColor: primaryColor.withValues(alpha: 0.08),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     // Index or equalizer
@@ -90,22 +97,22 @@ class SongTile extends StatelessWidget {
                         width: 26,
                         child: (isCurrentSong || isLoading)
                             ? (isBufferingOrLoading
-                                ? Center(
-                                    child: SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                        color: primaryColor,
-                                        strokeWidth: 1.5,
+                                  ? Center(
+                                      child: SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          color: primaryColor,
+                                          strokeWidth: 1.5,
+                                        ),
                                       ),
-                                    ),
-                                  )
-                                : AnimatedEqualizer(
-                                    isPlaying: isPlaying,
-                                    height: 16,
-                                    barWidth: 2.5,
-                                    barCount: 3,
-                                  ))
+                                    )
+                                  : AnimatedEqualizer(
+                                      isPlaying: isPlaying,
+                                      height: 16,
+                                      barWidth: 2.5,
+                                      barCount: 3,
+                                    ))
                             : Text(
                                 '${index! + 1}',
                                 style: GoogleFonts.spaceMono(
@@ -172,9 +179,13 @@ class SongTile extends StatelessWidget {
                           Text(
                             song.title,
                             style: GoogleFonts.outfit(
-                              color: isCurrentSong ? primaryColor : Colors.white,
+                              color: isCurrentSong
+                                  ? primaryColor
+                                  : Colors.white,
                               fontSize: 14,
-                              fontWeight: isCurrentSong ? FontWeight.bold : FontWeight.w600,
+                              fontWeight: isCurrentSong
+                                  ? FontWeight.bold
+                                  : FontWeight.w600,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -198,14 +209,23 @@ class SongTile extends StatelessWidget {
                               // Single concise short badge (NEW > DL > LOCAL > Source)
                               Builder(
                                 builder: (_) {
-                                  final isNew = playerProvider.isNewInSession(song);
-                                  final rawTag = (sourceTag ?? song.source).toLowerCase();
-                                  final isLocal = song.isLocalFile || rawTag == 'local' || rawTag.startsWith('local_');
+                                  final isNew = playerProvider.isNewInSession(
+                                    song,
+                                  );
+                                  final rawTag = (sourceTag ?? song.source)
+                                      .toLowerCase();
+                                  final isLocal =
+                                      song.isLocalFile ||
+                                      rawTag == 'local' ||
+                                      rawTag.startsWith('local_');
 
                                   String tagText = 'YT';
-                                  Color bgColor = Colors.redAccent.withValues(alpha: 0.6);
+                                  Color bgColor = Colors.redAccent.withValues(
+                                    alpha: 0.6,
+                                  );
 
-                                  if (rawTag == 'duplicate' || rawTag == 'dup') {
+                                  if (rawTag == 'duplicate' ||
+                                      rawTag == 'dup') {
                                     tagText = 'DUP';
                                     bgColor = Colors.amber.shade800;
                                   } else if (isNew) {
@@ -216,26 +236,42 @@ class SongTile extends StatelessWidget {
                                     bgColor = Colors.cyan.shade800;
                                   } else if (isLocal) {
                                     tagText = 'LOCAL';
-                                    bgColor = Colors.blue.withValues(alpha: 0.6);
-                                  } else if (rawTag.contains('jiosaavn') || rawTag.contains('saavn')) {
+                                    bgColor = Colors.blue.withValues(
+                                      alpha: 0.6,
+                                    );
+                                  } else if (rawTag.contains('jiosaavn') ||
+                                      rawTag.contains('saavn')) {
                                     tagText = 'SAAVN';
-                                    bgColor = const Color(0xFF00D4B2).withValues(alpha: 0.6);
+                                    bgColor = const Color(
+                                      0xFF00D4B2,
+                                    ).withValues(alpha: 0.6);
                                   } else if (rawTag.contains('radio')) {
                                     tagText = 'RADIO';
-                                    bgColor = Colors.pinkAccent.withValues(alpha: 0.6);
+                                    bgColor = Colors.pinkAccent.withValues(
+                                      alpha: 0.6,
+                                    );
                                   } else if (rawTag.contains('archive')) {
                                     tagText = 'ARCHIVE';
-                                    bgColor = Colors.purple.withValues(alpha: 0.6);
+                                    bgColor = Colors.purple.withValues(
+                                      alpha: 0.6,
+                                    );
                                   } else if (rawTag.contains('jamendo')) {
                                     tagText = 'JAM';
-                                    bgColor = Colors.amber.withValues(alpha: 0.6);
+                                    bgColor = Colors.amber.withValues(
+                                      alpha: 0.6,
+                                    );
                                   } else if (rawTag.contains('audius')) {
                                     tagText = 'AUD';
-                                    bgColor = Colors.teal.withValues(alpha: 0.6);
+                                    bgColor = Colors.teal.withValues(
+                                      alpha: 0.6,
+                                    );
                                   }
 
                                   return Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: bgColor,
                                       borderRadius: BorderRadius.circular(4),
@@ -251,18 +287,26 @@ class SongTile extends StatelessWidget {
                                   );
                                 },
                               ),
-                               if (song.isRecovered) ...[
+                              if (song.isRecovered) ...[
                                 const SizedBox(width: 4),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      colors: [Colors.amber, Colors.orangeAccent],
+                                      colors: [
+                                        Colors.amber,
+                                        Colors.orangeAccent,
+                                      ],
                                     ),
                                     borderRadius: BorderRadius.circular(5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.amber.withValues(alpha: 0.5),
+                                        color: Colors.amber.withValues(
+                                          alpha: 0.5,
+                                        ),
                                         blurRadius: 4,
                                       ),
                                     ],
@@ -280,15 +324,20 @@ class SongTile extends StatelessWidget {
                               if (song.isEdited) ...[
                                 const SizedBox(width: 4),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.amber.shade800,
                                     borderRadius: BorderRadius.circular(5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.amber.shade800.withValues(alpha: 0.3),
+                                        color: Colors.amber.shade800.withValues(
+                                          alpha: 0.3,
+                                        ),
                                         blurRadius: 4,
-                                      )
+                                      ),
                                     ],
                                   ),
                                   child: const Text(
@@ -332,8 +381,13 @@ class SongTile extends StatelessWidget {
                       trailing!
                     else
                       IconButton(
-                        icon: const Icon(Icons.more_vert_rounded, color: AppColors.textTertiary, size: 18),
-                        onPressed: () => _showSongContextMenu(context, playerProvider),
+                        icon: const Icon(
+                          Icons.more_vert_rounded,
+                          color: AppColors.textTertiary,
+                          size: 18,
+                        ),
+                        onPressed: () =>
+                            _showSongContextMenu(context, playerProvider),
                       ),
                   ],
                 ),
@@ -345,8 +399,13 @@ class SongTile extends StatelessWidget {
     );
   }
 
-  void _showSongContextMenu(BuildContext context, PlayerProvider playerProvider) {
-    final isDownloaded = playerProvider.downloadedSongs.any((s) => s.videoId == song.videoId);
+  void _showSongContextMenu(
+    BuildContext context,
+    PlayerProvider playerProvider,
+  ) {
+    final isDownloaded = playerProvider.downloadedSongs.any(
+      (s) => s.videoId == song.videoId,
+    );
     final isLocalSection = sourceTag == 'local';
 
     showModalBottomSheet(
@@ -391,7 +450,8 @@ class SongTile extends StatelessWidget {
                           children: [
                             Text(
                               song.title,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
@@ -401,9 +461,8 @@ class SongTile extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               song.artist,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.textTertiary,
-                                  ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: AppColors.textTertiary),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -415,20 +474,32 @@ class SongTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 const Divider(color: AppColors.divider, height: 1),
-                
+
                 // Menu options
                 if (isLocalSection) ...[
                   ListTile(
-                    leading: const Icon(Icons.library_music_rounded, color: Colors.white),
-                    title: const Text('Add / Move to Album', style: TextStyle(color: Colors.white)),
+                    leading: const Icon(
+                      Icons.library_music_rounded,
+                      color: Colors.white,
+                    ),
+                    title: const Text(
+                      'Add / Move to Album',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       _showMoveToAlbumDialog(context, playerProvider);
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.info_outline_rounded, color: Colors.white),
-                    title: const Text('Song Details', style: TextStyle(color: Colors.white)),
+                    leading: const Icon(
+                      Icons.info_outline_rounded,
+                      color: Colors.white,
+                    ),
+                    title: const Text(
+                      'Song Details',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       _showSongInfoDialog(context);
@@ -436,8 +507,14 @@ class SongTile extends StatelessWidget {
                   ),
                 ] else ...[
                   ListTile(
-                    leading: const Icon(Icons.playlist_play_rounded, color: Colors.white),
-                    title: const Text('Play Next', style: TextStyle(color: Colors.white)),
+                    leading: const Icon(
+                      Icons.playlist_play_rounded,
+                      color: Colors.white,
+                    ),
+                    title: const Text(
+                      'Play Next',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     onTap: () {
                       playerProvider.playSongNext(song);
                       Navigator.pop(context);
@@ -450,8 +527,14 @@ class SongTile extends StatelessWidget {
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.queue_music_rounded, color: Colors.white),
-                    title: const Text('Add to Queue', style: TextStyle(color: Colors.white)),
+                    leading: const Icon(
+                      Icons.queue_music_rounded,
+                      color: Colors.white,
+                    ),
+                    title: const Text(
+                      'Add to Queue',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     onTap: () {
                       playerProvider.addSongToQueue(song);
                       Navigator.pop(context);
@@ -464,8 +547,14 @@ class SongTile extends StatelessWidget {
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.library_music_rounded, color: Colors.white),
-                    title: const Text('Add / Move to Album', style: TextStyle(color: Colors.white)),
+                    leading: const Icon(
+                      Icons.library_music_rounded,
+                      color: Colors.white,
+                    ),
+                    title: const Text(
+                      'Add / Move to Album',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       _showMoveToAlbumDialog(context, playerProvider);
@@ -473,8 +562,14 @@ class SongTile extends StatelessWidget {
                   ),
                   if (isDownloaded)
                     ListTile(
-                      leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                      title: const Text('Remove Download', style: TextStyle(color: Colors.redAccent)),
+                      leading: const Icon(
+                        Icons.delete_outline_rounded,
+                        color: Colors.redAccent,
+                      ),
+                      title: const Text(
+                        'Remove Download',
+                        style: TextStyle(color: Colors.redAccent),
+                      ),
                       onTap: () {
                         playerProvider.deleteDownload(song.videoId);
                         Navigator.pop(context);
@@ -488,8 +583,14 @@ class SongTile extends StatelessWidget {
                     )
                   else if (!song.isLiveRadio)
                     ListTile(
-                      leading: const Icon(Icons.download_rounded, color: Colors.white),
-                      title: const Text('Download', style: TextStyle(color: Colors.white)),
+                      leading: const Icon(
+                        Icons.download_rounded,
+                        color: Colors.white,
+                      ),
+                      title: const Text(
+                        'Download',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       onTap: () {
                         playerProvider.downloadSong(song, context: context);
                         Navigator.pop(context);
@@ -502,9 +603,21 @@ class SongTile extends StatelessWidget {
                     )
                   else
                     ListTile(
-                      leading: const Icon(Icons.radio_rounded, color: Colors.white70),
-                      title: const Text('Live Radio Stream', style: TextStyle(color: Colors.white70)),
-                      subtitle: const Text('Continuous broadcast (Cannot download)', style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
+                      leading: const Icon(
+                        Icons.radio_rounded,
+                        color: Colors.white70,
+                      ),
+                      title: const Text(
+                        'Live Radio Stream',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      subtitle: const Text(
+                        'Continuous broadcast (Cannot download)',
+                        style: TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 11,
+                        ),
+                      ),
                       onTap: () {
                         Navigator.pop(context);
                         AppToast.show(
@@ -516,8 +629,14 @@ class SongTile extends StatelessWidget {
                       },
                     ),
                   ListTile(
-                    leading: const Icon(Icons.share_rounded, color: Colors.white),
-                    title: const Text('Share Song', style: TextStyle(color: Colors.white)),
+                    leading: const Icon(
+                      Icons.share_rounded,
+                      color: Colors.white,
+                    ),
+                    title: const Text(
+                      'Share Song',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       AppToast.show(
@@ -529,8 +648,14 @@ class SongTile extends StatelessWidget {
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.info_outline_rounded, color: Colors.white),
-                    title: const Text('Song Details', style: TextStyle(color: Colors.white)),
+                    leading: const Icon(
+                      Icons.info_outline_rounded,
+                      color: Colors.white,
+                    ),
+                    title: const Text(
+                      'Song Details',
+                      style: TextStyle(color: Colors.white),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       _showSongInfoDialog(context);
@@ -547,7 +672,10 @@ class SongTile extends StatelessWidget {
   }
 
   // ignore: unused_element
-  void _showAddToAlbumDialog(BuildContext context, PlayerProvider playerProvider) {
+  void _showAddToAlbumDialog(
+    BuildContext context,
+    PlayerProvider playerProvider,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
@@ -573,15 +701,18 @@ class SongTile extends StatelessWidget {
               Text(
                 'Add to Album',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 12),
               if (albums.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Text('No albums created yet', style: TextStyle(color: AppColors.textTertiary)),
+                  child: Text(
+                    'No albums created yet',
+                    style: TextStyle(color: AppColors.textTertiary),
+                  ),
                 )
               else
                 Flexible(
@@ -590,13 +721,30 @@ class SongTile extends StatelessWidget {
                     itemCount: albums.length,
                     itemBuilder: (context, index) {
                       final album = albums[index];
-                      final isAlreadyAdded = album.songs.any((s) => s.videoId == song.videoId);
+                      final isAlreadyAdded = album.songs.any(
+                        (s) => s.videoId == song.videoId,
+                      );
                       return ListTile(
-                        leading: const Icon(Icons.album_rounded, color: AppColors.textTertiary),
-                        title: Text(album.name, style: const TextStyle(color: Colors.white)),
-                        subtitle: Text('${album.songCount} songs', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                        leading: const Icon(
+                          Icons.album_rounded,
+                          color: AppColors.textTertiary,
+                        ),
+                        title: Text(
+                          album.name,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        subtitle: Text(
+                          '${album.songCount} songs',
+                          style: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 12,
+                          ),
+                        ),
                         trailing: isAlreadyAdded
-                            ? Icon(Icons.check_circle_rounded, color: Theme.of(context).colorScheme.primary)
+                            ? Icon(
+                                Icons.check_circle_rounded,
+                                color: Theme.of(context).colorScheme.primary,
+                              )
                             : null,
                         onTap: isAlreadyAdded
                             ? null
@@ -606,7 +754,9 @@ class SongTile extends StatelessWidget {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text('Added to "${album.name}"'),
-                                    backgroundColor: Theme.of(context).colorScheme.primary,
+                                    backgroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
                                     duration: const Duration(seconds: 2),
                                   ),
                                 );
@@ -623,14 +773,13 @@ class SongTile extends StatelessWidget {
     );
   }
 
-
   Future<Map<String, dynamic>> _getSongFileInfo() async {
     final info = <String, dynamic>{
       'exists': false,
       'size': 'N/A',
       'path': 'N/A',
     };
-    
+
     String? path = song.filePath;
     if (path == null) {
       final localPath = await DownloadService().getLocalAudioPath(song.videoId);
@@ -638,14 +787,14 @@ class SongTile extends StatelessWidget {
         path = localPath;
       }
     }
-    
+
     if (path != null) {
       final file = File(path);
       if (await file.exists()) {
         final length = await file.length();
         info['exists'] = true;
         info['path'] = path;
-        
+
         if (length < 1024) {
           info['size'] = '$length B';
         } else if (length < 1024 * 1024) {
@@ -664,12 +813,19 @@ class SongTile extends StatelessWidget {
       builder: (ctx) {
         return AlertDialog(
           backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Song Details', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'Song Details',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
           content: FutureBuilder<Map<String, dynamic>>(
             future: _getSongFileInfo(),
             builder: (context, snapshot) {
-              final info = snapshot.data ?? {'exists': false, 'size': 'Loading...', 'path': 'Loading...'};
+              final info =
+                  snapshot.data ??
+                  {'exists': false, 'size': 'Loading...', 'path': 'Loading...'};
               final exists = info['exists'] as bool;
               final size = info['size'] as String;
               final path = info['path'] as String;
@@ -684,7 +840,10 @@ class SongTile extends StatelessWidget {
                   const SizedBox(height: 8),
                   _buildInfoRow('Source', song.source.toUpperCase()),
                   const SizedBox(height: 8),
-                  _buildInfoRow('Storage Type', exists ? 'Local Disk File' : 'Streamed Online'),
+                  _buildInfoRow(
+                    'Storage Type',
+                    exists ? 'Local Disk File' : 'Streamed Online',
+                  ),
                   if (exists) ...[
                     const SizedBox(height: 8),
                     _buildInfoRow('File Size', size),
@@ -712,7 +871,11 @@ class SongTile extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            color: AppColors.textTertiary,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
@@ -729,7 +892,10 @@ class SongTile extends StatelessWidget {
     );
   }
 
-  void _showMoveToAlbumDialog(BuildContext context, PlayerProvider playerProvider) {
+  void _showMoveToAlbumDialog(
+    BuildContext context,
+    PlayerProvider playerProvider,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
@@ -756,7 +922,10 @@ class SongTile extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.create_new_folder_rounded, color: Colors.cyanAccent),
+                    icon: const Icon(
+                      Icons.create_new_folder_rounded,
+                      color: Colors.cyanAccent,
+                    ),
                     onPressed: () {
                       Navigator.pop(ctx);
                       _showCreateAndMoveAlbumDialog(context, playerProvider);
@@ -784,27 +953,40 @@ class SongTile extends StatelessWidget {
                     itemBuilder: (context, index) {
                       final album = albums[index];
                       return ListTile(
-                        leading: const Icon(Icons.folder_outlined, color: Colors.white70),
-                        title: Text(album.name, style: const TextStyle(color: Colors.white)),
+                        leading: const Icon(
+                          Icons.folder_outlined,
+                          color: Colors.white70,
+                        ),
+                        title: Text(
+                          album.name,
+                          style: const TextStyle(color: Colors.white),
+                        ),
                         onTap: () async {
                           Navigator.pop(ctx);
                           final op = await _promptMoveType(context);
                           if (op == null) return;
 
-                          final success = await playerProvider.moveSongToAnotherAlbumFolder(
-                            song,
-                            album.id,
-                            physicalMove: op.physicalMove,
-                            isCopyMode: op.isCopyMode,
-                          );
+                          final success = await playerProvider
+                              .moveSongToAnotherAlbumFolder(
+                                song,
+                                album.id,
+                                physicalMove: op.physicalMove,
+                                isCopyMode: op.isCopyMode,
+                              );
                           if (context.mounted) {
                             final label = op.isCopyMode
                                 ? 'Copied to "${album.name}"'
-                                : (op.physicalMove ? 'Moved to "${album.name}"' : 'Added to "${album.name}"');
+                                : (op.physicalMove
+                                      ? 'Moved to "${album.name}"'
+                                      : 'Added to "${album.name}"');
                             AppToast.show(
                               context,
-                              success ? label : 'Failed operation for "${album.name}"',
-                              type: success ? ToastType.success : ToastType.error,
+                              success
+                                  ? label
+                                  : 'Failed operation for "${album.name}"',
+                              type: success
+                                  ? ToastType.success
+                                  : ToastType.error,
                             );
                           }
                         },
@@ -820,14 +1002,20 @@ class SongTile extends StatelessWidget {
     );
   }
 
-  void _showCreateAndMoveAlbumDialog(BuildContext context, PlayerProvider playerProvider) {
+  void _showCreateAndMoveAlbumDialog(
+    BuildContext context,
+    PlayerProvider playerProvider,
+  ) {
     final controller = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('New Album Folder', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'New Album Folder',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -840,7 +1028,10 @@ class SongTile extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           TextButton(
             onPressed: () async {
@@ -851,16 +1042,19 @@ class SongTile extends StatelessWidget {
                 if (op == null) return;
 
                 final newAlbum = await playerProvider.createAlbum(name);
-                final success = await playerProvider.moveSongToAnotherAlbumFolder(
-                  song,
-                  newAlbum.id,
-                  physicalMove: op.physicalMove,
-                  isCopyMode: op.isCopyMode,
-                );
+                final success = await playerProvider
+                    .moveSongToAnotherAlbumFolder(
+                      song,
+                      newAlbum.id,
+                      physicalMove: op.physicalMove,
+                      isCopyMode: op.isCopyMode,
+                    );
                 if (context.mounted) {
                   final label = op.isCopyMode
                       ? 'Created folder & copied to "$name"'
-                      : (op.physicalMove ? 'Created folder & moved to "$name"' : 'Created album "$name"');
+                      : (op.physicalMove
+                            ? 'Created folder & moved to "$name"'
+                            : 'Created album "$name"');
                   AppToast.show(
                     context,
                     success ? label : 'Failed operation for "$name"',
@@ -869,9 +1063,10 @@ class SongTile extends StatelessWidget {
                 }
               }
             },
-            child: Text('Create & Continue',
-                style:
-                    TextStyle(color: Theme.of(context).colorScheme.primary)),
+            child: Text(
+              'Create & Continue',
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
           ),
         ],
       ),
@@ -884,38 +1079,86 @@ class SongTile extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Choose Storage Operation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Choose Storage Operation',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: const Text(
           'How would you like to handle the file storage for this target album?',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
         ),
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        actionsPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         actions: [
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
                 dense: true,
-                leading: const Icon(Icons.copy_rounded, color: Colors.cyanAccent),
-                title: const Text('Make a Copy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text('Duplicates file in target album directory while preserving original', style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-                onTap: () => Navigator.pop(ctx, _MoveOpResult(physicalMove: true, isCopyMode: true)),
+                leading: const Icon(
+                  Icons.copy_rounded,
+                  color: Colors.cyanAccent,
+                ),
+                title: const Text(
+                  'Make a Copy',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: const Text(
+                  'Duplicates file in target album directory while preserving original',
+                  style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                ),
+                onTap: () => Navigator.pop(
+                  ctx,
+                  _MoveOpResult(physicalMove: true, isCopyMode: true),
+                ),
               ),
               const Divider(color: AppColors.divider, height: 1),
               ListTile(
                 dense: true,
-                leading: const Icon(Icons.drive_file_move_rounded, color: Colors.amberAccent),
-                title: const Text('Permanently Move', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text('Transfers original file to target album directory completely', style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-                onTap: () => Navigator.pop(ctx, _MoveOpResult(physicalMove: true, isCopyMode: false)),
+                leading: const Icon(
+                  Icons.drive_file_move_rounded,
+                  color: Colors.amberAccent,
+                ),
+                title: const Text(
+                  'Permanently Move',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: const Text(
+                  'Transfers original file to target album directory completely',
+                  style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                ),
+                onTap: () => Navigator.pop(
+                  ctx,
+                  _MoveOpResult(physicalMove: true, isCopyMode: false),
+                ),
               ),
               const Divider(color: AppColors.divider, height: 1),
               ListTile(
                 dense: true,
-                leading: const Icon(Icons.bookmark_add_rounded, color: Colors.white70),
-                title: const Text('In-App Bookmark', style: TextStyle(color: Colors.white70)),
-                subtitle: const Text('Organizes song in app memory only without moving disk files', style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-                onTap: () => Navigator.pop(ctx, _MoveOpResult(physicalMove: false, isCopyMode: false)),
+                leading: const Icon(
+                  Icons.bookmark_add_rounded,
+                  color: Colors.white70,
+                ),
+                title: const Text(
+                  'In-App Bookmark',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                subtitle: const Text(
+                  'Organizes song in app memory only without moving disk files',
+                  style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                ),
+                onTap: () => Navigator.pop(
+                  ctx,
+                  _MoveOpResult(physicalMove: false, isCopyMode: false),
+                ),
               ),
             ],
           ),
@@ -956,13 +1199,19 @@ class _FavoriteHeartState extends State<_FavoriteHeart>
   );
   late final Animation<double> _scale = TweenSequence<double>([
     TweenSequenceItem(
-        tween: Tween(begin: 1.0, end: 1.35)
-            .chain(CurveTween(curve: Curves.easeOut)),
-        weight: 40),
+      tween: Tween(
+        begin: 1.0,
+        end: 1.35,
+      ).chain(CurveTween(curve: Curves.easeOut)),
+      weight: 40,
+    ),
     TweenSequenceItem(
-        tween: Tween(begin: 1.35, end: 1.0)
-            .chain(CurveTween(curve: Curves.elasticOut)),
-        weight: 60),
+      tween: Tween(
+        begin: 1.35,
+        end: 1.0,
+      ).chain(CurveTween(curve: Curves.elasticOut)),
+      weight: 60,
+    ),
   ]).animate(_controller);
 
   @override

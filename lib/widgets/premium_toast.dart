@@ -134,8 +134,10 @@ class _ToastCardState extends State<_ToastCard>
       reverseDuration: const Duration(milliseconds: 220),
     );
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _slide = Tween<Offset>(begin: const Offset(0, -0.4), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _slide = Tween<Offset>(
+      begin: const Offset(0, -0.4),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
     _autoDismiss = Timer(widget.errorContext.dismissAfter, _close);
   }
@@ -206,8 +208,11 @@ class _ToastCardState extends State<_ToastCard>
                               color: errorColor.withValues(alpha: 0.4),
                             ),
                           ),
-                          child: Icon(widget.errorContext.icon,
-                              color: errorColor, size: 20),
+                          child: Icon(
+                            widget.errorContext.icon,
+                            color: errorColor,
+                            size: 20,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -246,10 +251,13 @@ class _ToastCardState extends State<_ToastCard>
                               widget.onRetry!();
                             },
                             style: TextButton.styleFrom(
-                              foregroundColor:
-                                  Theme.of(context).colorScheme.primary,
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),

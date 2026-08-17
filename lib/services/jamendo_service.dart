@@ -40,7 +40,8 @@ class JamendoService {
 
   Future<List<Song>> search(String query, {int limit = 25}) {
     return _fetchTracks(
-        'namesearch=${Uri.encodeComponent(query)}&limit=$limit');
+      'namesearch=${Uri.encodeComponent(query)}&limit=$limit',
+    );
   }
 
   Future<List<Song>> trending({int limit = 25}) {
@@ -49,25 +50,31 @@ class JamendoService {
 
   Future<List<Song>> byTag(String tag, {int limit = 25}) {
     return _fetchTracks(
-        'tags=${Uri.encodeComponent(tag)}&order=popularity_week&limit=$limit');
+      'tags=${Uri.encodeComponent(tag)}&order=popularity_week&limit=$limit',
+    );
   }
 
   Future<List<Song>> _fetchTracks(String params) async {
     if (clientId.isEmpty) {
-      debugPrint('[JamendoService] clientId is not set — no results. '
-          'Get a free key at developer.jamendo.com');
+      debugPrint(
+        '[JamendoService] clientId is not set — no results. '
+        'Get a free key at developer.jamendo.com',
+      );
       return const [];
     }
 
     try {
       final uri = Uri.parse(
-          'https://api.jamendo.com/v3.0/tracks/?client_id=$clientId'
-          '&format=json&audioformat=mp32&include=musicinfo&$params');
+        'https://api.jamendo.com/v3.0/tracks/?client_id=$clientId'
+        '&format=json&audioformat=mp32&include=musicinfo&$params',
+      );
 
-      final request =
-          await _client.getUrl(uri).timeout(const Duration(seconds: 6));
-      final response =
-          await request.close().timeout(const Duration(seconds: 6));
+      final request = await _client
+          .getUrl(uri)
+          .timeout(const Duration(seconds: 6));
+      final response = await request.close().timeout(
+        const Duration(seconds: 6),
+      );
       if (response.statusCode != 200) {
         debugPrint('[JamendoService] HTTP ${response.statusCode}');
         await response.drain();
@@ -82,8 +89,7 @@ class JamendoService {
 
       final headers = data['headers'] as Map<String, dynamic>?;
       if (headers != null && headers['status'] != 'success') {
-        debugPrint(
-            '[JamendoService] API error: ${headers['error_message']}');
+        debugPrint('[JamendoService] API error: ${headers['error_message']}');
         return const [];
       }
 
@@ -97,26 +103,26 @@ class JamendoService {
         // `audio` is the direct streaming URL. If it's empty the track
         // is not streamable — skip it instead of listing a dead tile.
         final audio = (item['audio'] as String? ?? '').trim();
-        final image = (item['album_image'] as String? ??
-                item['image'] as String? ??
-                '')
-            .trim();
-        final durationSec =
-            int.tryParse('${item['duration'] ?? 0}') ?? 0;
+        final image =
+            (item['album_image'] as String? ?? item['image'] as String? ?? '')
+                .trim();
+        final durationSec = int.tryParse('${item['duration'] ?? 0}') ?? 0;
 
         if (trackId.isEmpty || name.isEmpty || audio.isEmpty) continue;
         if (!audio.startsWith('https://')) continue;
 
         final id = '$idPrefix$trackId$_urlMarker$audio';
-        songs.add(Song(
-          id: id,
-          videoId: id,
-          title: name,
-          artist: artist,
-          thumbnailUrl: image,
-          highResThumbnailUrl: image,
-          duration: Duration(seconds: durationSec),
-        ));
+        songs.add(
+          Song(
+            id: id,
+            videoId: id,
+            title: name,
+            artist: artist,
+            thumbnailUrl: image,
+            highResThumbnailUrl: image,
+            duration: Duration(seconds: durationSec),
+          ),
+        );
       }
 
       return songs;

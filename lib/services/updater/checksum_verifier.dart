@@ -7,10 +7,15 @@ class ChecksumMismatchException implements Exception {
   final String expectedHash;
   final String actualHash;
 
-  const ChecksumMismatchException(this.message, {required this.expectedHash, required this.actualHash});
+  const ChecksumMismatchException(
+    this.message, {
+    required this.expectedHash,
+    required this.actualHash,
+  });
 
   @override
-  String toString() => 'ChecksumMismatchException: $message (Expected: $expectedHash, Actual: $actualHash)';
+  String toString() =>
+      'ChecksumMismatchException: $message (Expected: $expectedHash, Actual: $actualHash)';
 }
 
 class ChecksumVerifier {
@@ -31,7 +36,9 @@ class ChecksumVerifier {
     debugPrint('[Checksum] Expected: $cleanExpected | Actual: $cleanActual');
 
     if (cleanExpected.isEmpty) {
-      debugPrint('[Checksum] Error: Expected hash format invalid or empty — refusing to pass.');
+      debugPrint(
+        '[Checksum] Error: Expected hash format invalid or empty — refusing to pass.',
+      );
       throw ChecksumMismatchException(
         'The checksum file could not be parsed. The update integrity cannot be verified.',
         expectedHash: '(unparseable)',

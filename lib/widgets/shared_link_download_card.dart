@@ -52,8 +52,10 @@ class _SharedLinkDownloadCardState extends State<SharedLinkDownloadCard>
       reverseDuration: const Duration(milliseconds: 240),
     );
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _slide = Tween<Offset>(begin: const Offset(0, 0.35), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.35),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
   }
 
   @override
@@ -119,8 +121,9 @@ class _SharedLinkDownloadCardState extends State<SharedLinkDownloadCard>
     final status = context.select<PlayerProvider, SharedDownloadStatus?>(
       (p) => p.sharedDownload,
     );
-    final hasMiniPlayer =
-        context.select<PlayerProvider, bool>((p) => p.hasCurrentSong);
+    final hasMiniPlayer = context.select<PlayerProvider, bool>(
+      (p) => p.hasCurrentSong,
+    );
 
     _sync(status);
 
@@ -138,9 +141,8 @@ class _SharedLinkDownloadCardState extends State<SharedLinkDownloadCard>
     // gesture-nav one, where viewPadding.bottom adds another ~24-48px that was
     // simply ignored.
     final systemInset = MediaQuery.viewPaddingOf(context).bottom;
-    final bottom = kBottomNavigationBarHeight +
-        systemInset +
-        (hasMiniPlayer ? 8.0 : 0.0);
+    final bottom =
+        kBottomNavigationBarHeight + systemInset + (hasMiniPlayer ? 8.0 : 0.0);
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 260),
@@ -213,10 +215,10 @@ class SharedDownloadCardSurface extends StatelessWidget {
   });
 
   Color _accentOf(BuildContext context) => switch (status.phase) {
-        SharedDownloadPhase.done => AppColors.success,
-        SharedDownloadPhase.failed => AppColors.error,
-        _ => Theme.of(context).colorScheme.primary,
-      };
+    SharedDownloadPhase.done => AppColors.success,
+    SharedDownloadPhase.failed => AppColors.error,
+    _ => Theme.of(context).colorScheme.primary,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -259,14 +261,12 @@ class SharedDownloadCardSurface extends StatelessWidget {
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         height: 3.5,
-                        width: MediaQuery.of(context).size.width *
+                        width:
+                            MediaQuery.of(context).size.width *
                             status.progress.clamp(0.0, 1.0),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [
-                              accent.withValues(alpha: 0.6),
-                              accent,
-                            ],
+                            colors: [accent.withValues(alpha: 0.6), accent],
                           ),
                           borderRadius: const BorderRadius.only(
                             topRight: Radius.circular(2),
@@ -285,7 +285,10 @@ class SharedDownloadCardSurface extends StatelessWidget {
                           ? GestureDetector(
                               onTap: onToggleDeck,
                               child: Container(
-                                margin: const EdgeInsets.only(top: 6, bottom: 2),
+                                margin: const EdgeInsets.only(
+                                  top: 6,
+                                  bottom: 2,
+                                ),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                   vertical: 2,
@@ -298,7 +301,9 @@ class SharedDownloadCardSurface extends StatelessWidget {
                                       height: 3.5,
                                       decoration: BoxDecoration(
                                         color: activeIndex == 0
-                                            ? Theme.of(context).colorScheme.primary
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.primary
                                             : Colors.white24,
                                         borderRadius: BorderRadius.circular(2),
                                       ),
@@ -323,8 +328,9 @@ class SharedDownloadCardSurface extends StatelessWidget {
                               width: 34,
                               height: 4,
                               decoration: BoxDecoration(
-                                color: AppColors.textTertiary
-                                    .withValues(alpha: 0.45),
+                                color: AppColors.textTertiary.withValues(
+                                  alpha: 0.45,
+                                ),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
@@ -339,7 +345,9 @@ class SharedDownloadCardSurface extends StatelessWidget {
                     children: [
                       _Artwork(status: status, accent: accent),
                       const SizedBox(width: 12),
-                      Expanded(child: _Details(status: status, accent: accent)),
+                      Expanded(
+                        child: _Details(status: status, accent: accent),
+                      ),
                       const SizedBox(width: 4),
                       _Action(status: status, accent: accent),
                     ],

@@ -21,11 +21,11 @@ class CachedMetadata {
   }
 
   Map<String, dynamic> toJson() => {
-        'g': genre,
-        'a': albumTitle,
-        'ar': artistName,
-        't': timestamp.millisecondsSinceEpoch,
-      };
+    'g': genre,
+    'a': albumTitle,
+    'ar': artistName,
+    't': timestamp.millisecondsSinceEpoch,
+  };
 
   factory CachedMetadata.fromJson(Map<String, dynamic> json) {
     return CachedMetadata(
@@ -62,7 +62,9 @@ class MetadataCache {
         final Map<String, dynamic> decoded = json.decode(raw);
         decoded.forEach((key, value) {
           try {
-            _cache[key] = CachedMetadata.fromJson(value as Map<String, dynamic>);
+            _cache[key] = CachedMetadata.fromJson(
+              value as Map<String, dynamic>,
+            );
           } catch (_) {}
         });
       }
@@ -79,7 +81,10 @@ class MetadataCache {
       final Map<String, dynamic> encoded = {};
       _cache.forEach((key, val) {
         // Only keep non-expired entries
-        final ttl = (val.genre != null || val.albumTitle != null || val.artistName != null)
+        final ttl =
+            (val.genre != null ||
+                val.albumTitle != null ||
+                val.artistName != null)
             ? positiveTtl
             : negativeTtl;
         if (!val.isExpired(ttl)) {
@@ -97,7 +102,10 @@ class MetadataCache {
     final entry = _cache[songId];
     if (entry == null) return null;
 
-    final ttl = (entry.genre != null || entry.albumTitle != null || entry.artistName != null)
+    final ttl =
+        (entry.genre != null ||
+            entry.albumTitle != null ||
+            entry.artistName != null)
         ? positiveTtl
         : negativeTtl;
 
@@ -110,7 +118,12 @@ class MetadataCache {
   }
 
   /// Put metadata into the cache.
-  void put(String songId, {String? genre, String? albumTitle, String? artistName}) {
+  void put(
+    String songId, {
+    String? genre,
+    String? albumTitle,
+    String? artistName,
+  }) {
     _cache[songId] = CachedMetadata(
       genre: genre,
       albumTitle: albumTitle,

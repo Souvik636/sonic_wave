@@ -8,7 +8,8 @@ import '../models/song.dart';
 /// tracks, and favorite songs to score and recommend matching tracks from the
 /// available library or catalog for dynamic queue auto-injection.
 class RecommendationEngine {
-  static final RecommendationEngine _instance = RecommendationEngine._internal();
+  static final RecommendationEngine _instance =
+      RecommendationEngine._internal();
   factory RecommendationEngine() => _instance;
   RecommendationEngine._internal();
 
@@ -21,7 +22,9 @@ class RecommendationEngine {
     required List<Song> recentlyPlayed,
     int count = 4,
   }) {
-    if (librarySongs.isEmpty && favoriteSongs.isEmpty && recentlyPlayed.isEmpty) {
+    if (librarySongs.isEmpty &&
+        favoriteSongs.isEmpty &&
+        recentlyPlayed.isEmpty) {
       return [];
     }
 
@@ -62,7 +65,10 @@ class RecommendationEngine {
       final songTitleLower = song.title.trim().toLowerCase();
 
       // 1. Same Artist Boost (+40 pts)
-      if (songArtistLower == currentArtistLower && songArtistLower.isNotEmpty && songArtistLower != 'unknown artist' && songArtistLower != 'local audio') {
+      if (songArtistLower == currentArtistLower &&
+          songArtistLower.isNotEmpty &&
+          songArtistLower != 'unknown artist' &&
+          songArtistLower != 'local audio') {
         score += 40.0;
       }
 
@@ -72,15 +78,22 @@ class RecommendationEngine {
       }
 
       // 3. Title / Keyword similarity (+15 pts)
-      final currentTokens = currentTitleLower.split(RegExp(r'\s+')).where((t) => t.length > 3).toSet();
-      final songTokens = songTitleLower.split(RegExp(r'\s+')).where((t) => t.length > 3).toSet();
+      final currentTokens = currentTitleLower
+          .split(RegExp(r'\s+'))
+          .where((t) => t.length > 3)
+          .toSet();
+      final songTokens = songTitleLower
+          .split(RegExp(r'\s+'))
+          .where((t) => t.length > 3)
+          .toSet();
       final commonTokens = currentTokens.intersection(songTokens);
       if (commonTokens.isNotEmpty) {
         score += commonTokens.length * 15.0;
       }
 
       // 4. Source & Album matching (+10 pts)
-      if (song.albumFolderName != null && song.albumFolderName == currentSong.albumFolderName) {
+      if (song.albumFolderName != null &&
+          song.albumFolderName == currentSong.albumFolderName) {
         score += 15.0;
       }
       if (song.source == currentSong.source) {
@@ -96,8 +109,13 @@ class RecommendationEngine {
     // Sort descending by score
     scoredCandidates.sort((a, b) => b.score.compareTo(a.score));
 
-    final recommendations = scoredCandidates.take(count).map((item) => item.song).toList();
-    debugPrint('[RecommendationEngine] Recommended ${recommendations.length} tracks for current song "${currentSong.title}"');
+    final recommendations = scoredCandidates
+        .take(count)
+        .map((item) => item.song)
+        .toList();
+    debugPrint(
+      '[RecommendationEngine] Recommended ${recommendations.length} tracks for current song "${currentSong.title}"',
+    );
     return recommendations;
   }
 }

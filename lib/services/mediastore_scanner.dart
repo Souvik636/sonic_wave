@@ -21,8 +21,9 @@ import 'package:flutter/services.dart';
 class MediaStoreScanner {
   MediaStoreScanner._();
 
-  static const MethodChannel _channel =
-      MethodChannel('com.sonicwave.sonic_wave/media');
+  static const MethodChannel _channel = MethodChannel(
+    'com.sonicwave.sonic_wave/media',
+  );
 
   /// A scan is a courtesy, never a blocker. If the platform side is slow or
   /// silent we give up and let Android's own periodic scan catch up, rather
@@ -74,9 +75,7 @@ class MediaStoreScanner {
     if (targets.isEmpty) return;
 
     try {
-      await _channel
-          .invokeMethod<int>('scanFiles', targets)
-          .timeout(_timeout);
+      await _channel.invokeMethod<int>('scanFiles', targets).timeout(_timeout);
       debugPrint('[MediaStore] Scanned ${targets.length} file(s)');
     } on TimeoutException {
       debugPrint('[MediaStore] Scan timed out for ${targets.length} file(s)');

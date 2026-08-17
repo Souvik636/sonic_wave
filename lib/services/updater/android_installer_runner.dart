@@ -71,14 +71,16 @@ class ApkPreflight {
       versionName: map['versionName'] as String?,
       versionCode: (map['versionCode'] as num?)?.toInt() ?? -1,
       installedVersionName: map['installedVersionName'] as String?,
-      installedVersionCode: (map['installedVersionCode'] as num?)?.toInt() ?? -1,
+      installedVersionCode:
+          (map['installedVersionCode'] as num?)?.toInt() ?? -1,
       packageMatches: map['packageMatches'] as bool? ?? true,
       signatureMatches: map['signatureMatches'] as bool? ?? true,
       signaturesKnown: map['signaturesKnown'] as bool? ?? false,
       abiCompatible: map['abiCompatible'] as bool? ?? true,
       canRequestInstall: map['canRequestInstall'] as bool? ?? true,
       deviceAbis:
-          (map['deviceAbis'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+          (map['deviceAbis'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
     );
   }
 
@@ -113,7 +115,9 @@ class ApkPreflight {
 }
 
 class AndroidInstallerRunner {
-  static const MethodChannel _channel = MethodChannel('com.sonicwave.sonic_wave/installer');
+  static const MethodChannel _channel = MethodChannel(
+    'com.sonicwave.sonic_wave/installer',
+  );
 
   /// Inspect [apkFile] against the running install. Returns null off Android,
   /// or when the native side could not read the file.
@@ -126,15 +130,17 @@ class AndroidInstallerRunner {
       );
       if (raw == null) return null;
       final preflight = ApkPreflight.fromMap(raw);
-      debugPrint('[AndroidInstaller] Preflight: '
-          'parsable=${preflight.parsable} '
-          'pkg=${preflight.packageName} '
-          'v=${preflight.versionName}(${preflight.versionCode}) '
-          'installed=${preflight.installedVersionName}(${preflight.installedVersionCode}) '
-          'sigMatch=${preflight.signatureMatches} '
-          'sigKnown=${preflight.signaturesKnown} '
-          'abiOk=${preflight.abiCompatible} '
-          'canInstall=${preflight.canRequestInstall}');
+      debugPrint(
+        '[AndroidInstaller] Preflight: '
+        'parsable=${preflight.parsable} '
+        'pkg=${preflight.packageName} '
+        'v=${preflight.versionName}(${preflight.versionCode}) '
+        'installed=${preflight.installedVersionName}(${preflight.installedVersionCode}) '
+        'sigMatch=${preflight.signatureMatches} '
+        'sigKnown=${preflight.signaturesKnown} '
+        'abiOk=${preflight.abiCompatible} '
+        'canInstall=${preflight.canRequestInstall}',
+      );
       return preflight;
     } catch (e) {
       debugPrint('[AndroidInstaller] Preflight failed: $e');
@@ -170,14 +176,20 @@ class AndroidInstallerRunner {
   /// success path frequently never returns — that is expected.
   static Future<bool> installApk(File apkFile) async {
     if (!await apkFile.exists()) {
-      throw InstallerExecutionException('APK binary file not found at path: ${apkFile.path}');
+      throw InstallerExecutionException(
+        'APK binary file not found at path: ${apkFile.path}',
+      );
     }
 
-    debugPrint('[AndroidInstaller] Committing PackageInstaller session for: ${apkFile.path}');
+    debugPrint(
+      '[AndroidInstaller] Committing PackageInstaller session for: ${apkFile.path}',
+    );
 
     if (!Platform.isAndroid) {
       // Fallback simulation for non-Android / test execution
-      debugPrint('[AndroidInstaller] Mocking APK install trigger on non-Android platform.');
+      debugPrint(
+        '[AndroidInstaller] Mocking APK install trigger on non-Android platform.',
+      );
       return true;
     }
 
@@ -197,7 +209,9 @@ class AndroidInstallerRunner {
 
   /// Turn a PackageInstaller status into something a user can act on.
   static String _explain(String code, String? message) {
-    final detail = (message == null || message.trim().isEmpty) ? '' : ' ($message)';
+    final detail = (message == null || message.trim().isEmpty)
+        ? ''
+        : ' ($message)';
     switch (code) {
       case 'CONFLICT':
         return 'Android refused the update because it conflicts with the '

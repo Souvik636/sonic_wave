@@ -46,9 +46,11 @@ class DownloadProgressCardState extends State<DownloadProgressCard>
   @override
   void didUpdateWidget(DownloadProgressCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.item.status == DownloadStatus.downloading && !_pulseController.isAnimating) {
+    if (widget.item.status == DownloadStatus.downloading &&
+        !_pulseController.isAnimating) {
       _pulseController.repeat(reverse: true);
-    } else if (widget.item.status != DownloadStatus.downloading && _pulseController.isAnimating) {
+    } else if (widget.item.status != DownloadStatus.downloading &&
+        _pulseController.isAnimating) {
       _pulseController.stop();
       _pulseController.value = 1.0;
     }
@@ -70,18 +72,18 @@ class DownloadProgressCardState extends State<DownloadProgressCard>
     final statusColor = isPaused
         ? AppColors.downloadPaused
         : isRetrying
-            ? AppColors.downloadRetrying
-            : primaryColor;
+        ? AppColors.downloadRetrying
+        : primaryColor;
 
     final statusText = isPaused
         ? 'Paused'
         : isRetrying
-            ? 'Retrying (${item.retryCount}/3)...'
-            : item.progress < 0.05
-                ? 'Resolving stream...'
-                : item.progress >= 0.90 && item.progress < 1.0
-                    ? 'Processing container & tags...'
-                    : 'Downloading (${(item.progress * 100).toInt()}%)...';
+        ? 'Retrying (${item.retryCount}/3)...'
+        : item.progress < 0.05
+        ? 'Resolving stream...'
+        : item.progress >= 0.90 && item.progress < 1.0
+        ? 'Processing container & tags...'
+        : 'Downloading (${(item.progress * 100).toInt()}%)...';
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
@@ -116,7 +118,9 @@ class DownloadProgressCardState extends State<DownloadProgressCard>
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: statusColor.withValues(alpha: _pulseAnimation.value * 0.5),
+                        color: statusColor.withValues(
+                          alpha: _pulseAnimation.value * 0.5,
+                        ),
                         width: 2,
                       ),
                     ),
@@ -133,14 +137,22 @@ class DownloadProgressCardState extends State<DownloadProgressCard>
                           height: 46,
                           errorWidget: (context, url, error) => Container(
                             color: AppColors.surfaceVariant,
-                            child: const Icon(Icons.music_note_rounded, color: AppColors.textTertiary, size: 20),
+                            child: const Icon(
+                              Icons.music_note_rounded,
+                              color: AppColors.textTertiary,
+                              size: 20,
+                            ),
                           ),
                         )
                       : Container(
                           color: AppColors.surfaceVariant,
                           width: 46,
                           height: 46,
-                          child: const Icon(Icons.music_note_rounded, color: AppColors.textTertiary, size: 20),
+                          child: const Icon(
+                            Icons.music_note_rounded,
+                            color: AppColors.textTertiary,
+                            size: 20,
+                          ),
                         ),
                 ),
               ),
@@ -151,14 +163,21 @@ class DownloadProgressCardState extends State<DownloadProgressCard>
                   children: [
                     Text(
                       item.song.title,
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 3),
                     Text(
                       item.song.artist,
-                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                      style: const TextStyle(
+                        color: AppColors.textTertiary,
+                        fontSize: 11,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -170,7 +189,9 @@ class DownloadProgressCardState extends State<DownloadProgressCard>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   AnimatedControlButton(
-                    icon: isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                    icon: isPaused
+                        ? Icons.play_arrow_rounded
+                        : Icons.pause_rounded,
                     color: Colors.white,
                     bgColor: statusColor.withValues(alpha: 0.2),
                     size: 34,
@@ -188,17 +209,15 @@ class DownloadProgressCardState extends State<DownloadProgressCard>
                     color: Colors.redAccent,
                     bgColor: Colors.redAccent.withValues(alpha: 0.12),
                     size: 34,
-                    onTap: () => widget.playerProvider.cancelDownload(item.song.videoId),
+                    onTap: () =>
+                        widget.playerProvider.cancelDownload(item.song.videoId),
                   ),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 12),
-          GradientProgressBar(
-            progress: item.progress,
-            isPaused: isPaused,
-          ),
+          GradientProgressBar(progress: item.progress, isPaused: isPaused),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -206,14 +225,21 @@ class DownloadProgressCardState extends State<DownloadProgressCard>
                 duration: const Duration(milliseconds: 200),
                 child: Container(
                   key: ValueKey(statusText),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     statusText,
-                    style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -229,27 +255,45 @@ class DownloadProgressCardState extends State<DownloadProgressCard>
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.speed_rounded, size: 12, color: statusColor.withValues(alpha: 0.7)),
+                          Icon(
+                            Icons.speed_rounded,
+                            size: 12,
+                            color: statusColor.withValues(alpha: 0.7),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             item.formattedSpeed,
-                            style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ],
                       ),
                     if (item.formattedSizeProgress.isNotEmpty)
                       Text(
                         item.formattedSizeProgress,
-                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                        style: const TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 10,
+                        ),
                       ),
                     if (item.formattedEta.isNotEmpty && !isPaused)
                       Text(
                         item.formattedEta,
-                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                        style: const TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 10,
+                        ),
                       ),
                     Text(
                       '${(item.progress * 100).toInt()}%',
-                      style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -296,9 +340,10 @@ class AnimatedControlButtonState extends State<AnimatedControlButton>
       vsync: this,
       duration: const Duration(milliseconds: 100),
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.88).animate(
-      CurvedAnimation(parent: _tapController, curve: Curves.easeInOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.88,
+    ).animate(CurvedAnimation(parent: _tapController, curve: Curves.easeInOut));
   }
 
   @override
@@ -323,7 +368,11 @@ class AnimatedControlButtonState extends State<AnimatedControlButton>
             color: widget.bgColor,
             borderRadius: BorderRadius.circular(widget.size / 3),
           ),
-          child: Icon(widget.icon, color: widget.color, size: widget.size * 0.5),
+          child: Icon(
+            widget.icon,
+            color: widget.color,
+            size: widget.size * 0.5,
+          ),
         ),
       ),
     );
@@ -422,8 +471,14 @@ class GradientProgressBarState extends State<GradientProgressBar>
                             ? BoxDecoration(
                                 borderRadius: BorderRadius.circular(3),
                                 gradient: LinearGradient(
-                                  begin: Alignment(-1.0 + _shimmerController.value * 3, 0),
-                                  end: Alignment(-0.5 + _shimmerController.value * 3, 0),
+                                  begin: Alignment(
+                                    -1.0 + _shimmerController.value * 3,
+                                    0,
+                                  ),
+                                  end: Alignment(
+                                    -0.5 + _shimmerController.value * 3,
+                                    0,
+                                  ),
                                   colors: [
                                     Colors.transparent,
                                     Colors.white.withValues(alpha: 0.2),
@@ -476,12 +531,14 @@ class PulsingIconState extends State<PulsingIcon>
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
-    _scaleAnim = Tween<double>(begin: 0.92, end: 1.08).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    _opacityAnim = Tween<double>(begin: 0.25, end: 0.45).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scaleAnim = Tween<double>(
+      begin: 0.92,
+      end: 1.08,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _opacityAnim = Tween<double>(
+      begin: 0.25,
+      end: 0.45,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -542,13 +599,17 @@ class DownloadedSongTileState extends State<DownloadedSongTile>
       duration: const Duration(milliseconds: 400),
     );
     final delay = math.min(widget.index * 0.08, 0.5);
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0.15, 0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Interval(delay, math.min(delay + 0.5, 1.0), curve: Curves.easeOut),
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0.15, 0), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _slideController,
+            curve: Interval(
+              delay,
+              math.min(delay + 0.5, 1.0),
+              curve: Curves.easeOut,
+            ),
+          ),
+        );
     _slideController.forward();
     _detectDeleteType();
   }
@@ -573,7 +634,9 @@ class DownloadedSongTileState extends State<DownloadedSongTile>
     final isPermanent = _deleteType == DeleteType.permanent;
     final deleteColor = isPermanent ? Colors.redAccent : Colors.amber;
     final deleteLabel = isPermanent ? 'Delete Permanently' : 'Delete Memory';
-    final deleteIcon = isPermanent ? Icons.delete_forever_rounded : Icons.link_off_rounded;
+    final deleteIcon = isPermanent
+        ? Icons.delete_forever_rounded
+        : Icons.link_off_rounded;
 
     return SlideTransition(
       position: _slideAnimation,
@@ -597,7 +660,11 @@ class DownloadedSongTileState extends State<DownloadedSongTile>
                 const SizedBox(height: 4),
                 Text(
                   deleteLabel,
-                  style: TextStyle(color: deleteColor.withValues(alpha: 0.8), fontSize: 10, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: deleteColor.withValues(alpha: 0.8),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -617,7 +684,9 @@ class DownloadedSongTileState extends State<DownloadedSongTile>
                 content: Row(
                   children: [
                     Icon(
-                      isPermanent ? Icons.delete_forever_rounded : Icons.link_off_rounded,
+                      isPermanent
+                          ? Icons.delete_forever_rounded
+                          : Icons.link_off_rounded,
                       color: deleteColor,
                       size: 16,
                     ),
@@ -634,7 +703,9 @@ class DownloadedSongTileState extends State<DownloadedSongTile>
                 ),
                 backgroundColor: AppColors.surface,
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 duration: const Duration(seconds: 4),
                 action: !isPermanent
                     ? SnackBarAction(
@@ -653,7 +724,10 @@ class DownloadedSongTileState extends State<DownloadedSongTile>
             index: widget.index,
             sourceTag: isPermanent ? 'downloaded' : 'local',
             onTap: () {
-              widget.playerProvider.playPlaylist(widget.allDownloaded, startIndex: widget.index);
+              widget.playerProvider.playPlaylist(
+                widget.allDownloaded,
+                startIndex: widget.index,
+              );
             },
           ),
         ),
@@ -684,7 +758,10 @@ class QueuedDownloadTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceVariant.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.downloadQueued.withValues(alpha: 0.2), width: 0.5),
+        border: Border.all(
+          color: AppColors.downloadQueued.withValues(alpha: 0.2),
+          width: 0.5,
+        ),
       ),
       child: Row(
         children: [
@@ -698,7 +775,11 @@ class QueuedDownloadTile extends StatelessWidget {
             alignment: Alignment.center,
             child: Text(
               '${index + 1}',
-              style: const TextStyle(color: AppColors.downloadQueued, fontSize: 12, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: AppColors.downloadQueued,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -708,14 +789,21 @@ class QueuedDownloadTile extends StatelessWidget {
               children: [
                 Text(
                   item.song.title,
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   item.song.artist,
-                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                  style: const TextStyle(
+                    color: AppColors.textTertiary,
+                    fontSize: 11,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -730,12 +818,20 @@ class QueuedDownloadTile extends StatelessWidget {
             ),
             child: const Text(
               'Waiting',
-              style: TextStyle(color: AppColors.downloadQueued, fontSize: 10, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                color: AppColors.downloadQueued,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           const SizedBox(width: 8),
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: AppColors.textTertiary, size: 18),
+            icon: const Icon(
+              Icons.close_rounded,
+              color: AppColors.textTertiary,
+              size: 18,
+            ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             onPressed: () => playerProvider.cancelDownload(item.song.videoId),
@@ -766,11 +862,18 @@ class FailedDownloadTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.downloadFailed.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.downloadFailed.withValues(alpha: 0.25), width: 0.5),
+        border: Border.all(
+          color: AppColors.downloadFailed.withValues(alpha: 0.25),
+          width: 0.5,
+        ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.downloadFailed, size: 26),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.downloadFailed,
+            size: 26,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -778,14 +881,21 @@ class FailedDownloadTile extends StatelessWidget {
               children: [
                 Text(
                   item.song.title,
-                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 3),
                 Text(
                   'Failed after ${item.retryCount} attempt${item.retryCount > 1 ? 's' : ''}',
-                  style: const TextStyle(color: AppColors.downloadFailed, fontSize: 10),
+                  style: const TextStyle(
+                    color: AppColors.downloadFailed,
+                    fontSize: 10,
+                  ),
                 ),
               ],
             ),

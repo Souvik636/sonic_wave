@@ -13,10 +13,7 @@ import 'song_tile.dart';
 class AlbumDetailsSheet extends StatelessWidget {
   final String albumId;
 
-  const AlbumDetailsSheet({
-    super.key,
-    required this.albumId,
-  });
+  const AlbumDetailsSheet({super.key, required this.albumId});
 
   static void show(BuildContext context, String albumId) {
     showModalBottomSheet(
@@ -131,7 +128,9 @@ class AlbumDetailsSheet extends StatelessWidget {
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: primary.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(6),
@@ -161,11 +160,14 @@ class AlbumDetailsSheet extends StatelessWidget {
                       ),
                     ),
                     PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert_rounded,
-                          color: AppColors.textSecondary),
+                      icon: const Icon(
+                        Icons.more_vert_rounded,
+                        color: AppColors.textSecondary,
+                      ),
                       color: AppColors.surface,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       onSelected: (val) {
                         if (val == 'rename') {
                           _showRenameDialog(context, playerProvider, album);
@@ -180,11 +182,16 @@ class AlbumDetailsSheet extends StatelessWidget {
                           value: 'rename',
                           child: Row(
                             children: [
-                              Icon(Icons.edit_rounded,
-                                  color: Colors.white, size: 18),
+                              Icon(
+                                Icons.edit_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
                               SizedBox(width: 10),
-                              Text('Rename Album',
-                                  style: TextStyle(color: Colors.white)),
+                              Text(
+                                'Rename Album',
+                                style: TextStyle(color: Colors.white),
+                              ),
                             ],
                           ),
                         ),
@@ -192,11 +199,16 @@ class AlbumDetailsSheet extends StatelessWidget {
                           value: 'add',
                           child: Row(
                             children: [
-                              Icon(Icons.add_rounded,
-                                  color: Colors.white, size: 18),
+                              Icon(
+                                Icons.add_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
                               SizedBox(width: 10),
-                              Text('Add Songs',
-                                  style: TextStyle(color: Colors.white)),
+                              Text(
+                                'Add Songs',
+                                style: TextStyle(color: Colors.white),
+                              ),
                             ],
                           ),
                         ),
@@ -204,19 +216,26 @@ class AlbumDetailsSheet extends StatelessWidget {
                           value: 'delete',
                           child: Row(
                             children: [
-                              Icon(Icons.delete_forever_rounded,
-                                  color: Colors.redAccent, size: 18),
+                              Icon(
+                                Icons.delete_forever_rounded,
+                                color: Colors.redAccent,
+                                size: 18,
+                              ),
                               SizedBox(width: 10),
-                              Text('Delete Album',
-                                  style: TextStyle(color: Colors.redAccent)),
+                              Text(
+                                'Delete Album',
+                                style: TextStyle(color: Colors.redAccent),
+                              ),
                             ],
                           ),
                         ),
                       ],
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded,
-                          color: AppColors.textSecondary),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.textSecondary,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -231,11 +250,15 @@ class AlbumDetailsSheet extends StatelessWidget {
                         onPressed: album.songs.isEmpty
                             ? null
                             : () {
-                                playerProvider.playPlaylist(album.songs,
-                                    startIndex: 0);
+                                playerProvider.playPlaylist(
+                                  album.songs,
+                                  startIndex: 0,
+                                );
                                 AppToast.show(
-                                    context, 'Playing "${album.name}"',
-                                    type: ToastType.success);
+                                  context,
+                                  'Playing "${album.name}"',
+                                  type: ToastType.success,
+                                );
                               },
                         icon: const Icon(Icons.play_arrow_rounded, size: 18),
                         label: const Text('Play All'),
@@ -244,7 +267,8 @@ class AlbumDetailsSheet extends StatelessWidget {
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -259,10 +283,12 @@ class AlbumDetailsSheet extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: BorderSide(
-                              color: primary.withValues(alpha: 0.6)),
+                            color: primary.withValues(alpha: 0.6),
+                          ),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -306,7 +332,8 @@ class AlbumDetailsSheet extends StatelessWidget {
                             backgroundColor: primary,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                         ),
                       ],
@@ -314,7 +341,9 @@ class AlbumDetailsSheet extends StatelessWidget {
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     itemCount: album.songs.length,
                     itemBuilder: (context, index) {
                       final song = album.songs[index];
@@ -328,31 +357,48 @@ class AlbumDetailsSheet extends StatelessWidget {
                             color: Colors.redAccent.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.delete_outline_rounded,
-                              color: Colors.redAccent),
+                          child: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: Colors.redAccent,
+                          ),
                         ),
                         onDismissed: (_) {
                           playerProvider.removeSongFromAlbum(
-                              album.id, song.videoId);
-                          AppToast.show(context, 'Removed from album',
-                              type: ToastType.info);
+                            album.id,
+                            song.videoId,
+                          );
+                          AppToast.show(
+                            context,
+                            'Removed from album',
+                            type: ToastType.info,
+                          );
                         },
                         child: SongTile(
                           song: song,
                           index: index,
                           sourceTag: 'album',
                           onTap: () {
-                            playerProvider.playPlaylist(album.songs,
-                                startIndex: index);
+                            playerProvider.playPlaylist(
+                              album.songs,
+                              startIndex: index,
+                            );
                           },
                           trailing: IconButton(
-                            icon: const Icon(Icons.remove_circle_outline_rounded,
-                                color: AppColors.textTertiary, size: 20),
+                            icon: const Icon(
+                              Icons.remove_circle_outline_rounded,
+                              color: AppColors.textTertiary,
+                              size: 20,
+                            ),
                             onPressed: () {
                               playerProvider.removeSongFromAlbum(
-                                  album.id, song.videoId);
-                              AppToast.show(context, 'Removed "${song.title}"',
-                                  type: ToastType.info);
+                                album.id,
+                                song.videoId,
+                              );
+                              AppToast.show(
+                                context,
+                                'Removed "${song.title}"',
+                                type: ToastType.info,
+                              );
                             },
                           ),
                         ),
@@ -366,7 +412,10 @@ class AlbumDetailsSheet extends StatelessWidget {
   }
 
   void _showBulkSongPicker(
-      BuildContext context, PlayerProvider playerProvider, UserAlbum album) {
+    BuildContext context,
+    PlayerProvider playerProvider,
+    UserAlbum album,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -376,35 +425,45 @@ class AlbumDetailsSheet extends StatelessWidget {
   }
 
   void _showRenameDialog(
-      BuildContext context, PlayerProvider playerProvider, UserAlbum album) {
+    BuildContext context,
+    PlayerProvider playerProvider,
+    UserAlbum album,
+  ) {
     final controller = TextEditingController(text: album.name);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Rename Album',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Rename Album',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
             hintText: 'New album name...',
-            hintStyle:
-                const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            hintStyle: const TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 12,
+            ),
             filled: true,
             fillColor: AppColors.surfaceVariant.withValues(alpha: 0.5),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -413,8 +472,11 @@ class AlbumDetailsSheet extends StatelessWidget {
                 Navigator.pop(ctx);
                 await playerProvider.renameAlbum(album.id, newName);
                 if (context.mounted) {
-                  AppToast.show(context, 'Renamed album to "$newName"',
-                      type: ToastType.success);
+                  AppToast.show(
+                    context,
+                    'Renamed album to "$newName"',
+                    type: ToastType.success,
+                  );
                 }
               }
             },
@@ -422,7 +484,8 @@ class AlbumDetailsSheet extends StatelessWidget {
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Save'),
           ),
@@ -432,14 +495,22 @@ class AlbumDetailsSheet extends StatelessWidget {
   }
 
   void _showDeleteDialog(
-      BuildContext context, PlayerProvider playerProvider, UserAlbum album) {
+    BuildContext context,
+    PlayerProvider playerProvider,
+    UserAlbum album,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Delete "${album.name}"?',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          'Delete "${album.name}"?',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: Text(
           album.isFolderBased
               ? 'This physical album folder and its index will be deleted. Audio files can be moved to recovery backup.'
@@ -449,25 +520,33 @@ class AlbumDetailsSheet extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx); // Close dialog
               Navigator.pop(context); // Close sheet
-              await playerProvider.deleteAlbumWithProtection(album.id,
-                  moveToRecovery: true);
+              await playerProvider.deleteAlbumWithProtection(
+                album.id,
+                moveToRecovery: true,
+              );
               if (context.mounted) {
-                AppToast.show(context, 'Deleted album "${album.name}"',
-                    type: ToastType.warning);
+                AppToast.show(
+                  context,
+                  'Deleted album "${album.name}"',
+                  type: ToastType.warning,
+                );
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.redAccent,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Delete Album'),
           ),
@@ -518,13 +597,16 @@ class _BulkSongPickerModalState extends State<_BulkSongPickerModal> {
     List<Song> filtered = allAvailable;
     if (_query.isNotEmpty) {
       filtered = allAvailable
-          .where((s) =>
-              s.title.toLowerCase().contains(_query) ||
-              s.artist.toLowerCase().contains(_query))
+          .where(
+            (s) =>
+                s.title.toLowerCase().contains(_query) ||
+                s.artist.toLowerCase().contains(_query),
+          )
           .toList();
     }
 
-    final newlySelectedCount = _selectedVideoIds.length - widget.album.songs.length;
+    final newlySelectedCount =
+        _selectedVideoIds.length - widget.album.songs.length;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.8,
@@ -567,7 +649,8 @@ class _BulkSongPickerModalState extends State<_BulkSongPickerModal> {
                             _selectedVideoIds.clear();
                           } else {
                             _selectedVideoIds.addAll(
-                                allAvailable.map((s) => s.videoId));
+                              allAvailable.map((s) => s.videoId),
+                            );
                           }
                         });
                       },
@@ -589,13 +672,20 @@ class _BulkSongPickerModalState extends State<_BulkSongPickerModal> {
                   decoration: InputDecoration(
                     hintText: 'Search songs to add...',
                     hintStyle: const TextStyle(
-                        color: AppColors.textTertiary, fontSize: 12),
-                    prefixIcon: const Icon(Icons.search_rounded,
-                        color: AppColors.textTertiary, size: 18),
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: AppColors.textTertiary,
+                      size: 18,
+                    ),
                     filled: true,
                     fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -621,7 +711,8 @@ class _BulkSongPickerModalState extends State<_BulkSongPickerModal> {
                   value: isSelected,
                   activeColor: primary,
                   checkboxShape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                   onChanged: (val) {
                     setState(() {
                       if (val == true) {
@@ -634,16 +725,19 @@ class _BulkSongPickerModalState extends State<_BulkSongPickerModal> {
                   title: Text(
                     song.title,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600),
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Text(
                     '${song.artist} • ${song.formattedDuration}',
                     style: const TextStyle(
-                        color: AppColors.textTertiary, fontSize: 11),
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -663,7 +757,9 @@ class _BulkSongPickerModalState extends State<_BulkSongPickerModal> {
                       .where((s) => _selectedVideoIds.contains(s.videoId))
                       .toList();
                   await playerProvider.addSongsToAlbum(
-                      widget.album.id, selectedSongs);
+                    widget.album.id,
+                    selectedSongs,
+                  );
                   if (context.mounted) {
                     Navigator.pop(context);
                     AppToast.show(
@@ -680,14 +776,17 @@ class _BulkSongPickerModalState extends State<_BulkSongPickerModal> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 child: Text(
                   newlySelectedCount > 0
                       ? 'Add $newlySelectedCount Selected Song(s)'
                       : 'Save Album Tracklist',
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),

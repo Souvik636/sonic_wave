@@ -26,16 +26,21 @@ class DownloadsHub extends StatelessWidget {
         final isOffline = homeProvider.isOffline;
 
         final downloadingItems = activeItems
-            .where((i) =>
-                i.status == DownloadStatus.downloading ||
-                i.status == DownloadStatus.retrying)
+            .where(
+              (i) =>
+                  i.status == DownloadStatus.downloading ||
+                  i.status == DownloadStatus.retrying,
+            )
             .toList();
-        final pausedItems =
-            activeItems.where((i) => i.status == DownloadStatus.paused).toList();
-        final queuedItems =
-            activeItems.where((i) => i.status == DownloadStatus.queued).toList();
-        final failedItems =
-            activeItems.where((i) => i.status == DownloadStatus.failed).toList();
+        final pausedItems = activeItems
+            .where((i) => i.status == DownloadStatus.paused)
+            .toList();
+        final queuedItems = activeItems
+            .where((i) => i.status == DownloadStatus.queued)
+            .toList();
+        final failedItems = activeItems
+            .where((i) => i.status == DownloadStatus.failed)
+            .toList();
         final hasActiveDownloads = activeItems.isNotEmpty;
         final activeCount = downloadingItems.length + pausedItems.length;
 
@@ -66,22 +71,19 @@ class DownloadsHub extends StatelessWidget {
                 ),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final item = index < downloadingItems.length
-                        ? downloadingItems[index]
-                        : pausedItems[index - downloadingItems.length];
-                    return StaggeredReveal(
-                      key: ValueKey('dl_${item.song.videoId}'),
-                      index: index,
-                      child: DownloadProgressCard(
-                        item: item,
-                        playerProvider: playerProvider,
-                      ),
-                    );
-                  },
-                  childCount: activeCount,
-                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final item = index < downloadingItems.length
+                      ? downloadingItems[index]
+                      : pausedItems[index - downloadingItems.length];
+                  return StaggeredReveal(
+                    key: ValueKey('dl_${item.song.videoId}'),
+                    index: index,
+                    child: DownloadProgressCard(
+                      item: item,
+                      playerProvider: playerProvider,
+                    ),
+                  );
+                }, childCount: activeCount),
               ),
             ],
 
@@ -95,21 +97,18 @@ class DownloadsHub extends StatelessWidget {
                 ),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final item = queuedItems[index];
-                    return StaggeredReveal(
-                      key: ValueKey('q_${item.song.videoId}'),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final item = queuedItems[index];
+                  return StaggeredReveal(
+                    key: ValueKey('q_${item.song.videoId}'),
+                    index: index,
+                    child: QueuedDownloadTile(
+                      item: item,
                       index: index,
-                      child: QueuedDownloadTile(
-                        item: item,
-                        index: index,
-                        playerProvider: playerProvider,
-                      ),
-                    );
-                  },
-                  childCount: queuedItems.length,
-                ),
+                      playerProvider: playerProvider,
+                    ),
+                  );
+                }, childCount: queuedItems.length),
               ),
             ],
 
@@ -123,20 +122,17 @@ class DownloadsHub extends StatelessWidget {
                 ),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final item = failedItems[index];
-                    return StaggeredReveal(
-                      key: ValueKey('f_${item.song.videoId}'),
-                      index: index,
-                      child: FailedDownloadTile(
-                        item: item,
-                        playerProvider: playerProvider,
-                      ),
-                    );
-                  },
-                  childCount: failedItems.length,
-                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final item = failedItems[index];
+                  return StaggeredReveal(
+                    key: ValueKey('f_${item.song.videoId}'),
+                    index: index,
+                    child: FailedDownloadTile(
+                      item: item,
+                      playerProvider: playerProvider,
+                    ),
+                  );
+                }, childCount: failedItems.length),
               ),
             ],
 
@@ -159,21 +155,18 @@ class DownloadsHub extends StatelessWidget {
                 ),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    return StaggeredReveal(
-                      key: ValueKey('d_${downloaded[index].videoId}'),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  return StaggeredReveal(
+                    key: ValueKey('d_${downloaded[index].videoId}'),
+                    index: index,
+                    child: DownloadedSongTile(
+                      song: downloaded[index],
                       index: index,
-                      child: DownloadedSongTile(
-                        song: downloaded[index],
-                        index: index,
-                        playerProvider: playerProvider,
-                        allDownloaded: downloaded,
-                      ),
-                    );
-                  },
-                  childCount: downloaded.length,
-                ),
+                      playerProvider: playerProvider,
+                      allDownloaded: downloaded,
+                    ),
+                  );
+                }, childCount: downloaded.length),
               ),
             ],
             const SliverToBoxAdapter(child: SizedBox(height: 140)),
@@ -318,8 +311,10 @@ class _StatsHeader extends StatelessWidget {
               onConfirm();
               Navigator.pop(ctx);
             },
-            child: Text(confirmLabel,
-                style: const TextStyle(color: Colors.redAccent)),
+            child: Text(
+              confirmLabel,
+              style: const TextStyle(color: Colors.redAccent),
+            ),
           ),
         ],
       ),
@@ -577,8 +572,10 @@ class _OfflineBanner extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.amber.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border:
-              Border.all(color: Colors.amber.withValues(alpha: 0.3), width: 0.5),
+          border: Border.all(
+            color: Colors.amber.withValues(alpha: 0.3),
+            width: 0.5,
+          ),
         ),
         child: const Row(
           children: [

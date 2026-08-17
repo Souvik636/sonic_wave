@@ -66,7 +66,9 @@ class SearchProvider extends ChangeNotifier {
   void addToRecentSearches(String query) {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return;
-    _recentSearches.removeWhere((item) => item.toLowerCase() == trimmed.toLowerCase());
+    _recentSearches.removeWhere(
+      (item) => item.toLowerCase() == trimmed.toLowerCase(),
+    );
     _recentSearches.insert(0, trimmed);
     if (_recentSearches.length > 5) {
       _recentSearches = _recentSearches.sublist(0, 5);
@@ -77,7 +79,9 @@ class SearchProvider extends ChangeNotifier {
 
   /// Remove a single item from recent searches
   void removeFromRecentSearches(String query) {
-    _recentSearches.removeWhere((item) => item.toLowerCase() == query.toLowerCase());
+    _recentSearches.removeWhere(
+      (item) => item.toLowerCase() == query.toLowerCase(),
+    );
     _saveRecentSearches();
     notifyListeners();
   }
@@ -90,7 +94,11 @@ class SearchProvider extends ChangeNotifier {
   }
 
   /// Update query and trigger debounced suggestions
-  void updateQuery(String query, {bool offlineOnly = false, List<Song> downloadedSongs = const []}) {
+  void updateQuery(
+    String query, {
+    bool offlineOnly = false,
+    List<Song> downloadedSongs = const [],
+  }) {
     _query = query;
     _error = null;
 
@@ -111,7 +119,11 @@ class SearchProvider extends ChangeNotifier {
   }
 
   /// Execute search
-  Future<void> search({String? searchQuery, bool offlineOnly = false, List<Song> downloadedSongs = const []}) async {
+  Future<void> search({
+    String? searchQuery,
+    bool offlineOnly = false,
+    List<Song> downloadedSongs = const [],
+  }) async {
     final q = searchQuery ?? _query;
     if (q.isEmpty) return;
 
@@ -127,7 +139,7 @@ class SearchProvider extends ChangeNotifier {
         final queryLower = q.toLowerCase();
         _results = downloadedSongs.where((song) {
           return song.title.toLowerCase().contains(queryLower) ||
-                 song.artist.toLowerCase().contains(queryLower);
+              song.artist.toLowerCase().contains(queryLower);
         }).toList();
       } else {
         // Check cache first for instant results
@@ -140,22 +152,40 @@ class SearchProvider extends ChangeNotifier {
           return;
         }
 
-        DiagnosticLogService().log(DiagnosticLogService.searchStart, {'query': q});
-
-        final ytFuture = NetworkResilienceService().runWithAutoHeal(
-          () => _youtubeService.searchSongs(q).timeout(const Duration(seconds: 8)),
-          name: 'youtube_search',
-          maxAttempts: 3,
-        ).catchError((e) {
-          DiagnosticLogService().log(DiagnosticLogService.searchError, {'query': q, 'source': 'youtube', 'error': e.toString()});
-          return <Song>[];
+        DiagnosticLogService().log(DiagnosticLogService.searchStart, {
+          'query': q,
         });
+
+        final ytFuture = NetworkResilienceService()
+            .runWithAutoHeal(
+              () => _youtubeService
+                  .searchSongs(q)
+                  .timeout(const Duration(seconds: 8)),
+              name: 'youtube_search',
+              maxAttempts: 3,
+            )
+            .catchError((e) {
+              DiagnosticLogService().log(DiagnosticLogService.searchError, {
+                'query': q,
+                'source': 'youtube',
+                'error': e.toString(),
+              });
+              return <Song>[];
+            });
         final archiveFuture = _archiveOrgService.searchSongs(q).catchError((e) {
-          DiagnosticLogService().log(DiagnosticLogService.searchError, {'query': q, 'source': 'archive', 'error': e.toString()});
+          DiagnosticLogService().log(DiagnosticLogService.searchError, {
+            'query': q,
+            'source': 'archive',
+            'error': e.toString(),
+          });
           return <Song>[];
         });
         final jioFuture = _jioSaavnService.searchSongs(q).catchError((e) {
-          DiagnosticLogService().log(DiagnosticLogService.searchError, {'query': q, 'source': 'jiosaavn', 'error': e.toString()});
+          DiagnosticLogService().log(DiagnosticLogService.searchError, {
+            'query': q,
+            'source': 'jiosaavn',
+            'error': e.toString(),
+          });
           return <Song>[];
         });
 
@@ -167,9 +197,13 @@ class SearchProvider extends ChangeNotifier {
         final ytResults = searchResults[0];
         final archiveResults = searchResults[1];
         final jioResults = searchResults[2];
-        
-        final ytWithQuery = ytResults.map((s) => s.copyWith(searchQuery: q)).toList();
-        final jioWithQuery = jioResults.map((s) => s.copyWith(searchQuery: q)).toList();
+
+        final ytWithQuery = ytResults
+            .map((s) => s.copyWith(searchQuery: q))
+            .toList();
+        final jioWithQuery = jioResults
+            .map((s) => s.copyWith(searchQuery: q))
+            .toList();
         _results = [...jioWithQuery, ...ytWithQuery, ...archiveResults];
 
         DiagnosticLogService().log(DiagnosticLogService.searchResult, {
@@ -186,7 +220,10 @@ class SearchProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      DiagnosticLogService().log(DiagnosticLogService.searchError, {'query': q, 'error': e.toString()});
+      DiagnosticLogService().log(DiagnosticLogService.searchError, {
+        'query': q,
+        'error': e.toString(),
+      });
       _error = 'Failed to search. Please try again.';
       _isLoading = false;
       notifyListeners();
@@ -194,7 +231,11 @@ class SearchProvider extends ChangeNotifier {
   }
 
   /// Fetch search suggestions
-  Future<void> _fetchSuggestions(String query, bool offlineOnly, List<Song> downloadedSongs) async {
+  Future<void> _fetchSuggestions(
+    String query,
+    bool offlineOnly,
+    List<Song> downloadedSongs,
+  ) async {
     if (query.length < 2) return;
 
     _isLoadingSuggestions = true;

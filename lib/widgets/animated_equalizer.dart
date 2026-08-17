@@ -36,8 +36,10 @@ class _AnimatedEqualizerState extends State<AnimatedEqualizer>
   @override
   void initState() {
     super.initState();
-    final speed =
-        Provider.of<SettingsProvider>(context, listen: false).visualizerSpeed;
+    final speed = Provider.of<SettingsProvider>(
+      context,
+      listen: false,
+    ).visualizerSpeed;
     // One continuous driver — its phase is the shared clock for every bar.
     _controller = AnimationController(
       vsync: this,

@@ -39,10 +39,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
   }
 
   Future<void> _loadAll() async {
-    await Future.wait([
-      _loadAudius(),
-      _loadJamendo(),
-    ]);
+    await Future.wait([_loadAudius(), _loadJamendo()]);
   }
 
   Future<void> _loadAudius() async {
@@ -88,9 +85,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
         physics: const BouncingScrollPhysics(),
         slivers: [
           // Header Hero Banner
-          SliverToBoxAdapter(
-            child: _buildHeroBanner(context, playerProvider),
-          ),
+          SliverToBoxAdapter(child: _buildHeroBanner(context, playerProvider)),
 
           // Sub-Category Filter Chips Bar
           SliverToBoxAdapter(
@@ -112,12 +107,19 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
-                          color: isSelected ? primaryColor : AppColors.surfaceVariant.withValues(alpha: 0.5),
+                          color: isSelected
+                              ? primaryColor
+                              : AppColors.surfaceVariant.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: isSelected ? primaryColor : AppColors.glassBorder,
+                            color: isSelected
+                                ? primaryColor
+                                : AppColors.glassBorder,
                             width: 1,
                           ),
                           boxShadow: isSelected
@@ -133,9 +135,13 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                         child: Text(
                           cat,
                           style: GoogleFonts.inter(
-                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.textSecondary,
                             fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
                           ),
                         ),
                       ),
@@ -169,9 +175,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             ),
           ],
 
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 140),
-          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 140)),
         ],
       ),
     );
@@ -211,11 +215,17 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: primary.withValues(alpha: 0.4), width: 1),
+                  border: Border.all(
+                    color: primary.withValues(alpha: 0.4),
+                    width: 1,
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -235,7 +245,11 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 ),
               ),
 
-              Icon(Icons.local_fire_department_rounded, color: Colors.amberAccent, size: 22),
+              Icon(
+                Icons.local_fire_department_rounded,
+                color: Colors.amberAccent,
+                size: 22,
+              ),
             ],
           ),
 
@@ -266,10 +280,16 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
             children: [
               ElevatedButton.icon(
                 onPressed: () {
-                  final playlist = _activeCategory == 'Jamendo Popular' ? _jamendoTracks : _audiusTracks;
+                  final playlist = _activeCategory == 'Jamendo Popular'
+                      ? _jamendoTracks
+                      : _audiusTracks;
                   if (playlist.isNotEmpty) {
                     playerProvider.playPlaylist(playlist, startIndex: 0);
-                    AppToast.show(context, 'Playing Discovery Trending', type: ToastType.info);
+                    AppToast.show(
+                      context,
+                      'Playing Discovery Trending',
+                      type: ToastType.info,
+                    );
                   }
                 },
                 icon: const Icon(Icons.play_arrow_rounded, size: 20),
@@ -277,8 +297,13 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   elevation: 4,
                 ),
               ),
@@ -289,9 +314,17 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 label: const Text('Refresh'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.3), width: 1),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  side: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
               ),
             ],
@@ -301,7 +334,10 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     );
   }
 
-  Widget _buildFavoritesList(BuildContext context, PlayerProvider playerProvider) {
+  Widget _buildFavoritesList(
+    BuildContext context,
+    PlayerProvider playerProvider,
+  ) {
     final favorites = playerProvider.favorites;
 
     if (favorites.isEmpty) {
@@ -310,16 +346,27 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           padding: const EdgeInsets.all(40),
           child: Column(
             children: [
-              Icon(Icons.favorite_outline_rounded, size: 60, color: AppColors.textTertiary.withValues(alpha: 0.4)),
+              Icon(
+                Icons.favorite_outline_rounded,
+                size: 60,
+                color: AppColors.textTertiary.withValues(alpha: 0.4),
+              ),
               const SizedBox(height: 16),
               Text(
                 'No Favorites Saved Yet',
-                style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
                 'Tap the heart icon on any song to save it to your favorites list.',
-                style: GoogleFonts.inter(color: AppColors.textTertiary, fontSize: 13),
+                style: GoogleFonts.inter(
+                  color: AppColors.textTertiary,
+                  fontSize: 13,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -329,25 +376,22 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     }
 
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final song = favorites[index];
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: StaggeredReveal(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final song = favorites[index];
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: StaggeredReveal(
+            index: index,
+            child: SongTile(
+              song: song,
               index: index,
-              child: SongTile(
-                song: song,
-                index: index,
-                onTap: () {
-                  playerProvider.playPlaylist(favorites, startIndex: index);
-                },
-              ),
+              onTap: () {
+                playerProvider.playPlaylist(favorites, startIndex: index);
+              },
             ),
-          );
-        },
-        childCount: favorites.length,
-      ),
+          ),
+        );
+      }, childCount: favorites.length),
     );
   }
 
@@ -374,11 +418,18 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
           padding: const EdgeInsets.all(40),
           child: Column(
             children: [
-              Icon(Icons.music_off_rounded, size: 54, color: AppColors.textTertiary.withValues(alpha: 0.4)),
+              Icon(
+                Icons.music_off_rounded,
+                size: 54,
+                color: AppColors.textTertiary.withValues(alpha: 0.4),
+              ),
               const SizedBox(height: 16),
               Text(
                 emptyMessage,
-                style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
+                style: GoogleFonts.inter(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 14),
@@ -393,26 +444,26 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     }
 
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          final song = songs[index];
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: StaggeredReveal(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final song = songs[index];
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: StaggeredReveal(
+            index: index,
+            child: SongTile(
+              song: song,
               index: index,
-              child: SongTile(
-                song: song,
-                index: index,
-                sourceTag: sourceTag,
-                onTap: () {
-                  context.read<PlayerProvider>().playPlaylist(songs, startIndex: index);
-                },
-              ),
+              sourceTag: sourceTag,
+              onTap: () {
+                context.read<PlayerProvider>().playPlaylist(
+                  songs,
+                  startIndex: index,
+                );
+              },
             ),
-          );
-        },
-        childCount: songs.length,
-      ),
+          ),
+        );
+      }, childCount: songs.length),
     );
   }
 }

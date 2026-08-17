@@ -33,7 +33,8 @@ class GitHubReleaseClient implements UpdateClient {
     required this.currentVersion,
   });
 
-  String get _latestReleaseApiUrl => 'https://api.github.com/repos/$owner/$repo/releases/latest';
+  String get _latestReleaseApiUrl =>
+      'https://api.github.com/repos/$owner/$repo/releases/latest';
 
   // ─── SharedPreferences keys for auto-check throttling ──────────────
   static const _keyLastCheckMs = 'updater_last_check_ms';
@@ -68,7 +69,8 @@ class GitHubReleaseClient implements UpdateClient {
       final releaseJson = prefs.getString(_keyCachedRelease);
       if (releaseJson != null) {
         _cachedRelease = AppRelease.fromJson(
-            json.decode(releaseJson) as Map<String, dynamic>);
+          json.decode(releaseJson) as Map<String, dynamic>,
+        );
       }
     } catch (e) {
       debugPrint('[GitHubUpdater] Failed to load persisted ETag: $e');
@@ -76,7 +78,10 @@ class GitHubReleaseClient implements UpdateClient {
   }
 
   /// Persist ETag and release data to disk.
-  Future<void> _persistETag(String etag, Map<String, dynamic> releaseData) async {
+  Future<void> _persistETag(
+    String etag,
+    Map<String, dynamic> releaseData,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyETag, etag);
@@ -106,19 +111,26 @@ class GitHubReleaseClient implements UpdateClient {
           request.headers.set('If-None-Match', _cachedETag!);
         }
 
-        final response = await request.close().timeout(const Duration(seconds: 12));
+        final response = await request.close().timeout(
+          const Duration(seconds: 12),
+        );
 
         if (response.statusCode == 403 || response.statusCode == 429) {
           await response.drain<void>();
-          throw const GitHubRateLimitException('GitHub API rate limit exceeded. Please try again later.');
+          throw const GitHubRateLimitException(
+            'GitHub API rate limit exceeded. Please try again later.',
+          );
         }
 
         // 304 Not Modified — release unchanged since last check.
         // Use cached release data without burning a rate-limit token.
         if (response.statusCode == 304) {
           await response.drain<void>();
-          debugPrint('[GitHubUpdater] 304 Not Modified — using cached release data');
-          if (_cachedRelease != null && _isNewerVersion(currentVersion, _cachedRelease!.tag)) {
+          debugPrint(
+            '[GitHubUpdater] 304 Not Modified — using cached release data',
+          );
+          if (_cachedRelease != null &&
+              _isNewerVersion(currentVersion, _cachedRelease!.tag)) {
             await _recordCheck(updateAvailable: true);
             return _cachedRelease;
           }
@@ -129,7 +141,9 @@ class GitHubReleaseClient implements UpdateClient {
         if (response.statusCode == 404) {
           await response.drain<void>();
           debugPrint('[GitHubUpdater] Repository not found: $owner/$repo');
-          throw Exception('Repository $owner/$repo not found on GitHub. Check your internet connection.');
+          throw Exception(
+            'Repository $owner/$repo not found on GitHub. Check your internet connection.',
+          );
         }
 
         if (response.statusCode == 200) {
@@ -147,11 +161,15 @@ class GitHubReleaseClient implements UpdateClient {
           }
 
           if (_isNewerVersion(currentVersion, release.tag)) {
-            debugPrint('[GitHubUpdater] Found newer Android 64-Bit release: ${release.tag} (Installed: $currentVersion)');
+            debugPrint(
+              '[GitHubUpdater] Found newer Android 64-Bit release: ${release.tag} (Installed: $currentVersion)',
+            );
             await _recordCheck(updateAvailable: true);
             return release;
           } else {
-            debugPrint('[GitHubUpdater] App is up to date (Installed: $currentVersion | Remote: ${release.tag})');
+            debugPrint(
+              '[GitHubUpdater] App is up to date (Installed: $currentVersion | Remote: ${release.tag})',
+            );
             await _recordCheck(updateAvailable: false);
             return null;
           }
@@ -159,7 +177,9 @@ class GitHubReleaseClient implements UpdateClient {
 
         // Unexpected status — drain and retry.
         await response.drain<void>();
-        debugPrint('[GitHubUpdater] Unexpected HTTP ${response.statusCode}, attempt ${attempt + 1}');
+        debugPrint(
+          '[GitHubUpdater] Unexpected HTTP ${response.statusCode}, attempt ${attempt + 1}',
+        );
       } on GitHubRateLimitException {
         rethrow;
       } catch (e) {
@@ -175,7 +195,10 @@ class GitHubReleaseClient implements UpdateClient {
   }
 
   @override
-  Stream<UpdateProgress> downloadAsset(ReleaseAsset asset, File destinationFile) async* {
+  Stream<UpdateProgress> downloadAsset(
+    ReleaseAsset asset,
+    File destinationFile,
+  ) async* {
     final client = HttpClient();
     try {
       // ── Resume support ─────────────────────────────────────────────
@@ -190,7 +213,9 @@ class GitHubReleaseClient implements UpdateClient {
         // If it's the same size or larger, start fresh (it may be corrupt).
         if (existingBytes > 0 && existingBytes < asset.size) {
           writeMode = FileMode.append;
-          debugPrint('[GitHubUpdater] Resuming download from byte $existingBytes');
+          debugPrint(
+            '[GitHubUpdater] Resuming download from byte $existingBytes',
+          );
         } else {
           existingBytes = 0;
         }
@@ -206,7 +231,9 @@ class GitHubReleaseClient implements UpdateClient {
 
       // 206 Partial Content = resume accepted, 200 = server ignored Range.
       if (response.statusCode != 200 && response.statusCode != 206) {
-        throw HttpException('Failed to download asset: HTTP ${response.statusCode}');
+        throw HttpException(
+          'Failed to download asset: HTTP ${response.statusCode}',
+        );
       }
 
       // If the server returned 200 instead of 206, it doesn't support Range
@@ -214,11 +241,16 @@ class GitHubReleaseClient implements UpdateClient {
       if (response.statusCode == 200 && existingBytes > 0) {
         existingBytes = 0;
         writeMode = FileMode.write;
-        debugPrint('[GitHubUpdater] Server does not support Range; restarting download');
+        debugPrint(
+          '[GitHubUpdater] Server does not support Range; restarting download',
+        );
       }
 
-      final totalBytes = existingBytes +
-          (response.contentLength > 0 ? response.contentLength : (asset.size - existingBytes));
+      final totalBytes =
+          existingBytes +
+          (response.contentLength > 0
+              ? response.contentLength
+              : (asset.size - existingBytes));
       final sink = destinationFile.openWrite(mode: writeMode);
       int downloadedBytes = existingBytes;
       final startTime = DateTime.now();
@@ -241,7 +273,8 @@ class GitHubReleaseClient implements UpdateClient {
           final now = DateTime.now().millisecondsSinceEpoch;
           if (now - lastReportTime >= 100 || downloadedBytes == totalBytes) {
             lastReportTime = now;
-            final elapsedSecs = (now - startTime.millisecondsSinceEpoch) / 1000.0;
+            final elapsedSecs =
+                (now - startTime.millisecondsSinceEpoch) / 1000.0;
             // Speed is calculated on newly downloaded bytes only (not resumed).
             final newBytes = downloadedBytes - existingBytes;
             final speedBps = elapsedSecs > 0 ? (newBytes / elapsedSecs) : 0.0;
@@ -280,9 +313,14 @@ class GitHubReleaseClient implements UpdateClient {
       '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 
   @override
-  Future<bool> verifyChecksum(ReleaseAsset? checksumAsset, File downloadedFile) async {
+  Future<bool> verifyChecksum(
+    ReleaseAsset? checksumAsset,
+    File downloadedFile,
+  ) async {
     if (checksumAsset == null) {
-      debugPrint('[GitHubUpdater] No .sha256 checksum asset provided in release. Skipping hash verification.');
+      debugPrint(
+        '[GitHubUpdater] No .sha256 checksum asset provided in release. Skipping hash verification.',
+      );
       // Return false to indicate verification was SKIPPED, not that the file
       // is verified. The caller (UpdateDialog) uses this to show a warning.
       return false;
@@ -315,11 +353,23 @@ class GitHubReleaseClient implements UpdateClient {
   /// Semantic versioning (SemVer) comparison helper.
   static bool _isNewerVersion(String installedVersion, String remoteTag) {
     try {
-      final cleanInstalled = installedVersion.replaceAll(RegExp(r'^[vV]'), '').split('+').first;
-      final cleanRemote = remoteTag.replaceAll(RegExp(r'^[vV]'), '').split('+').first;
+      final cleanInstalled = installedVersion
+          .replaceAll(RegExp(r'^[vV]'), '')
+          .split('+')
+          .first;
+      final cleanRemote = remoteTag
+          .replaceAll(RegExp(r'^[vV]'), '')
+          .split('+')
+          .first;
 
-      final instParts = cleanInstalled.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-      final remParts = cleanRemote.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+      final instParts = cleanInstalled
+          .split('.')
+          .map((e) => int.tryParse(e) ?? 0)
+          .toList();
+      final remParts = cleanRemote
+          .split('.')
+          .map((e) => int.tryParse(e) ?? 0)
+          .toList();
 
       while (instParts.length < 3) {
         instParts.add(0);
@@ -334,8 +384,12 @@ class GitHubReleaseClient implements UpdateClient {
       }
 
       // Check build numbers (e.g. 1.0.0+3 vs 1.0.0+4, or 1.0.0 vs 1.0.0+1)
-      final instBuild = installedVersion.contains('+') ? (int.tryParse(installedVersion.split('+').last) ?? 0) : 0;
-      final remBuild = remoteTag.contains('+') ? (int.tryParse(remoteTag.split('+').last) ?? 0) : 0;
+      final instBuild = installedVersion.contains('+')
+          ? (int.tryParse(installedVersion.split('+').last) ?? 0)
+          : 0;
+      final remBuild = remoteTag.contains('+')
+          ? (int.tryParse(remoteTag.split('+').last) ?? 0)
+          : 0;
       return remBuild > instBuild;
     } catch (e) {
       debugPrint('[GitHubUpdater] Version parsing exception: $e');

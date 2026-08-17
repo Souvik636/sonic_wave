@@ -141,31 +141,37 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
       final seed = posMs / 1000.0;
 
       // Bass: slow, heavy pulses (kick drum, bass guitar)
-      final rawBass = (math.sin(seed * 5.2) * 0.5 + 0.5) *
-              (math.sin(seed * 2.1 + 0.7) * 0.3 + 0.7) *
-              (math.cos(seed * 1.3) * 0.2 + 0.8);
+      final rawBass =
+          (math.sin(seed * 5.2) * 0.5 + 0.5) *
+          (math.sin(seed * 2.1 + 0.7) * 0.3 + 0.7) *
+          (math.cos(seed * 1.3) * 0.2 + 0.8);
       // Add beat-synced spikes (~120 BPM = 2Hz)
       final beatPhase = (seed * 2.0) % 1.0;
       final beatSpike = beatPhase < 0.1 ? (1.0 - beatPhase / 0.1) : 0.0;
 
       // Mids: vocals, instruments — moderate variation
-      final rawMid = (math.sin(seed * 8.7 + 1.2) * 0.4 + 0.5) *
-              (math.cos(seed * 3.4 + 2.1) * 0.3 + 0.7) *
-              (math.sin(seed * 6.1 + 0.3) * 0.2 + 0.8);
+      final rawMid =
+          (math.sin(seed * 8.7 + 1.2) * 0.4 + 0.5) *
+          (math.cos(seed * 3.4 + 2.1) * 0.3 + 0.7) *
+          (math.sin(seed * 6.1 + 0.3) * 0.2 + 0.8);
 
       // Treble: hi-hats, cymbals, sibilance — fast, sparkly
-      final rawTreble = (math.sin(seed * 15.3 + 0.5) * 0.35 + 0.5) *
-              (math.cos(seed * 11.2 + 3.7) * 0.25 + 0.75) *
-              (math.sin(seed * 7.8 + 1.9) * 0.3 + 0.7);
+      final rawTreble =
+          (math.sin(seed * 15.3 + 0.5) * 0.35 + 0.5) *
+          (math.cos(seed * 11.2 + 3.7) * 0.25 + 0.75) *
+          (math.sin(seed * 7.8 + 1.9) * 0.3 + 0.7);
 
       // Only update if audio is progressing (delta > 0 means audio is moving)
       if (delta > 0) {
         setState(() {
           // Smooth interpolation (exponential decay) for organic feel
-          _bassEnergy = _bassEnergy * 0.7 + (rawBass + beatSpike * 0.5).clamp(0.0, 1.0) * 0.3;
+          _bassEnergy =
+              _bassEnergy * 0.7 +
+              (rawBass + beatSpike * 0.5).clamp(0.0, 1.0) * 0.3;
           _midEnergy = _midEnergy * 0.75 + rawMid.clamp(0.0, 1.0) * 0.25;
           _trebleEnergy = _trebleEnergy * 0.8 + rawTreble.clamp(0.0, 1.0) * 0.2;
-          _overallEnergy = (_bassEnergy * 0.45 + _midEnergy * 0.35 + _trebleEnergy * 0.2);
+          _overallEnergy =
+              (_bassEnergy * 0.45 + _midEnergy * 0.35 + _trebleEnergy * 0.2);
         });
 
         // Trigger beat pulse on strong bass hits
@@ -240,14 +246,14 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
       builder: (context, pp, _) {
         final song = pp.currentSong;
         if (song == null) {
-          return const Scaffold(
-            body: Center(child: Text('No song playing')),
-          );
+          return const Scaffold(body: Center(child: Text('No song playing')));
         }
 
         final progress = pp.duration.inMilliseconds > 0
-            ? (pp.position.inMilliseconds / pp.duration.inMilliseconds)
-                .clamp(0.0, 1.0)
+            ? (pp.position.inMilliseconds / pp.duration.inMilliseconds).clamp(
+                0.0,
+                1.0,
+              )
             : 0.0;
 
         // Dynamic background color that shifts with energy bands
@@ -260,7 +266,8 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
           HSLColor.fromColor(primary).lightness,
         ).toColor();
 
-        final isLocalOrDownloaded = song.isLocalFile ||
+        final isLocalOrDownloaded =
+            song.isLocalFile ||
             pp.downloadedSongs.any((s) => s.videoId == song.videoId);
 
         return Scaffold(
@@ -291,9 +298,14 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                 onVerticalDragUpdate: (d) {
                   if (_isDraggingVolume) {
                     _triggerVolumeBar();
-                    final settings = Provider.of<SettingsProvider>(context, listen: false);
+                    final settings = Provider.of<SettingsProvider>(
+                      context,
+                      listen: false,
+                    );
                     final delta = -d.primaryDelta! / 250.0;
-                    settings.setVolume((settings.volume + delta).clamp(0.0, 1.0));
+                    settings.setVolume(
+                      (settings.volume + delta).clamp(0.0, 1.0),
+                    );
                   }
                 },
                 onVerticalDragEnd: (_) => _isDraggingVolume = false,
@@ -307,7 +319,9 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                           center: Alignment.center,
                           radius: 1.2 + _bassEnergy * 0.3,
                           colors: [
-                            dynamicPrimary.withValues(alpha: 0.06 + _bassEnergy * 0.08),
+                            dynamicPrimary.withValues(
+                              alpha: 0.06 + _bassEnergy * 0.08,
+                            ),
                             Color.lerp(
                               const Color(0xFF050510),
                               dynamicPrimary.withValues(alpha: 0.03),
@@ -381,7 +395,9 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                                   center: Alignment.center,
                                   radius: 0.8,
                                   colors: [
-                                    dynamicPrimary.withValues(alpha: beatVal * _bassEnergy * 0.08),
+                                    dynamicPrimary.withValues(
+                                      alpha: beatVal * _bassEnergy * 0.08,
+                                    ),
                                     Colors.transparent,
                                   ],
                                 ),
@@ -412,7 +428,13 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                               const Spacer(flex: 2),
 
                               // ── Album art island with glow + orbs ─────────
-                              _buildAlbumArtIsland(screenWidth, song, pp, progress, dynamicPrimary),
+                              _buildAlbumArtIsland(
+                                screenWidth,
+                                song,
+                                pp,
+                                progress,
+                                dynamicPrimary,
+                              ),
                               const Spacer(flex: 1),
 
                               // ── Song info ─────────────────────────────────
@@ -487,10 +509,14 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Text(
@@ -510,8 +536,11 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
             children: [
               IconButton(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                    color: Colors.white70, size: 30),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white70,
+                  size: 30,
+                ),
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -520,27 +549,39 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                   IconButton(
                     onPressed: () {
                       AppHaptics.selection();
-                      Provider.of<SettingsProvider>(context, listen: false)
-                          .setPlayerStyle('classic');
+                      Provider.of<SettingsProvider>(
+                        context,
+                        listen: false,
+                      ).setPlayerStyle('classic');
                       Navigator.pushReplacement(
                         context,
                         PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => const PlayerScreen(),
-                          transitionsBuilder: (context, anim, secondaryAnimation, child) =>
-                              FadeTransition(opacity: anim, child: child),
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const PlayerScreen(),
+                          transitionsBuilder:
+                              (context, anim, secondaryAnimation, child) =>
+                                  FadeTransition(opacity: anim, child: child),
                           transitionDuration: const Duration(milliseconds: 300),
                         ),
                       );
                     },
                     tooltip: 'Switch to Classic Player',
-                    icon: const Icon(Icons.album_rounded, color: Colors.white38, size: 22),
+                    icon: const Icon(
+                      Icons.album_rounded,
+                      color: Colors.white38,
+                      size: 22,
+                    ),
                   ),
                   // Three-dot options: Sleep Timer → Detailed Info & Metadata
                   IconButton(
                     onPressed: () => showSongOptionsSheet(context, song),
                     tooltip: 'More options',
-                    icon: const Icon(Icons.more_vert_rounded,
-                        color: Colors.white70, size: 22),
+                    icon: const Icon(
+                      Icons.more_vert_rounded,
+                      color: Colors.white70,
+                      size: 22,
+                    ),
                   ),
                 ],
               ),
@@ -555,7 +596,11 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   // ALBUM ART ISLAND with Breathing Glow + Floating Orbs + Progress Arc
   // ════════════════════════════════════════════════════════════════════════
   Widget _buildAlbumArtIsland(
-    double screenWidth, Song song, PlayerProvider pp, double progress, Color primary,
+    double screenWidth,
+    Song song,
+    PlayerProvider pp,
+    double progress,
+    Color primary,
   ) {
     final artSize = screenWidth * 0.62;
 
@@ -588,12 +633,16 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: primary.withValues(alpha: 0.20 + 0.15 * t + bassBoost * 0.15),
+                      color: primary.withValues(
+                        alpha: 0.20 + 0.15 * t + bassBoost * 0.15,
+                      ),
                       width: 1.5 + 0.5 * t + bassBoost,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: primary.withValues(alpha: 0.10 + 0.12 * t + bassBoost * 0.15),
+                        color: primary.withValues(
+                          alpha: 0.10 + 0.12 * t + bassBoost * 0.15,
+                        ),
                         blurRadius: 30 + 20 * t + _overallEnergy * 25,
                         spreadRadius: 4 + 6 * t + bassBoost * 8,
                       ),
@@ -637,7 +686,8 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
             AnimatedBuilder(
               animation: _beatController,
               builder: (context, _) {
-                final beatScale = 1.0 + (1.0 - _beatController.value) * _bassEnergy * 0.02;
+                final beatScale =
+                    1.0 + (1.0 - _beatController.value) * _bassEnergy * 0.02;
                 return Transform.scale(
                   scale: beatScale,
                   child: Container(
@@ -647,7 +697,9 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                       borderRadius: BorderRadius.circular(28),
                       boxShadow: [
                         BoxShadow(
-                          color: primary.withValues(alpha: 0.15 + _overallEnergy * 0.1),
+                          color: primary.withValues(
+                            alpha: 0.15 + _overallEnergy * 0.1,
+                          ),
                           blurRadius: 40 + _bassEnergy * 20,
                           spreadRadius: 2 + _bassEnergy * 4,
                         ),
@@ -753,7 +805,9 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   Widget _buildSeekBar(PlayerProvider pp, double progress, Color primary) {
     final displayProgress = _isDraggingSeek ? _dragSeekValue : progress;
     final displayPosition = _isDraggingSeek
-        ? Duration(milliseconds: (_dragSeekValue * pp.duration.inMilliseconds).round())
+        ? Duration(
+            milliseconds: (_dragSeekValue * pp.duration.inMilliseconds).round(),
+          )
         : pp.position;
     final remaining = pp.duration - displayPosition;
 
@@ -772,16 +826,23 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                   onPanStart: (d) {
                     setState(() {
                       _isDraggingSeek = true;
-                      _dragSeekValue = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
+                      _dragSeekValue = (d.localPosition.dx / maxW).clamp(
+                        0.0,
+                        1.0,
+                      );
                     });
                   },
                   onPanUpdate: (d) {
                     setState(() {
-                      _dragSeekValue = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
+                      _dragSeekValue = (d.localPosition.dx / maxW).clamp(
+                        0.0,
+                        1.0,
+                      );
                     });
                   },
                   onPanEnd: (_) {
-                    final seekMs = (_dragSeekValue * pp.duration.inMilliseconds).round();
+                    final seekMs = (_dragSeekValue * pp.duration.inMilliseconds)
+                        .round();
                     pp.seek(Duration(milliseconds: seekMs));
                     setState(() => _isDraggingSeek = false);
                   },
@@ -814,8 +875,8 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                           FractionallySizedBox(
                             widthFactor: pp.duration.inMilliseconds > 0
                                 ? (pp.bufferedPosition.inMilliseconds /
-                                        pp.duration.inMilliseconds)
-                                    .clamp(0.0, 1.0)
+                                          pp.duration.inMilliseconds)
+                                      .clamp(0.0, 1.0)
                                 : 0.0,
                             child: Container(
                               height: _isDraggingSeek ? 8 : 5,
@@ -834,13 +895,17 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                                 gradient: LinearGradient(
                                   colors: [
                                     primary,
-                                    primary.withValues(alpha: 0.7 + _overallEnergy * 0.3),
+                                    primary.withValues(
+                                      alpha: 0.7 + _overallEnergy * 0.3,
+                                    ),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(4),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: primary.withValues(alpha: 0.3 + _overallEnergy * 0.2),
+                                    color: primary.withValues(
+                                      alpha: 0.3 + _overallEnergy * 0.2,
+                                    ),
                                     blurRadius: 6 + _bassEnergy * 6,
                                   ),
                                 ],
@@ -849,7 +914,10 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                           ),
                           // Thumb dot
                           Positioned(
-                            left: (displayProgress * maxW - 7).clamp(0.0, maxW - 14),
+                            left: (displayProgress * maxW - 7).clamp(
+                              0.0,
+                              maxW - 14,
+                            ),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 100),
                               width: _isDraggingSeek ? 16 : 14,
@@ -963,7 +1031,9 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                   child: AnimatedBuilder(
                     animation: _beatController,
                     builder: (context, child) {
-                      final beatScale = 1.0 + (1.0 - _beatController.value) * _bassEnergy * 0.04;
+                      final beatScale =
+                          1.0 +
+                          (1.0 - _beatController.value) * _bassEnergy * 0.04;
                       return Transform.scale(
                         scale: beatScale,
                         child: Container(
@@ -978,7 +1048,9 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: primary.withValues(alpha: 0.4 + _bassEnergy * 0.2),
+                                color: primary.withValues(
+                                  alpha: 0.4 + _bassEnergy * 0.2,
+                                ),
                                 blurRadius: 20 + _bassEnergy * 10,
                                 spreadRadius: 2 + _bassEnergy * 3,
                               ),
@@ -1080,7 +1152,9 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   // ════════════════════════════════════════════════════════════════════════
   Widget _buildSecondaryActions(PlayerProvider pp, Song song, Color primary) {
     final isFavorite = pp.isFavorite(song.videoId);
-    final isDownloaded = pp.downloadedSongs.any((s) => s.videoId == song.videoId);
+    final isDownloaded = pp.downloadedSongs.any(
+      (s) => s.videoId == song.videoId,
+    );
     final downloadProgress = pp.downloadProgress[song.videoId];
     final downloadStatus = pp.getDownloadStatus(song.videoId);
     final isDownloading = downloadProgress != null || downloadStatus != null;
@@ -1096,9 +1170,7 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.04),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.06),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1118,7 +1190,11 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                 ),
                 // Download — animated percentage while downloading
                 if (isDownloading)
-                  _downloadingIndicator(downloadStatus, downloadProgress, primary)
+                  _downloadingIndicator(
+                    downloadStatus,
+                    downloadProgress,
+                    primary,
+                  )
                 else
                   _secondaryAction(
                     icon: isDownloaded
@@ -1163,7 +1239,10 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   /// Download-in-progress indicator: circular percentage ring tinted with the
   /// theme colour plus a live % label underneath.
   Widget _downloadingIndicator(
-      DownloadStatus? status, double? progress, Color primary) {
+    DownloadStatus? status,
+    double? progress,
+    Color primary,
+  ) {
     String label = '0%';
     if (status == DownloadStatus.queued) {
       label = 'Queued';
@@ -1234,7 +1313,11 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
           const SizedBox(height: 3),
           Text(
             label,
-            style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -1264,8 +1347,8 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                 settings.volume > 0.5
                     ? Icons.volume_up_rounded
                     : settings.volume > 0
-                        ? Icons.volume_down_rounded
-                        : Icons.volume_off_rounded,
+                    ? Icons.volume_down_rounded
+                    : Icons.volume_off_rounded,
                 color: Colors.white54,
                 size: 16,
               ),
@@ -1275,7 +1358,9 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                   child: SliderTheme(
                     data: SliderThemeData(
                       trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 5,
+                      ),
                       activeTrackColor: Theme.of(context).colorScheme.primary,
                       inactiveTrackColor: Colors.white12,
                       thumbColor: Colors.white,
@@ -1353,14 +1438,17 @@ class _AuroraRibbonPainter extends CustomPainter {
       path.moveTo(0, yOffset);
       for (double x = 0; x <= size.width; x += 2) {
         final nx = x / size.width;
-        final y = yOffset +
+        final y =
+            yOffset +
             math.sin(nx * waveComplexity * math.pi + phaseOffset) *
                 ribbonAmplitude +
-            math.cos(nx * (waveComplexity - 0.5) * math.pi + phaseOffset * 0.7) *
-                ribbonAmplitude * 0.4 +
+            math.cos(
+                  nx * (waveComplexity - 0.5) * math.pi + phaseOffset * 0.7,
+                ) *
+                ribbonAmplitude *
+                0.4 +
             // Add bass punch: sudden spikes
-            math.sin(nx * 8 * math.pi + phaseOffset * 2.0) *
-                bassEnergy * 15.0;
+            math.sin(nx * 8 * math.pi + phaseOffset * 2.0) * bassEnergy * 15.0;
         path.lineTo(x, y);
       }
       path.lineTo(size.width, size.height);
@@ -1371,10 +1459,7 @@ class _AuroraRibbonPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            ribbonColors[i],
-            ribbonColors[i].withValues(alpha: 0.0),
-          ],
+          colors: [ribbonColors[i], ribbonColors[i].withValues(alpha: 0.0)],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
 
@@ -1384,8 +1469,10 @@ class _AuroraRibbonPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _AuroraRibbonPainter old) =>
-      old.phase != phase || old.bassEnergy != bassEnergy ||
-      old.midEnergy != midEnergy || old.trebleEnergy != trebleEnergy ||
+      old.phase != phase ||
+      old.bassEnergy != bassEnergy ||
+      old.midEnergy != midEnergy ||
+      old.trebleEnergy != trebleEnergy ||
       old.isPlaying != isPlaying;
 }
 
@@ -1415,11 +1502,13 @@ class _FloatingOrbsPainter extends CustomPainter {
 
     for (int i = 0; i < orbCount; i++) {
       final speed = isPlaying ? (0.8 + midEnergy * 0.6) : 0.15;
-      final angle = phase * 2 * math.pi * speed +
+      final angle =
+          phase * 2 * math.pi * speed +
           (i * 2 * math.pi / orbCount) +
           math.sin(phase * 4 * math.pi + i) * 0.3;
 
-      final radiusVariation = orbitRadius +
+      final radiusVariation =
+          orbitRadius +
           math.sin(phase * 3 * math.pi + i * 1.5) * (6 + bassEnergy * 8);
       final x = center.dx + math.cos(angle) * radiusVariation;
       final y = center.dy + math.sin(angle) * radiusVariation;
@@ -1435,7 +1524,9 @@ class _FloatingOrbsPainter extends CustomPainter {
         Offset(x, y),
         orbRadius * 3,
         Paint()
-          ..color = accentColor.withValues(alpha: (opacity * 0.35).clamp(0.0, 1.0))
+          ..color = accentColor.withValues(
+            alpha: (opacity * 0.35).clamp(0.0, 1.0),
+          )
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
       );
 
@@ -1443,15 +1534,18 @@ class _FloatingOrbsPainter extends CustomPainter {
       canvas.drawCircle(
         Offset(x, y),
         orbRadius,
-        Paint()..color = Colors.white.withValues(alpha: opacity.clamp(0.0, 1.0)),
+        Paint()
+          ..color = Colors.white.withValues(alpha: opacity.clamp(0.0, 1.0)),
       );
     }
   }
 
   @override
   bool shouldRepaint(covariant _FloatingOrbsPainter old) =>
-      old.phase != phase || old.isPlaying != isPlaying ||
-      old.midEnergy != midEnergy || old.bassEnergy != bassEnergy;
+      old.phase != phase ||
+      old.isPlaying != isPlaying ||
+      old.midEnergy != midEnergy ||
+      old.bassEnergy != bassEnergy;
 }
 
 /// Particles that shimmer with treble and flash on bass hits.
@@ -1489,9 +1583,10 @@ class _ParticleShimmerPainter extends CustomPainter {
 
       final radius = 0.6 + rng.nextDouble() * 1.0 + bassEnergy * 0.5;
       final alpha = isPlaying
-          ? (0.10 + trebleEnergy * 0.20 +
-              0.15 * math.sin(phase * 8 * math.pi + i * 0.7) +
-              bassEnergy * 0.08)
+          ? (0.10 +
+                trebleEnergy * 0.20 +
+                0.15 * math.sin(phase * 8 * math.pi + i * 0.7) +
+                bassEnergy * 0.08)
           : 0.04;
 
       canvas.drawCircle(
@@ -1504,8 +1599,10 @@ class _ParticleShimmerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ParticleShimmerPainter old) =>
-      old.phase != phase || old.isPlaying != isPlaying ||
-      old.trebleEnergy != trebleEnergy || old.bassEnergy != bassEnergy;
+      old.phase != phase ||
+      old.isPlaying != isPlaying ||
+      old.trebleEnergy != trebleEnergy ||
+      old.bassEnergy != bassEnergy;
 }
 
 /// Circular arc with energy-reactive glow on the progress dot.
@@ -1569,11 +1666,7 @@ class _CircularArcPainter extends CustomPainter {
       );
 
       // Core dot
-      canvas.drawCircle(
-        Offset(dotX, dotY),
-        4,
-        Paint()..color = Colors.white,
-      );
+      canvas.drawCircle(Offset(dotX, dotY), 4, Paint()..color = Colors.white);
     }
   }
 
@@ -1636,8 +1729,9 @@ class _AmbientLightPainter extends CustomPainter {
           c2,
           size.width * (0.50 + overallEnergy * 0.12),
           [
-            const Color(0xFF00C9A7)
-                .withValues(alpha: 0.05 + overallEnergy * 0.05),
+            const Color(
+              0xFF00C9A7,
+            ).withValues(alpha: 0.05 + overallEnergy * 0.05),
             Colors.transparent,
           ],
           [0.0, 1.0],

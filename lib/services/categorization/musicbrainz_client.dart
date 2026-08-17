@@ -41,7 +41,9 @@ class MusicBrainzClient {
   /// Clean special Lucene syntax characters.
   String _lucene(String s) {
     return s.replaceAllMapped(
-        RegExp(r'[+\-&|!(){}\[\]^"~*?:\\/]'), (m) => '\\${m[0]}');
+      RegExp(r'[+\-&|!(){}\[\]^"~*?:\\/]'),
+      (m) => '\\${m[0]}',
+    );
   }
 
   /// Close the HTTP client.
@@ -63,7 +65,10 @@ class MusicBrainzClient {
     if (cached != null) {
       _cacheHitsCount++;
       return MetadataResult(
-        found: cached.genre != null || cached.albumTitle != null || cached.artistName != null,
+        found:
+            cached.genre != null ||
+            cached.albumTitle != null ||
+            cached.artistName != null,
         genre: cached.genre,
         albumTitle: cached.albumTitle,
         canonicalArtist: cached.artistName,
@@ -78,7 +83,9 @@ class MusicBrainzClient {
 
     if (_lookupsCount >= maxLookups) {
       if (!_budgetExhaustedLogged) {
-        debugPrint('[MusicBrainz] Lookup budget ($maxLookups) exhausted. Skipping remaining network lookups.');
+        debugPrint(
+          '[MusicBrainz] Lookup budget ($maxLookups) exhausted. Skipping remaining network lookups.',
+        );
         _budgetExhaustedLogged = true;
       }
       return const MetadataResult(found: false);
@@ -108,7 +115,9 @@ class MusicBrainzClient {
 
       if (_consecutiveFailures >= 3) {
         _aborted = true;
-        debugPrint('[MusicBrainz] Circuit breaker tripped. Network lookups disabled.');
+        debugPrint(
+          '[MusicBrainz] Circuit breaker tripped. Network lookups disabled.',
+        );
       }
 
       // Cache negative lookup to avoid retrying immediately
@@ -118,8 +127,14 @@ class MusicBrainzClient {
     }
   }
 
-  Future<MetadataResult> _fetchFromNetwork(String title, String artist, {bool isRetry = false}) async {
-    final queryArtist = artist.toLowerCase() == 'local audio' || artist.toLowerCase() == 'unknown'
+  Future<MetadataResult> _fetchFromNetwork(
+    String title,
+    String artist, {
+    bool isRetry = false,
+  }) async {
+    final queryArtist =
+        artist.toLowerCase() == 'local audio' ||
+            artist.toLowerCase() == 'unknown'
         ? ''
         : artist;
 
@@ -146,7 +161,9 @@ class MusicBrainzClient {
     if (response.statusCode == 503 && !isRetry) {
       // 503 Service Unavailable (rate limit). Retry once with 2s backoff.
       await response.drain();
-      debugPrint('[MusicBrainz] HTTP 503 received. Retrying with 2s backoff...');
+      debugPrint(
+        '[MusicBrainz] HTTP 503 received. Retrying with 2s backoff...',
+      );
       await Future.delayed(const Duration(seconds: 2));
       return _fetchFromNetwork(title, artist, isRetry: true);
     }
@@ -165,7 +182,10 @@ class MusicBrainzClient {
     }
 
     // Sort by Lucene score to get best match
-    recordings.sort((a, b) => ((b['score'] as int?) ?? 0).compareTo((a['score'] as int?) ?? 0));
+    recordings.sort(
+      (a, b) =>
+          ((b['score'] as int?) ?? 0).compareTo((a['score'] as int?) ?? 0),
+    );
     final rec = recordings.first as Map<String, dynamic>;
     final score = rec['score'] as int? ?? 0;
 
@@ -178,7 +198,10 @@ class MusicBrainzClient {
     final tags = rec['tags'] as List<dynamic>?;
     if (tags != null && tags.isNotEmpty) {
       // Sort tags by count to get the most common genre
-      tags.sort((a, b) => ((b['count'] as int?) ?? 0).compareTo((a['count'] as int?) ?? 0));
+      tags.sort(
+        (a, b) =>
+            ((b['count'] as int?) ?? 0).compareTo((a['count'] as int?) ?? 0),
+      );
       genre = tags.first['name'] as String?;
     }
 
@@ -193,7 +216,8 @@ class MusicBrainzClient {
           if (group != null) {
             final primaryType = group['primary-type'] as String?;
             final secondaryTypes = group['secondary-types'] as List<dynamic>?;
-            final isCompilation = secondaryTypes?.contains('Compilation') ?? false;
+            final isCompilation =
+                secondaryTypes?.contains('Compilation') ?? false;
 
             if (primaryType == 'Album' && !isCompilation) {
               candidates.add(r);

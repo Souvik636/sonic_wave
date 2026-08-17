@@ -43,7 +43,8 @@ class MockUpdateClient implements UpdateClient {
         return AppRelease(
           tag: mockTargetVersion,
           name: 'SonicWave Android 64-Bit Release ($mockTargetVersion)',
-          releaseNotes: '''
+          releaseNotes:
+              '''
 ## What's New in $mockTargetVersion (Android 64-Bit)
 * **64-Bit Audio Engine:** Optimized arm64-v8a high-bitrate playback pipeline.
 * **YouTube Stream Resilience:** Enhanced 403 Forbidden auto-retry with chrome user-agent headers.
@@ -66,7 +67,10 @@ class MockUpdateClient implements UpdateClient {
   }
 
   @override
-  Stream<UpdateProgress> downloadAsset(ReleaseAsset asset, File destinationFile) async* {
+  Stream<UpdateProgress> downloadAsset(
+    ReleaseAsset asset,
+    File destinationFile,
+  ) async* {
     final totalBytes = asset.size > 0 ? asset.size : 104200000;
     const steps = 10;
     final chunkSize = totalBytes ~/ steps;
@@ -86,14 +90,19 @@ class MockUpdateClient implements UpdateClient {
   }
 
   @override
-  Future<bool> verifyChecksum(ReleaseAsset? checksumAsset, File downloadedFile) async {
+  Future<bool> verifyChecksum(
+    ReleaseAsset? checksumAsset,
+    File downloadedFile,
+  ) async {
     await Future.delayed(const Duration(milliseconds: 200));
 
     if (scenario == MockScenario.checksumMismatch) {
       throw const ChecksumMismatchException(
         'Mock downloaded APK file SHA-256 hash does not match official release hash.',
-        expectedHash: 'a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890',
-        actualHash: '0000000000000000000000000000000000000000000000000000000000000000',
+        expectedHash:
+            'a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890',
+        actualHash:
+            '0000000000000000000000000000000000000000000000000000000000000000',
       );
     }
 
@@ -105,7 +114,9 @@ class MockUpdateClient implements UpdateClient {
     await Future.delayed(const Duration(milliseconds: 300));
 
     if (scenario == MockScenario.installerCancellation) {
-      throw const SocketException('User cancelled Android PackageInstaller prompt.');
+      throw const SocketException(
+        'User cancelled Android PackageInstaller prompt.',
+      );
     }
 
     return true;

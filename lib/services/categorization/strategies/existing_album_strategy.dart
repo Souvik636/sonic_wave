@@ -31,11 +31,13 @@ class ExistingAlbumStrategy extends CategorizationStrategy {
     final songs = unclaimed(ctx, classifiedIds);
     if (songs.isEmpty || ctx.albums.isEmpty) return [];
 
-    onProgress(StageProgress(
-      label: 'Matching songs to your albums',
-      done: 0,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(
+        label: 'Matching songs to your albums',
+        done: 0,
+        total: songs.length,
+      ),
+    );
 
     // bucket[albumId] → list of (songId, score)
     final Map<String, List<_ScoredSong>> buckets = {};
@@ -47,7 +49,8 @@ class ExistingAlbumStrategy extends CategorizationStrategy {
       if (token.isCancelled) break;
 
       final song = songs[i];
-      final candidateText = '${TitleCleaner.cleanTitle(song.title)} ${TitleCleaner.cleanArtist(song.artist)}';
+      final candidateText =
+          '${TitleCleaner.cleanTitle(song.title)} ${TitleCleaner.cleanArtist(song.artist)}';
 
       final match = AlbumMatchScorer.bestMatch(
         candidateText,
@@ -63,11 +66,13 @@ class ExistingAlbumStrategy extends CategorizationStrategy {
       }
 
       if (i % 10 == 0) {
-        onProgress(StageProgress(
-          label: 'Matching songs to your albums',
-          done: i + 1,
-          total: songs.length,
-        ));
+        onProgress(
+          StageProgress(
+            label: 'Matching songs to your albums',
+            done: i + 1,
+            total: songs.length,
+          ),
+        );
       }
     }
 
@@ -79,25 +84,30 @@ class ExistingAlbumStrategy extends CategorizationStrategy {
 
       final avgScore =
           entry.value.map((s) => s.score).reduce((a, b) => a + b) /
-              entry.value.length;
+          entry.value.length;
 
-      proposals.add(AiProposedAlbum(
-        id: _uuid.v4(),
-        name: album.name,
-        description: 'Matched ${entry.value.length} song${entry.value.length > 1 ? "s" : ""} to your existing album.',
-        songIds: List.unmodifiable(entry.value.map((s) => s.songId)),
-        existingAlbumId: album.id,
-        action: ProposalAction.addToExisting,
-        source: ProposalSource.existingMatch,
-        confidence: avgScore.clamp(0.0, 1.0),
-      ));
+      proposals.add(
+        AiProposedAlbum(
+          id: _uuid.v4(),
+          name: album.name,
+          description:
+              'Matched ${entry.value.length} song${entry.value.length > 1 ? "s" : ""} to your existing album.',
+          songIds: List.unmodifiable(entry.value.map((s) => s.songId)),
+          existingAlbumId: album.id,
+          action: ProposalAction.addToExisting,
+          source: ProposalSource.existingMatch,
+          confidence: avgScore.clamp(0.0, 1.0),
+        ),
+      );
     }
 
-    onProgress(StageProgress(
-      label: 'Matching songs to your albums',
-      done: songs.length,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(
+        label: 'Matching songs to your albums',
+        done: songs.length,
+        total: songs.length,
+      ),
+    );
 
     return proposals;
   }

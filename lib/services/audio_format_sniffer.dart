@@ -32,7 +32,9 @@ class AudioFormatSniffer {
   Future<Directory> _getUnwrapDir() async {
     if (_unwrappedDir != null) return _unwrappedDir!;
     final temp = await getTemporaryDirectory();
-    final dir = Directory('${temp.path}${Platform.pathSeparator}unwrapped_audio');
+    final dir = Directory(
+      '${temp.path}${Platform.pathSeparator}unwrapped_audio',
+    );
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
@@ -66,13 +68,22 @@ class AudioFormatSniffer {
     if (bytes[0] == 0x49 && bytes[1] == 0x44 && bytes[2] == 0x33) {
       return const SniffedAudio(format: 'mp3', offset: 0); // ID3v2
     }
-    if (bytes[0] == 0x66 && bytes[1] == 0x4C && bytes[2] == 0x61 && bytes[3] == 0x43) {
+    if (bytes[0] == 0x66 &&
+        bytes[1] == 0x4C &&
+        bytes[2] == 0x61 &&
+        bytes[3] == 0x43) {
       return const SniffedAudio(format: 'flac', offset: 0); // fLaC
     }
-    if (bytes[0] == 0x4F && bytes[1] == 0x67 && bytes[2] == 0x67 && bytes[3] == 0x53) {
+    if (bytes[0] == 0x4F &&
+        bytes[1] == 0x67 &&
+        bytes[2] == 0x67 &&
+        bytes[3] == 0x53) {
       return const SniffedAudio(format: 'ogg', offset: 0); // OggS
     }
-    if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) {
+    if (bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46) {
       return const SniffedAudio(format: 'wav', offset: 0); // RIFF
     }
     if (bytes.length >= 8 &&
@@ -136,26 +147,75 @@ class AudioFormatSniffer {
     }
 
     // 3. Scan for Common Single-Byte XOR Encryption Masks (e.g. offline cached media)
-    const commonXorKeys = [0x55, 0xAA, 0x88, 0x5A, 0xA5, 0x66, 0x77, 0xFF, 0x11, 0x22, 0x33, 0x44];
+    const commonXorKeys = [
+      0x55,
+      0xAA,
+      0x88,
+      0x5A,
+      0xA5,
+      0x66,
+      0x77,
+      0xFF,
+      0x11,
+      0x22,
+      0x33,
+      0x44,
+    ];
     for (final k in commonXorKeys) {
-      if ((bytes[0] ^ k) == 0x49 && (bytes[1] ^ k) == 0x44 && (bytes[2] ^ k) == 0x33) {
-        return SniffedAudio(format: 'mp3', offset: 0, xorKey: k, isObfuscated: true);
+      if ((bytes[0] ^ k) == 0x49 &&
+          (bytes[1] ^ k) == 0x44 &&
+          (bytes[2] ^ k) == 0x33) {
+        return SniffedAudio(
+          format: 'mp3',
+          offset: 0,
+          xorKey: k,
+          isObfuscated: true,
+        );
       }
-      if ((bytes[0] ^ k) == 0x66 && (bytes[1] ^ k) == 0x4C && (bytes[2] ^ k) == 0x61 && (bytes[3] ^ k) == 0x43) {
-        return SniffedAudio(format: 'flac', offset: 0, xorKey: k, isObfuscated: true);
+      if ((bytes[0] ^ k) == 0x66 &&
+          (bytes[1] ^ k) == 0x4C &&
+          (bytes[2] ^ k) == 0x61 &&
+          (bytes[3] ^ k) == 0x43) {
+        return SniffedAudio(
+          format: 'flac',
+          offset: 0,
+          xorKey: k,
+          isObfuscated: true,
+        );
       }
-      if ((bytes[0] ^ k) == 0x4F && (bytes[1] ^ k) == 0x67 && (bytes[2] ^ k) == 0x67 && (bytes[3] ^ k) == 0x53) {
-        return SniffedAudio(format: 'ogg', offset: 0, xorKey: k, isObfuscated: true);
+      if ((bytes[0] ^ k) == 0x4F &&
+          (bytes[1] ^ k) == 0x67 &&
+          (bytes[2] ^ k) == 0x67 &&
+          (bytes[3] ^ k) == 0x53) {
+        return SniffedAudio(
+          format: 'ogg',
+          offset: 0,
+          xorKey: k,
+          isObfuscated: true,
+        );
       }
-      if ((bytes[0] ^ k) == 0x52 && (bytes[1] ^ k) == 0x49 && (bytes[2] ^ k) == 0x46 && (bytes[3] ^ k) == 0x46) {
-        return SniffedAudio(format: 'wav', offset: 0, xorKey: k, isObfuscated: true);
+      if ((bytes[0] ^ k) == 0x52 &&
+          (bytes[1] ^ k) == 0x49 &&
+          (bytes[2] ^ k) == 0x46 &&
+          (bytes[3] ^ k) == 0x46) {
+        return SniffedAudio(
+          format: 'wav',
+          offset: 0,
+          xorKey: k,
+          isObfuscated: true,
+        );
       }
       if (bytes.length >= 8 &&
           (bytes[4] ^ k) == 0x66 &&
           (bytes[5] ^ k) == 0x74 &&
           (bytes[6] ^ k) == 0x79 &&
           (bytes[7] ^ k) == 0x70) {
-        return SniffedAudio(format: 'm4a', offset: 0, xorKey: k, isObfuscated: true);
+        return SniffedAudio(
+          format: 'm4a',
+          offset: 0,
+          xorKey: k,
+          isObfuscated: true,
+        );
       }
     }
 
@@ -174,9 +234,12 @@ class AudioFormatSniffer {
       }
 
       final stat = await sourceFile.stat();
-      final hash = '${sourceFile.path.hashCode.toUnsigned(32).toRadixString(16)}_${stat.size}_${stat.modified.millisecondsSinceEpoch}';
+      final hash =
+          '${sourceFile.path.hashCode.toUnsigned(32).toRadixString(16)}_${stat.size}_${stat.modified.millisecondsSinceEpoch}';
       final unwrapDir = await _getUnwrapDir();
-      final targetFile = File('${unwrapDir.path}${Platform.pathSeparator}$hash.${sniffed.format}');
+      final targetFile = File(
+        '${unwrapDir.path}${Platform.pathSeparator}$hash.${sniffed.format}',
+      );
 
       if (await targetFile.exists() && (await targetFile.length()) > 0) {
         return targetFile;
@@ -206,7 +269,9 @@ class AudioFormatSniffer {
       await reader.close();
       await writer.close();
 
-      debugPrint('[AudioSniffer] Unwrapped obfuscated audio (${sniffed.format}, offset: ${sniffed.offset}, xor: ${sniffed.xorKey}): ${sourceFile.path} -> ${targetFile.path}');
+      debugPrint(
+        '[AudioSniffer] Unwrapped obfuscated audio (${sniffed.format}, offset: ${sniffed.offset}, xor: ${sniffed.xorKey}): ${sourceFile.path} -> ${targetFile.path}',
+      );
       return targetFile;
     } catch (e) {
       debugPrint('[AudioSniffer] Failed to unwrap audio file: $e');

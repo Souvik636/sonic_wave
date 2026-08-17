@@ -52,11 +52,7 @@ class DiagnosticLogService {
   void log(String event, Map<String, dynamic> fields) {
     if (!_initialised) return;
     try {
-      _write({
-        'ts': _ts(),
-        'event': event,
-        ...fields,
-      });
+      _write({'ts': _ts(), 'event': event, ...fields});
     } catch (_) {}
   }
 
@@ -66,29 +62,29 @@ class DiagnosticLogService {
   // Event name constants
   // ──────────────────────────────────────────────────────────────────────────
 
-  static const String session         = 'session';
-  static const String appLifecycle    = 'app_lifecycle';
-  static const String playStart       = 'play_start';
-  static const String playResolved    = 'play_resolved';
-  static const String playSourceFail  = 'play_source_fail';
-  static const String playLoaded      = 'play_loaded';
-  static const String playError       = 'play_error';
-  static const String streamCacheHit  = 'stream_cache_hit';
-  static const String ytdlpExtract    = 'ytdlp_extract';
-  static const String ytdlpRace       = 'ytdlp_race';
-  static const String ytdlpRuntime    = 'ytdlp_runtime';
-  static const String searchStart     = 'search_start';
-  static const String searchResult    = 'search_result';
-  static const String searchError     = 'search_error';
-  static const String audioFocus      = 'audio_focus';
-  static const String autoRecovery    = 'auto_recovery';
-  static const String downloadStart   = 'download_start';
+  static const String session = 'session';
+  static const String appLifecycle = 'app_lifecycle';
+  static const String playStart = 'play_start';
+  static const String playResolved = 'play_resolved';
+  static const String playSourceFail = 'play_source_fail';
+  static const String playLoaded = 'play_loaded';
+  static const String playError = 'play_error';
+  static const String streamCacheHit = 'stream_cache_hit';
+  static const String ytdlpExtract = 'ytdlp_extract';
+  static const String ytdlpRace = 'ytdlp_race';
+  static const String ytdlpRuntime = 'ytdlp_runtime';
+  static const String searchStart = 'search_start';
+  static const String searchResult = 'search_result';
+  static const String searchError = 'search_error';
+  static const String audioFocus = 'audio_focus';
+  static const String autoRecovery = 'auto_recovery';
+  static const String downloadStart = 'download_start';
   static const String downloadHttpPath = 'download_http_path';
-  static const String downloadYtdlp   = 'download_ytdlp';
+  static const String downloadYtdlp = 'download_ytdlp';
   static const String downloadComplete = 'download_complete';
-  static const String downloadError   = 'download_error';
-  static const String downloadRetry   = 'download_retry';
+  static const String downloadError = 'download_error';
+  static const String downloadRetry = 'download_retry';
   static const String downloadResumed = 'download_resumed';
-  static const String sharedLink      = 'shared_link';
-  static const String prefetch        = 'prefetch';
+  static const String sharedLink = 'shared_link';
+  static const String prefetch = 'prefetch';
 }

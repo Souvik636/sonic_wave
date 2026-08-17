@@ -86,14 +86,19 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
     _previewTimer?.cancel();
     _previewTimer = null;
     if (_isPreviewPlaying) {
-      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+      final playerProvider = Provider.of<PlayerProvider>(
+        context,
+        listen: false,
+      );
       playerProvider.pause();
       if (_originalVolume != null) {
         playerProvider.player.setVolume(_originalVolume!);
       }
       playerProvider.audioHandler.setKaraokeMode(playerProvider.isKaraokeMode);
       if (playerProvider.useCustomEqualizer) {
-        playerProvider.audioHandler.setCustomEqualizerGains(playerProvider.customEqualizerGains);
+        playerProvider.audioHandler.setCustomEqualizerGains(
+          playerProvider.customEqualizerGains,
+        );
       }
       if (mounted) {
         setState(() {
@@ -117,13 +122,21 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
 
     if (_isolationMode == 'vocal') {
       playerProvider.audioHandler.setKaraokeMode(false);
-      playerProvider.audioHandler.setCustomEqualizerGains(const [-12.0, -12.0, 12.0, 12.0, -12.0]);
+      playerProvider.audioHandler.setCustomEqualizerGains(const [
+        -12.0,
+        -12.0,
+        12.0,
+        12.0,
+        -12.0,
+      ]);
     } else if (_isolationMode == 'instrument') {
       playerProvider.audioHandler.setKaraokeMode(true);
     } else {
       playerProvider.audioHandler.setKaraokeMode(false);
       if (playerProvider.useCustomEqualizer) {
-        playerProvider.audioHandler.setCustomEqualizerGains(playerProvider.customEqualizerGains);
+        playerProvider.audioHandler.setCustomEqualizerGains(
+          playerProvider.customEqualizerGains,
+        );
       }
     }
 
@@ -172,12 +185,17 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
         }
       }
 
-      final double newVol = (_originalVolume ?? 1.0) * volumeMultiplier.clamp(0.0, 1.0);
+      final double newVol =
+          (_originalVolume ?? 1.0) * volumeMultiplier.clamp(0.0, 1.0);
       playerProvider.player.setVolume(newVol);
     });
   }
 
-  Future<void> _saveSongEdits(Song song, PlayerProvider provider, {required bool saveAsCopy}) async {
+  Future<void> _saveSongEdits(
+    Song song,
+    PlayerProvider provider, {
+    required bool saveAsCopy,
+  }) async {
     setState(() {
       _isTrimmingFile = true;
     });
@@ -203,7 +221,9 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
       if (isLocal) {
         originalFilePath = song.videoId;
       } else {
-        originalFilePath = await DownloadService().getLocalAudioPath(song.videoId);
+        originalFilePath = await DownloadService().getLocalAudioPath(
+          song.videoId,
+        );
       }
 
       String targetVideoId = song.videoId;
@@ -224,8 +244,13 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
           if (startSecs > 0 || endSecs < originalSecs) {
             if (totalMs > 0 && totalBytes > 0) {
               final double bytesPerMs = totalBytes / totalMs;
-              final int startByte = (startSecs * 1000 * bytesPerMs).toInt().clamp(0, totalBytes);
-              final int endByte = (endSecs * 1000 * bytesPerMs).toInt().clamp(0, totalBytes);
+              final int startByte = (startSecs * 1000 * bytesPerMs)
+                  .toInt()
+                  .clamp(0, totalBytes);
+              final int endByte = (endSecs * 1000 * bytesPerMs).toInt().clamp(
+                0,
+                totalBytes,
+              );
 
               if (startByte < endByte) {
                 processedBytes = bytes.sublist(startByte, endByte);
@@ -278,16 +303,26 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
       }
 
       if (!mounted) return;
-      widget.pageController.animateToPage(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+      widget.pageController.animateToPage(
+        0,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(saveAsCopy ? 'New copy saved successfully!' : 'Song metadata & trim saved successfully!')),
+        SnackBar(
+          content: Text(
+            saveAsCopy
+                ? 'New copy saved successfully!'
+                : 'Song metadata & trim saved successfully!',
+          ),
+        ),
       );
     } catch (e) {
       debugPrint('Error saving song edits: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving changes: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving changes: $e')));
       }
     } finally {
       if (mounted) {
@@ -298,7 +333,11 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
     }
   }
 
-  void _showSaveOptionsSheet(BuildContext context, Song song, PlayerProvider provider) {
+  void _showSaveOptionsSheet(
+    BuildContext context,
+    Song song,
+    PlayerProvider provider,
+  ) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -314,7 +353,7 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                 color: Colors.black.withValues(alpha: 0.6),
                 blurRadius: 20,
                 offset: const Offset(0, -5),
-              )
+              ),
             ],
           ),
           child: Column(
@@ -355,12 +394,17 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                   _saveSongEdits(song, provider, saveAsCopy: false);
                 },
                 icon: const Icon(Icons.edit_document, size: 20),
-                label: const Text('Update & Overwrite Original', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'Update & Overwrite Original',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -370,12 +414,17 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                   _saveSongEdits(song, provider, saveAsCopy: true);
                 },
                 icon: const Icon(Icons.copy_rounded, size: 20),
-                label: const Text('Save as a New Copy', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'Save as a New Copy',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
                   side: const BorderSide(color: Colors.white24),
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -399,7 +448,10 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
     final settings = Provider.of<SettingsProvider>(context);
     final playerProvider = Provider.of<PlayerProvider>(context);
 
-    final trimLengthSecs = (_trimEndSecs - _trimStartSecs).clamp(0.0, double.infinity);
+    final trimLengthSecs = (_trimEndSecs - _trimStartSecs).clamp(
+      0.0,
+      double.infinity,
+    );
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -412,9 +464,17 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
                 onPressed: () {
-                  widget.pageController.animateToPage(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic);
+                  widget.pageController.animateToPage(
+                    0,
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeOutCubic,
+                  );
                 },
               ),
               Row(
@@ -431,7 +491,10 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                   if (widget.song.isEdited) ...[
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.amber.shade800,
                         borderRadius: BorderRadius.circular(6),
@@ -439,12 +502,16 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                           BoxShadow(
                             color: Colors.amber.shade800.withValues(alpha: 0.4),
                             blurRadius: 8,
-                          )
+                          ),
                         ],
                       ),
                       child: const Text(
                         'EDITED',
-                        style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
@@ -454,11 +521,22 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
                     )
                   : IconButton(
-                      icon: Icon(Icons.check_circle_rounded, color: primaryColor, size: 26),
-                      onPressed: () => _showSaveOptionsSheet(context, widget.song, playerProvider),
+                      icon: Icon(
+                        Icons.check_circle_rounded,
+                        color: primaryColor,
+                        size: 26,
+                      ),
+                      onPressed: () => _showSaveOptionsSheet(
+                        context,
+                        widget.song,
+                        playerProvider,
+                      ),
                     ),
             ],
           ),
@@ -475,7 +553,9 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
             child: Row(
               children: [
                 Icon(
-                  settings.storageType == StorageType.sdCard ? Icons.sd_card_rounded : Icons.folder_special_rounded,
+                  settings.storageType == StorageType.sdCard
+                      ? Icons.sd_card_rounded
+                      : Icons.folder_special_rounded,
                   color: primaryColor,
                   size: 16,
                 ),
@@ -493,14 +573,21 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: primaryColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     'AUTO-SAVE',
-                    style: TextStyle(color: primaryColor, fontSize: 8, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: primaryColor,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
@@ -519,7 +606,10 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                     height: screenWidth * 0.44,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: primaryColor.withValues(alpha: 0.4), width: 3),
+                      border: Border.all(
+                        color: primaryColor.withValues(alpha: 0.4),
+                        width: 3,
+                      ),
                     ),
                   ),
                 Container(
@@ -529,7 +619,9 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                     borderRadius: BorderRadius.circular(22),
                     boxShadow: [
                       BoxShadow(
-                        color: primaryColor.withValues(alpha: _isPreviewPlaying ? 0.45 : 0.2),
+                        color: primaryColor.withValues(
+                          alpha: _isPreviewPlaying ? 0.45 : 0.2,
+                        ),
                         blurRadius: _isPreviewPlaying ? 28 : 14,
                         offset: const Offset(0, 8),
                       ),
@@ -561,17 +653,33 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
           // Title Input Field
           TextField(
             controller: _titleController,
-            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
             decoration: InputDecoration(
               labelText: 'Song Title',
-              labelStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
-              prefixIcon: const Icon(Icons.music_note_rounded, color: AppColors.textTertiary, size: 16),
+              labelStyle: const TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 11,
+              ),
+              prefixIcon: const Icon(
+                Icons.music_note_rounded,
+                color: AppColors.textTertiary,
+                size: 16,
+              ),
               filled: true,
               fillColor: Colors.white.withValues(alpha: 0.04),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                borderSide: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -584,17 +692,33 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
           // Artist Input Field
           TextField(
             controller: _artistController,
-            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
             decoration: InputDecoration(
               labelText: 'Artist Name',
-              labelStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
-              prefixIcon: const Icon(Icons.person_rounded, color: AppColors.textTertiary, size: 16),
+              labelStyle: const TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 11,
+              ),
+              prefixIcon: const Icon(
+                Icons.person_rounded,
+                color: AppColors.textTertiary,
+                size: 16,
+              ),
               filled: true,
               fillColor: Colors.white.withValues(alpha: 0.04),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                borderSide: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -642,7 +766,9 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                 AudioWaveformTimeline(
                   startVal: _trimStartSecs,
                   endVal: _trimEndSecs,
-                  maxVal: widget.song.duration.inSeconds.toDouble() <= 0.0 ? 1.0 : widget.song.duration.inSeconds.toDouble(),
+                  maxVal: widget.song.duration.inSeconds.toDouble() <= 0.0
+                      ? 1.0
+                      : widget.song.duration.inSeconds.toDouble(),
                   currentPosition: _currentPreviewSecs,
                   fadeInVal: _fadeIn,
                   fadeOutVal: _fadeOut,
@@ -660,20 +786,44 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Trim Start', style: TextStyle(color: AppColors.textTertiary, fontSize: 10)),
+                        const Text(
+                          'Trim Start',
+                          style: TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 10,
+                          ),
+                        ),
                         Text(
-                          _formatDuration(Duration(seconds: _trimStartSecs.toInt())),
-                          style: GoogleFonts.spaceMono(color: Colors.tealAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                          _formatDuration(
+                            Duration(seconds: _trimStartSecs.toInt()),
+                          ),
+                          style: GoogleFonts.spaceMono(
+                            color: Colors.tealAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('Trim End', style: TextStyle(color: AppColors.textTertiary, fontSize: 10)),
+                        const Text(
+                          'Trim End',
+                          style: TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 10,
+                          ),
+                        ),
                         Text(
-                          _formatDuration(Duration(seconds: _trimEndSecs.toInt())),
-                          style: GoogleFonts.spaceMono(color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                          _formatDuration(
+                            Duration(seconds: _trimEndSecs.toInt()),
+                          ),
+                          style: GoogleFonts.spaceMono(
+                            color: Colors.orangeAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -788,11 +938,25 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.speed_rounded, color: AppColors.textTertiary, size: 18),
+                    const Icon(
+                      Icons.speed_rounded,
+                      color: AppColors.textTertiary,
+                      size: 18,
+                    ),
                     const SizedBox(width: 10),
-                    const Text('Speed', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    const Text(
+                      'Speed',
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                     const Spacer(),
-                    Text('${_speed.toStringAsFixed(2)}x', style: GoogleFonts.spaceMono(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text(
+                      '${_speed.toStringAsFixed(2)}x',
+                      style: GoogleFonts.spaceMono(
+                        color: primaryColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
                 Slider(
@@ -813,11 +977,25 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.tune_rounded, color: AppColors.textTertiary, size: 18),
+                    const Icon(
+                      Icons.tune_rounded,
+                      color: AppColors.textTertiary,
+                      size: 18,
+                    ),
                     const SizedBox(width: 10),
-                    const Text('Pitch Shift', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    const Text(
+                      'Pitch Shift',
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                     const Spacer(),
-                    Text('${_pitch > 0 ? '+' : ''}${_pitch.toInt()} semitones', style: GoogleFonts.spaceMono(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text(
+                      '${_pitch > 0 ? '+' : ''}${_pitch.toInt()} semitones',
+                      style: GoogleFonts.spaceMono(
+                        color: primaryColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
                 Slider(
@@ -865,11 +1043,25 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.arrow_upward_rounded, color: Colors.tealAccent, size: 18),
+                    const Icon(
+                      Icons.arrow_upward_rounded,
+                      color: Colors.tealAccent,
+                      size: 18,
+                    ),
                     const SizedBox(width: 10),
-                    const Text('Fade-In Duration', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    const Text(
+                      'Fade-In Duration',
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                     const Spacer(),
-                    Text('${_fadeIn.toStringAsFixed(1)}s', style: GoogleFonts.spaceMono(color: Colors.tealAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text(
+                      '${_fadeIn.toStringAsFixed(1)}s',
+                      style: GoogleFonts.spaceMono(
+                        color: Colors.tealAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
                 Slider(
@@ -887,11 +1079,25 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.arrow_downward_rounded, color: Colors.orangeAccent, size: 18),
+                    const Icon(
+                      Icons.arrow_downward_rounded,
+                      color: Colors.orangeAccent,
+                      size: 18,
+                    ),
                     const SizedBox(width: 10),
-                    const Text('Fade-Out Duration', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    const Text(
+                      'Fade-Out Duration',
+                      style: TextStyle(color: Colors.white, fontSize: 12),
+                    ),
                     const Spacer(),
-                    Text('${_fadeOut.toStringAsFixed(1)}s', style: GoogleFonts.spaceMono(color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text(
+                      '${_fadeOut.toStringAsFixed(1)}s',
+                      style: GoogleFonts.spaceMono(
+                        color: Colors.orangeAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
                 Slider(
@@ -910,20 +1116,31 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Fade Curve Shape', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                    const Text(
+                      'Fade Curve Shape',
+                      style: TextStyle(color: Colors.white70, fontSize: 11),
+                    ),
                     Row(
                       children: [
-                        _buildCurveSegment('Linear', _fadeCurve == 'linear', () {
-                          setState(() {
-                            _fadeCurve = 'linear';
-                          });
-                        }),
+                        _buildCurveSegment(
+                          'Linear',
+                          _fadeCurve == 'linear',
+                          () {
+                            setState(() {
+                              _fadeCurve = 'linear';
+                            });
+                          },
+                        ),
                         const SizedBox(width: 8),
-                        _buildCurveSegment('S-Curve', _fadeCurve == 'scurve', () {
-                          setState(() {
-                            _fadeCurve = 'scurve';
-                          });
-                        }),
+                        _buildCurveSegment(
+                          'S-Curve',
+                          _fadeCurve == 'scurve',
+                          () {
+                            setState(() {
+                              _fadeCurve = 'scurve';
+                            });
+                          },
+                        ),
                       ],
                     ),
                   ],
@@ -940,7 +1157,9 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                 child: TextButton.icon(
                   onPressed: () => _startPreview(widget.song, playerProvider),
                   icon: Icon(
-                    _isPreviewPlaying ? Icons.stop_circle_rounded : Icons.play_circle_filled_rounded,
+                    _isPreviewPlaying
+                        ? Icons.stop_circle_rounded
+                        : Icons.play_circle_filled_rounded,
                     size: 20,
                     color: _isPreviewPlaying ? Colors.redAccent : Colors.white,
                   ),
@@ -949,28 +1168,43 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: _isPreviewPlaying ? Colors.redAccent : Colors.white,
+                      color: _isPreviewPlaying
+                          ? Colors.redAccent
+                          : Colors.white,
                     ),
                   ),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.white,
-                    backgroundColor: _isPreviewPlaying ? Colors.redAccent.withValues(alpha: 0.1) : Colors.white10,
+                    backgroundColor: _isPreviewPlaying
+                        ? Colors.redAccent.withValues(alpha: 0.1)
+                        : Colors.white10,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _showSaveOptionsSheet(context, widget.song, playerProvider),
+                  onPressed: () => _showSaveOptionsSheet(
+                    context,
+                    widget.song,
+                    playerProvider,
+                  ),
                   icon: const Icon(Icons.save_rounded, size: 20),
-                  label: const Text('Save Output...', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  label: const Text(
+                    'Save Output...',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
                   style: ElevatedButton.styleFrom(
                     foregroundColor: Colors.white,
                     backgroundColor: primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                 ),
               ),
@@ -980,7 +1214,10 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
           Center(
             child: Text(
               'Swipe left to return to the player screen',
-              style: TextStyle(color: AppColors.textTertiary.withValues(alpha: 0.6), fontSize: 11),
+              style: TextStyle(
+                color: AppColors.textTertiary.withValues(alpha: 0.6),
+                fontSize: 11,
+              ),
             ),
           ),
         ],
@@ -1001,7 +1238,9 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: BoxDecoration(
-          color: active ? primaryColor.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.02),
+          color: active
+              ? primaryColor.withValues(alpha: 0.1)
+              : Colors.white.withValues(alpha: 0.02),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: active ? primaryColor : Colors.white.withValues(alpha: 0.06),
@@ -1010,11 +1249,7 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
         ),
         child: Column(
           children: [
-            Icon(
-              icon,
-              color: active ? primaryColor : Colors.white60,
-              size: 20,
-            ),
+            Icon(icon, color: active ? primaryColor : Colors.white60, size: 20),
             const SizedBox(height: 6),
             Text(
               label,
@@ -1039,7 +1274,9 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: active ? primaryColor.withValues(alpha: 0.2) : Colors.transparent,
+          color: active
+              ? primaryColor.withValues(alpha: 0.2)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: active ? primaryColor : Colors.white24),
         ),

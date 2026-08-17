@@ -63,10 +63,10 @@ class _SearchScreenState extends State<SearchScreen>
     _searchController.text = query;
     _focusNode.unfocus();
     context.read<SearchProvider>().search(
-          searchQuery: query,
-          offlineOnly: settings.offlineModeOnly,
-          downloadedSongs: playerProvider.downloadedSongs,
-        );
+      searchQuery: query,
+      offlineOnly: settings.offlineModeOnly,
+      downloadedSongs: playerProvider.downloadedSongs,
+    );
   }
 
   @override
@@ -97,7 +97,9 @@ class _SearchScreenState extends State<SearchScreen>
                           'Find songs, artists, playlists & genres',
                           style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textTertiary.withValues(alpha: 0.8),
+                            color: AppColors.textTertiary.withValues(
+                              alpha: 0.8,
+                            ),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -130,7 +132,9 @@ class _SearchScreenState extends State<SearchScreen>
                         boxShadow: [
                           BoxShadow(
                             color: _isFocused
-                                ? primaryColor.withValues(alpha: 0.25 * _glowAnimation.value + 0.10)
+                                ? primaryColor.withValues(
+                                    alpha: 0.25 * _glowAnimation.value + 0.10,
+                                  )
                                 : Colors.black.withValues(alpha: 0.2),
                             blurRadius: _isFocused ? 20 : 10,
                             spreadRadius: _isFocused ? 2 : 0,
@@ -154,9 +158,9 @@ class _SearchScreenState extends State<SearchScreen>
                     },
                     onSubmitted: (val) => _triggerSearch(val),
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppColors.textPrimary,
-                          fontSize: 15,
-                        ),
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                    ),
                     decoration: InputDecoration(
                       hintText: 'Search music, artists, albums...',
                       hintStyle: TextStyle(
@@ -165,7 +169,9 @@ class _SearchScreenState extends State<SearchScreen>
                       ),
                       prefixIcon: Icon(
                         Icons.search_rounded,
-                        color: _isFocused ? primaryColor : AppColors.textTertiary,
+                        color: _isFocused
+                            ? primaryColor
+                            : AppColors.textTertiary,
                         size: 22,
                       ),
                       suffixIcon: searchProvider.query.isNotEmpty
@@ -183,7 +189,9 @@ class _SearchScreenState extends State<SearchScreen>
                             )
                           : null,
                       filled: true,
-                      fillColor: AppColors.surfaceVariant.withValues(alpha: 0.85),
+                      fillColor: AppColors.surfaceVariant.withValues(
+                        alpha: 0.85,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide(
@@ -200,10 +208,7 @@ class _SearchScreenState extends State<SearchScreen>
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide(
-                          color: primaryColor,
-                          width: 1.5,
-                        ),
+                        borderSide: BorderSide(color: primaryColor, width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -241,7 +246,16 @@ class _SearchScreenState extends State<SearchScreen>
   // Quick Category Pills Filter Bar
   // ════════════════════════════════════════════════════════════════════════
   Widget _buildCategoryPills(SearchProvider searchProvider) {
-    final categories = ['Bollywood', 'Pop', 'Punjabi', 'Hip Hop', 'Lo-Fi', 'Rock', 'EDM', 'Romantic'];
+    final categories = [
+      'Bollywood',
+      'Pop',
+      'Punjabi',
+      'Hip Hop',
+      'Lo-Fi',
+      'Rock',
+      'EDM',
+      'Romantic',
+    ];
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return SizedBox(
@@ -253,7 +267,8 @@ class _SearchScreenState extends State<SearchScreen>
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final cat = categories[index];
-          final isSelected = _selectedCategoryChip == cat || searchProvider.query == cat;
+          final isSelected =
+              _selectedCategoryChip == cat || searchProvider.query == cat;
 
           return Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -265,16 +280,17 @@ class _SearchScreenState extends State<SearchScreen>
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? primaryColor
                       : AppColors.surfaceLight.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isSelected
-                        ? primaryColor
-                        : AppColors.glassBorder,
+                    color: isSelected ? primaryColor : AppColors.glassBorder,
                     width: 0.8,
                   ),
                   boxShadow: isSelected
@@ -292,8 +308,12 @@ class _SearchScreenState extends State<SearchScreen>
                     cat,
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: isSelected
+                          ? Colors.white
+                          : AppColors.textSecondary,
                     ),
                   ),
                 ),
@@ -375,9 +395,9 @@ class _SearchScreenState extends State<SearchScreen>
               index: index,
               onTap: () {
                 context.read<PlayerProvider>().playPlaylist(
-                      searchProvider.results,
-                      startIndex: index,
-                    );
+                  searchProvider.results,
+                  startIndex: index,
+                );
               },
             ),
           );
@@ -705,10 +725,7 @@ class _CategoryCard extends StatelessWidget {
   final _CategoryItem category;
   final VoidCallback onTap;
 
-  const _CategoryCard({
-    required this.category,
-    required this.onTap,
-  });
+  const _CategoryCard({required this.category, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -748,9 +765,7 @@ class _CategoryCard extends StatelessWidget {
                 fit: BoxFit.cover,
                 fadeInDuration: const Duration(milliseconds: 250),
                 errorWidget: (context, url, error) => const SizedBox.shrink(),
-                placeholder: (context, url) => Container(
-                  color: Colors.black12,
-                ),
+                placeholder: (context, url) => Container(color: Colors.black12),
               ),
 
               // Dark Overlay Gradient for Readability
@@ -788,11 +803,7 @@ class _CategoryCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(
-                          category.icon,
-                          size: 15,
-                          color: Colors.white70,
-                        ),
+                        Icon(category.icon, size: 15, color: Colors.white70),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(

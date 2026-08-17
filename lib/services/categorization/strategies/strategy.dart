@@ -63,8 +63,6 @@ abstract class CategorizationStrategy {
 
   /// Helper: filter songs down to only unclaimed ones.
   List<Song> unclaimed(StrategyContext ctx, Set<String> classifiedIds) {
-    return ctx.songs
-        .where((s) => !classifiedIds.contains(s.videoId))
-        .toList();
+    return ctx.songs.where((s) => !classifiedIds.contains(s.videoId)).toList();
   }
 }

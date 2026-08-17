@@ -208,7 +208,9 @@ class PlayerProvider extends ChangeNotifier {
     // When the 8-minute idle timer fires, save session state and refresh UI
     // BEFORE the audio handler tears down the notification and queue.
     _audioHandler.onIdleTimeout = () {
-      debugPrint('[PlayerProvider] Idle timeout — saving session and refreshing UI');
+      debugPrint(
+        '[PlayerProvider] Idle timeout — saving session and refreshing UI',
+      );
       _saveSessionState();
       _loadingSong = null;
       _playbackError = null;
@@ -229,7 +231,9 @@ class PlayerProvider extends ChangeNotifier {
     restoreLastSession();
 
     // Listen to processing state changes (buffering/loading)
-    _processingStateSub = _audioHandler.player.processingStateStream.listen((state) {
+    _processingStateSub = _audioHandler.player.processingStateStream.listen((
+      state,
+    ) {
       // "Stop after this song" sleep mode: pause once the track completes.
       if (state == ProcessingState.completed && _sleepAfterCurrentTrack) {
         _sleepAfterCurrentTrack = false;
@@ -239,7 +243,9 @@ class PlayerProvider extends ChangeNotifier {
     });
   }
 
-  static const MethodChannel _intentChannel = MethodChannel('com.sonicwave.sonic_wave/intent');
+  static const MethodChannel _intentChannel = MethodChannel(
+    'com.sonicwave.sonic_wave/intent',
+  );
 
   void _initFileIntentListener() {
     // 1. Listen for new intents when app is running / resumed
@@ -262,30 +268,34 @@ class PlayerProvider extends ChangeNotifier {
     });
 
     // 2. Check if the app was launched by opening a file
-    _intentChannel.invokeMethod<String>('getInitialFileUri').then((uriStr) async {
-      if (uriStr != null && uriStr.isNotEmpty) {
-        await handleOpenedFileUri(uriStr);
-      }
-    }).catchError((e) {
-      debugPrint('[PlayerProvider] Error getting initial file uri: $e');
-    });
+    _intentChannel
+        .invokeMethod<String>('getInitialFileUri')
+        .then((uriStr) async {
+          if (uriStr != null && uriStr.isNotEmpty) {
+            await handleOpenedFileUri(uriStr);
+          }
+        })
+        .catchError((e) {
+          debugPrint('[PlayerProvider] Error getting initial file uri: $e');
+        });
 
     // 3. …or by sharing a link into it from another app.
     _intentChannel
         .invokeMethod<String>('getInitialSharedText')
         .then((text) async {
-      if (text != null && text.isNotEmpty) {
-        await handleSharedText(text);
-      } else {
-        // Nothing new was shared, so this launch is the chance to pick up a
-        // share that was queued offline in an earlier run. Only when there is
-        // no fresh share: a new one is what the user is asking for right now
-        // and must not be pre-empted by an old one.
-        await resumePendingShare();
-      }
-    }).catchError((e) {
-      debugPrint('[PlayerProvider] Error getting initial shared text: $e');
-    });
+          if (text != null && text.isNotEmpty) {
+            await handleSharedText(text);
+          } else {
+            // Nothing new was shared, so this launch is the chance to pick up a
+            // share that was queued offline in an earlier run. Only when there is
+            // no fresh share: a new one is what the user is asking for right now
+            // and must not be pre-empted by an old one.
+            await resumePendingShare();
+          }
+        })
+        .catchError((e) {
+          debugPrint('[PlayerProvider] Error getting initial shared text: $e');
+        });
   }
 
   /// Video ids whose shared-link download is currently being set up, so a
@@ -339,31 +349,37 @@ class PlayerProvider extends ChangeNotifier {
     if (videoId == null) {
       debugPrint('[PlayerProvider] Shared text has no YouTube video link');
       // No id means no download to retry — the share itself was the problem.
-      _setSharedDownload(const SharedDownloadStatus(
-        phase: SharedDownloadPhase.failed,
-        videoId: '',
-        message: 'No YouTube link in what you shared',
-        canRetry: false,
-      ));
+      _setSharedDownload(
+        const SharedDownloadStatus(
+          phase: SharedDownloadPhase.failed,
+          videoId: '',
+          message: 'No YouTube link in what you shared',
+          canRetry: false,
+        ),
+      );
       return;
     }
 
     if (_sharedLinkInFlight.contains(videoId) ||
         _downloadProgress.containsKey(videoId)) {
-      _setSharedDownload(SharedDownloadStatus(
-        phase: SharedDownloadPhase.duplicate,
-        videoId: videoId,
-        song: _songForVideoId(videoId),
-        message: 'Already downloading',
-      ));
+      _setSharedDownload(
+        SharedDownloadStatus(
+          phase: SharedDownloadPhase.duplicate,
+          videoId: videoId,
+          song: _songForVideoId(videoId),
+          message: 'Already downloading',
+        ),
+      );
       return;
     }
 
     _sharedLinkInFlight.add(videoId);
     DownloadNotificationService.onCancelRequested = _onNotificationCancel;
     final shareSw = Stopwatch()..start();
-    DiagnosticLogService().log(DiagnosticLogService.sharedLink,
-        {'videoId': videoId, 'phase': 'start'});
+    DiagnosticLogService().log(DiagnosticLogService.sharedLink, {
+      'videoId': videoId,
+      'phase': 'start',
+    });
 
     try {
       await loadDownloads();
@@ -371,12 +387,14 @@ class PlayerProvider extends ChangeNotifier {
       if (existing.isNotEmpty) {
         // Nothing to fetch, but the user still asked for this song — offering
         // Play turns a dead end into the thing they probably wanted.
-        _setSharedDownload(SharedDownloadStatus(
-          phase: SharedDownloadPhase.duplicate,
-          videoId: videoId,
-          song: existing.first,
-          message: 'Already in your Downloads',
-        ));
+        _setSharedDownload(
+          SharedDownloadStatus(
+            phase: SharedDownloadPhase.duplicate,
+            videoId: videoId,
+            song: existing.first,
+            message: 'Already in your Downloads',
+          ),
+        );
         return;
       }
 
@@ -389,12 +407,16 @@ class PlayerProvider extends ChangeNotifier {
         return;
       }
 
-      debugPrint('[PlayerProvider] Shared YouTube link -> downloading $videoId');
+      debugPrint(
+        '[PlayerProvider] Shared YouTube link -> downloading $videoId',
+      );
 
-      _setSharedDownload(SharedDownloadStatus(
-        phase: SharedDownloadPhase.resolving,
-        videoId: videoId,
-      ));
+      _setSharedDownload(
+        SharedDownloadStatus(
+          phase: SharedDownloadPhase.resolving,
+          videoId: videoId,
+        ),
+      );
       await DownloadNotificationService.start(
         videoId: videoId,
         title: 'Preparing download',
@@ -422,11 +444,13 @@ class PlayerProvider extends ChangeNotifier {
       // rather than trusting the download to notice.
       if (_sharedDownload?.videoId != videoId) return;
 
-      _setSharedDownload(SharedDownloadStatus(
-        phase: SharedDownloadPhase.downloading,
-        videoId: videoId,
-        song: song,
-      ));
+      _setSharedDownload(
+        SharedDownloadStatus(
+          phase: SharedDownloadPhase.downloading,
+          videoId: videoId,
+          song: song,
+        ),
+      );
       await DownloadNotificationService.update(
         videoId: videoId,
         progress: 0,
@@ -436,20 +460,27 @@ class PlayerProvider extends ChangeNotifier {
 
       // downloadSong swallows its own errors, so success is decided by whether
       // the song actually landed in the downloads list.
-      await downloadSong(song, onProgress: (progress) {
-        final current = _sharedDownload;
-        if (current == null || current.videoId != videoId) return;
-        _setSharedDownload(current.copyWith(
-          phase: SharedDownloadPhase.downloading,
-          progress: progress,
-        ));
-        unawaited(DownloadNotificationService.update(
-          videoId: videoId,
-          progress: progress,
-          title: song.title,
-          subtitle: song.artist,
-        ));
-      });
+      await downloadSong(
+        song,
+        onProgress: (progress) {
+          final current = _sharedDownload;
+          if (current == null || current.videoId != videoId) return;
+          _setSharedDownload(
+            current.copyWith(
+              phase: SharedDownloadPhase.downloading,
+              progress: progress,
+            ),
+          );
+          unawaited(
+            DownloadNotificationService.update(
+              videoId: videoId,
+              progress: progress,
+              title: song.title,
+              subtitle: song.artist,
+            ),
+          );
+        },
+      );
 
       // Cancelled mid-flight: the card has already been cleared and the service
       // stopped, so reporting a failure here would contradict what the user did.
@@ -459,17 +490,20 @@ class PlayerProvider extends ChangeNotifier {
       if (saved) {
         shareSw.stop();
         DiagnosticLogService().log(DiagnosticLogService.sharedLink, {
-          'videoId': videoId, 'phase': 'done',
+          'videoId': videoId,
+          'phase': 'done',
           'elapsed_ms': shareSw.elapsedMilliseconds,
           'title': song.title,
         });
-        _setSharedDownload(SharedDownloadStatus(
-          phase: SharedDownloadPhase.done,
-          videoId: videoId,
-          song: _songForVideoId(videoId) ?? song,
-          progress: 1.0,
-          message: 'Saved to Downloads',
-        ));
+        _setSharedDownload(
+          SharedDownloadStatus(
+            phase: SharedDownloadPhase.done,
+            videoId: videoId,
+            song: _songForVideoId(videoId) ?? song,
+            progress: 1.0,
+            message: 'Saved to Downloads',
+          ),
+        );
         await DownloadNotificationService.complete(
           videoId: videoId,
           title: song.title,
@@ -478,13 +512,15 @@ class PlayerProvider extends ChangeNotifier {
         shareSw.stop();
         if (!await _hasNetwork()) {
           DiagnosticLogService().log(DiagnosticLogService.sharedLink, {
-            'videoId': videoId, 'phase': 'queued_offline',
+            'videoId': videoId,
+            'phase': 'queued_offline',
             'elapsed_ms': shareSw.elapsedMilliseconds,
           });
           await _queueShareForNetwork(text, videoId, song: song);
         } else {
           DiagnosticLogService().log(DiagnosticLogService.sharedLink, {
-            'videoId': videoId, 'phase': 'failed',
+            'videoId': videoId,
+            'phase': 'failed',
             'elapsed_ms': shareSw.elapsedMilliseconds,
           });
           await _failSharedDownload(videoId, 'Download failed', song: song);
@@ -504,8 +540,9 @@ class PlayerProvider extends ChangeNotifier {
   /// sitting on a DNS probe.
   Future<bool> _hasNetwork() async {
     try {
-      final result = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 4));
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 4));
       return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
     } catch (_) {
       return false;
@@ -513,16 +550,21 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   /// Park [text] until the network returns, and start polling for it.
-  Future<void> _queueShareForNetwork(String text, String videoId,
-      {Song? song}) async {
+  Future<void> _queueShareForNetwork(
+    String text,
+    String videoId, {
+    Song? song,
+  }) async {
     debugPrint('[PlayerProvider] No network — queued shared link $videoId');
 
-    _setSharedDownload(SharedDownloadStatus(
-      phase: SharedDownloadPhase.waitingForNetwork,
-      videoId: videoId,
-      song: song,
-      message: 'Waiting for a connection',
-    ));
+    _setSharedDownload(
+      SharedDownloadStatus(
+        phase: SharedDownloadPhase.waitingForNetwork,
+        videoId: videoId,
+        song: song,
+        message: 'Waiting for a connection',
+      ),
+    );
 
     // Persisted as well as held in memory: a share is usually made from another
     // app, so SonicWave is in the background and eligible to be killed long
@@ -604,15 +646,20 @@ class PlayerProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<void> _failSharedDownload(String videoId, String message,
-      {Song? song}) async {
+  Future<void> _failSharedDownload(
+    String videoId,
+    String message, {
+    Song? song,
+  }) async {
     if (_sharedDownload?.videoId != videoId) return;
-    _setSharedDownload(SharedDownloadStatus(
-      phase: SharedDownloadPhase.failed,
-      videoId: videoId,
-      song: song ?? _sharedDownload?.song,
-      message: message,
-    ));
+    _setSharedDownload(
+      SharedDownloadStatus(
+        phase: SharedDownloadPhase.failed,
+        videoId: videoId,
+        song: song ?? _sharedDownload?.song,
+        message: message,
+      ),
+    );
     await DownloadNotificationService.fail(
       videoId: videoId,
       title: song?.title ?? 'Shared link',
@@ -668,7 +715,10 @@ class PlayerProvider extends ChangeNotifier {
       String displayName = uriStr.split(RegExp(r'[/\\]')).last;
 
       if (uriStr.startsWith('content://')) {
-        final res = await _intentChannel.invokeMapMethod<String, String>('resolveContentUri', uriStr);
+        final res = await _intentChannel.invokeMapMethod<String, String>(
+          'resolveContentUri',
+          uriStr,
+        );
         if (res != null && res['path'] != null) {
           realPath = res['path']!;
           if (res['name'] != null && res['name']!.isNotEmpty) {
@@ -680,7 +730,9 @@ class PlayerProvider extends ChangeNotifier {
         displayName = realPath.split(Platform.pathSeparator).last;
       }
 
-      final cleanTitle = displayName.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '').replaceAll('_', ' ');
+      final cleanTitle = displayName
+          .replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '')
+          .replaceAll('_', ' ');
 
       Song initialSong = Song(
         id: 'local_${realPath.hashCode}',
@@ -716,7 +768,10 @@ class PlayerProvider extends ChangeNotifier {
         final songsJson = playlist.map((s) => s.toJson()).toList();
         await prefs.setString('saved_session_playlist', json.encode(songsJson));
         await prefs.setInt('saved_session_index', currentIndex);
-        await prefs.setInt('saved_session_position', _audioHandler.player.position.inSeconds);
+        await prefs.setInt(
+          'saved_session_position',
+          _audioHandler.player.position.inSeconds,
+        );
       }
     } catch (_) {}
   }
@@ -727,7 +782,9 @@ class PlayerProvider extends ChangeNotifier {
       final raw = prefs.getString('saved_session_playlist');
       if (raw != null && raw.isNotEmpty) {
         final List<dynamic> jsonList = json.decode(raw);
-        final songs = jsonList.map((j) => Song.fromJson(j as Map<String, dynamic>)).toList();
+        final songs = jsonList
+            .map((j) => Song.fromJson(j as Map<String, dynamic>))
+            .toList();
         final index = prefs.getInt('saved_session_index') ?? 0;
         final posSec = prefs.getInt('saved_session_position') ?? 0;
         if (songs.isNotEmpty) {
@@ -890,7 +947,8 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
     final sw = Stopwatch()..start();
     DiagnosticLogService().log(DiagnosticLogService.playStart, {
-      'videoId': song.videoId, 'title': song.title,
+      'videoId': song.videoId,
+      'title': song.title,
       'local': song.filePath != null,
     });
     try {
@@ -898,7 +956,8 @@ class PlayerProvider extends ChangeNotifier {
       if (_playGeneration == thisGeneration) {
         sw.stop();
         DiagnosticLogService().log(DiagnosticLogService.playLoaded, {
-          'videoId': song.videoId, 'elapsed_ms': sw.elapsedMilliseconds,
+          'videoId': song.videoId,
+          'elapsed_ms': sw.elapsedMilliseconds,
         });
         _addToRecentlyPlayed(song);
       }
@@ -907,7 +966,8 @@ class PlayerProvider extends ChangeNotifier {
         sw.stop();
         debugPrint('Error playing song: $e');
         DiagnosticLogService().log(DiagnosticLogService.playError, {
-          'videoId': song.videoId, 'elapsed_ms': sw.elapsedMilliseconds,
+          'videoId': song.videoId,
+          'elapsed_ms': sw.elapsedMilliseconds,
           'error': e.toString(),
         });
         final errorMsg = e.toString().replaceAll('Exception:', '').trim();
@@ -1034,7 +1094,9 @@ class PlayerProvider extends ChangeNotifier {
         final List<dynamic> jsonList = json.decode(jsonString);
         _history.clear();
         _history.addAll(
-          jsonList.map((j) => HistoryEntry.fromJson(j as Map<String, dynamic>)).toList(),
+          jsonList
+              .map((j) => HistoryEntry.fromJson(j as Map<String, dynamic>))
+              .toList(),
         );
         notifyListeners();
       }
@@ -1046,9 +1108,7 @@ class PlayerProvider extends ChangeNotifier {
   Future<void> _saveHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonString = json.encode(
-        _history.map((e) => e.toJson()).toList(),
-      );
+      final jsonString = json.encode(_history.map((e) => e.toJson()).toList());
       await prefs.setString(_recentlyPlayedKey, jsonString);
     } catch (e) {
       debugPrint('Error saving history: $e');
@@ -1165,7 +1225,10 @@ class PlayerProvider extends ChangeNotifier {
           break;
       }
 
-      _audioHandler.setSpeedAndPitch(speedMultiplier * _playbackSpeed, pitchMultiplier);
+      _audioHandler.setSpeedAndPitch(
+        speedMultiplier * _playbackSpeed,
+        pitchMultiplier,
+      );
       _audioHandler.setEqualizerPreset(_lastEnhancerMode);
     }
   }
@@ -1218,7 +1281,9 @@ class PlayerProvider extends ChangeNotifier {
     final originalVolume = player.volume;
     const steps = 15;
     const fadeDuration = Duration(milliseconds: 2500); // 2.5 seconds fade-out
-    final interval = Duration(milliseconds: fadeDuration.inMilliseconds ~/ steps);
+    final interval = Duration(
+      milliseconds: fadeDuration.inMilliseconds ~/ steps,
+    );
 
     for (int i = steps; i >= 0; i--) {
       final vol = originalVolume * (i / steps);
@@ -1227,7 +1292,7 @@ class PlayerProvider extends ChangeNotifier {
     }
 
     await pause();
-    
+
     // Restore original volume so that playback is normal when started next time
     await player.setVolume(originalVolume);
 
@@ -1247,17 +1312,19 @@ class PlayerProvider extends ChangeNotifier {
 
     for (final entry in service.activeTasks.entries) {
       final task = entry.value;
-      items.add(DownloadItem(
-        song: task.song,
-        status: task.status,
-        progress: task.progress,
-        speedBytesPerSec: task.speedBytesPerSec,
-        eta: task.eta,
-        bytesDownloaded: task.bytesDownloaded,
-        totalBytes: task.totalSize,
-        errorMessage: task.errorMessage,
-        retryCount: task.retryCount,
-      ));
+      items.add(
+        DownloadItem(
+          song: task.song,
+          status: task.status,
+          progress: task.progress,
+          speedBytesPerSec: task.speedBytesPerSec,
+          eta: task.eta,
+          bytesDownloaded: task.bytesDownloaded,
+          totalBytes: task.totalSize,
+          errorMessage: task.errorMessage,
+          retryCount: task.retryCount,
+        ),
+      );
     }
 
     // Sort: downloading → retrying → paused → queued → failed
@@ -1301,7 +1368,8 @@ class PlayerProvider extends ChangeNotifier {
 
   int _storageUsedBytes = 0;
   int get storageUsedBytes => _storageUsedBytes;
-  String get formattedStorageUsed => DownloadItem.formatFileSize(_storageUsedBytes);
+  String get formattedStorageUsed =>
+      DownloadItem.formatFileSize(_storageUsedBytes);
 
   Future<void> refreshStorageUsed() async {
     _storageUsedBytes = await DownloadService().getStorageUsed();
@@ -1334,9 +1402,13 @@ class PlayerProvider extends ChangeNotifier {
       final album = _albums[i];
 
       // If physical folder was deleted manually via File Manager, drop folder album
-      if (album.isFolderBased && album.folderPath != null && !Directory(album.folderPath!).existsSync()) {
+      if (album.isFolderBased &&
+          album.folderPath != null &&
+          !Directory(album.folderPath!).existsSync()) {
         albumsChanged = true;
-        debugPrint('[PlayerProvider] Pruned missing album folder "${album.name}" (${album.folderPath})');
+        debugPrint(
+          '[PlayerProvider] Pruned missing album folder "${album.name}" (${album.folderPath})',
+        );
         continue;
       }
 
@@ -1349,7 +1421,9 @@ class PlayerProvider extends ChangeNotifier {
           validSongs.add(song);
         } else {
           songPruned = true;
-          debugPrint('[PlayerProvider] Pruned missing song "${song.title}" from album "${album.name}"');
+          debugPrint(
+            '[PlayerProvider] Pruned missing song "${song.title}" from album "${album.name}"',
+          );
         }
       }
 
@@ -1370,7 +1444,9 @@ class PlayerProvider extends ChangeNotifier {
     // 3. Favorites Integrity
     final validFavorites = _favorites.where((song) {
       final path = song.filePath ?? (song.isLocalFile ? song.videoId : null);
-      if (path != null && path.isNotEmpty && (song.isLocalFile || path.contains('/') || path.contains('\\'))) {
+      if (path != null &&
+          path.isNotEmpty &&
+          (song.isLocalFile || path.contains('/') || path.contains('\\'))) {
         return File(path).existsSync();
       }
       return true;
@@ -1395,7 +1471,9 @@ class PlayerProvider extends ChangeNotifier {
     if (validLocalSongs.length != _localDeviceSongs.length) {
       final removed = _localDeviceSongs.length - validLocalSongs.length;
       _localDeviceSongs = validLocalSongs;
-      debugPrint('[PlayerProvider] Pruned $removed missing local song(s) from device index');
+      debugPrint(
+        '[PlayerProvider] Pruned $removed missing local song(s) from device index',
+      );
     }
 
     // 5. Refresh the storage-used counter. This used to only happen inside
@@ -1519,7 +1597,9 @@ class PlayerProvider extends ChangeNotifier {
 
     final localIdx = _localDeviceSongs.indexWhere((s) => s.videoId == videoId);
     if (localIdx >= 0) {
-      _localDeviceSongs[localIdx] = _localDeviceSongs[localIdx].copyWith(duration: newDuration);
+      _localDeviceSongs[localIdx] = _localDeviceSongs[localIdx].copyWith(
+        duration: newDuration,
+      );
     }
 
     final recentIdx = _history.indexWhere((e) => e.song.videoId == videoId);
@@ -1553,14 +1633,28 @@ class PlayerProvider extends ChangeNotifier {
 
     String title = '';
     String artist = '';
-    final found = _downloadedSongs.firstWhere((s) => s.videoId == videoId, orElse: () => 
-      _localDeviceSongs.firstWhere((s) => s.videoId == videoId, orElse: () =>
-        _favorites.firstWhere((s) => s.videoId == videoId, orElse: () =>
-          _history.map((e) => e.song).firstWhere((s) => s.videoId == videoId, orElse: () =>
-            Song(id: '', title: '', artist: '', thumbnailUrl: '', highResThumbnailUrl: '', duration: Duration.zero, videoId: videoId)
-          )
-        )
-      )
+    final found = _downloadedSongs.firstWhere(
+      (s) => s.videoId == videoId,
+      orElse: () => _localDeviceSongs.firstWhere(
+        (s) => s.videoId == videoId,
+        orElse: () => _favorites.firstWhere(
+          (s) => s.videoId == videoId,
+          orElse: () => _history
+              .map((e) => e.song)
+              .firstWhere(
+                (s) => s.videoId == videoId,
+                orElse: () => Song(
+                  id: '',
+                  title: '',
+                  artist: '',
+                  thumbnailUrl: '',
+                  highResThumbnailUrl: '',
+                  duration: Duration.zero,
+                  videoId: videoId,
+                ),
+              ),
+        ),
+      ),
     );
     title = found.title;
     artist = found.artist;
@@ -1570,8 +1664,16 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveNewSongCopy(Song originalSong, Song newSong, String sourceFilePath) async {
-    await DownloadService().saveNewSongCopy(originalSong, newSong, sourceFilePath);
+  Future<void> saveNewSongCopy(
+    Song originalSong,
+    Song newSong,
+    String sourceFilePath,
+  ) async {
+    await DownloadService().saveNewSongCopy(
+      originalSong,
+      newSong,
+      sourceFilePath,
+    );
     await loadDownloads();
     notifyListeners();
   }
@@ -1591,27 +1693,42 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
 
     if (context != null && context.mounted) {
-      AppToast.show(context, 'Downloading "${song.title}"...', type: ToastType.info);
+      AppToast.show(
+        context,
+        'Downloading "${song.title}"...',
+        type: ToastType.info,
+      );
     }
 
     final sw = Stopwatch()..start();
     try {
-      await DownloadService().downloadSong(song, (progress) {
-        _downloadProgress[song.videoId] = progress;
-        onProgress?.call(progress);
-        notifyListeners();
-      }, onStateChanged: () {
-        notifyListeners();
-      }, quality: _audioQuality);
+      await DownloadService().downloadSong(
+        song,
+        (progress) {
+          _downloadProgress[song.videoId] = progress;
+          onProgress?.call(progress);
+          notifyListeners();
+        },
+        onStateChanged: () {
+          notifyListeners();
+        },
+        quality: _audioQuality,
+      );
       sw.stop();
       _downloadProgress.remove(song.videoId);
       await loadDownloads();
 
       // Process any pending album assignments for this downloaded song
       if (_pendingAlbumDownloads.containsKey(song.videoId)) {
-        final albumIds = List<String>.from(_pendingAlbumDownloads.remove(song.videoId)!);
-        final freshIdx = _downloadedSongs.indexWhere((s) => s.videoId == song.videoId);
-        final downloadedSong = freshIdx >= 0 ? _downloadedSongs[freshIdx] : song;
+        final albumIds = List<String>.from(
+          _pendingAlbumDownloads.remove(song.videoId)!,
+        );
+        final freshIdx = _downloadedSongs.indexWhere(
+          (s) => s.videoId == song.videoId,
+        );
+        final downloadedSong = freshIdx >= 0
+            ? _downloadedSongs[freshIdx]
+            : song;
 
         for (final albumId in albumIds) {
           await addSongToAlbum(albumId, downloadedSong);
@@ -1619,11 +1736,16 @@ class PlayerProvider extends ChangeNotifier {
       }
 
       DiagnosticLogService().log(DiagnosticLogService.downloadComplete, {
-        'videoId': song.videoId, 'title': song.title,
+        'videoId': song.videoId,
+        'title': song.title,
         'elapsed_ms': sw.elapsedMilliseconds,
       });
       if (context != null && context.mounted) {
-        AppToast.show(context, 'Downloaded "${song.title}" for offline playback!', type: ToastType.success);
+        AppToast.show(
+          context,
+          'Downloaded "${song.title}" for offline playback!',
+          type: ToastType.success,
+        );
       }
     } catch (e) {
       sw.stop();
@@ -1633,7 +1755,11 @@ class PlayerProvider extends ChangeNotifier {
       debugPrint('Error downloading song in provider: $e');
       if (context != null && context.mounted) {
         final errText = e.toString().replaceAll('Exception:', '').trim();
-        AppToast.show(context, 'Failed to download "${song.title}": $errText', type: ToastType.warning);
+        AppToast.show(
+          context,
+          'Failed to download "${song.title}": $errText',
+          type: ToastType.warning,
+        );
       }
     }
   }
@@ -1647,7 +1773,9 @@ class PlayerProvider extends ChangeNotifier {
     BuildContext? context,
   }) async {
     // 1. Check if song is already downloaded
-    final existingIdx = _downloadedSongs.indexWhere((s) => s.videoId == song.videoId);
+    final existingIdx = _downloadedSongs.indexWhere(
+      (s) => s.videoId == song.videoId,
+    );
     if (existingIdx >= 0) {
       final downloadedSong = _downloadedSongs[existingIdx];
       await addSongToAlbum(targetAlbum.id, downloadedSong);
@@ -1663,7 +1791,9 @@ class PlayerProvider extends ChangeNotifier {
     }
 
     // 2. Register pending album assignment for this videoId
-    _pendingAlbumDownloads.putIfAbsent(song.videoId, () => []).add(targetAlbum.id);
+    _pendingAlbumDownloads
+        .putIfAbsent(song.videoId, () => [])
+        .add(targetAlbum.id);
 
     // 3. If download is already in progress, notify user
     if (_downloadProgress.containsKey(song.videoId)) {
@@ -1793,7 +1923,9 @@ class PlayerProvider extends ChangeNotifier {
         final List<dynamic> jsonList = json.decode(jsonString);
         _favorites.clear();
         _favorites.addAll(
-          jsonList.map((j) => Song.fromJson(j as Map<String, dynamic>)).toList(),
+          jsonList
+              .map((j) => Song.fromJson(j as Map<String, dynamic>))
+              .toList(),
         );
         notifyListeners();
       }
@@ -1832,7 +1964,9 @@ class PlayerProvider extends ChangeNotifier {
         final List<dynamic> jsonList = json.decode(jsonString);
         _albums.clear();
         _albums.addAll(
-          jsonList.map((j) => UserAlbum.fromJson(j as Map<String, dynamic>)).toList(),
+          jsonList
+              .map((j) => UserAlbum.fromJson(j as Map<String, dynamic>))
+              .toList(),
         );
       } else {
         // First run: clean initialization with no pre-defined albums.
@@ -1849,9 +1983,7 @@ class PlayerProvider extends ChangeNotifier {
   Future<void> _saveAlbums() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final jsonString = json.encode(
-        _albums.map((a) => a.toJson()).toList(),
-      );
+      final jsonString = json.encode(_albums.map((a) => a.toJson()).toList());
       await prefs.setString(_albumsKey, jsonString);
     } catch (e) {
       debugPrint('Error saving albums: $e');
@@ -1914,14 +2046,19 @@ class PlayerProvider extends ChangeNotifier {
       // Option B: "Do anyway" — move physical files into hidden recovery backup folder
       try {
         final docsDir = await getApplicationDocumentsDirectory();
-        final recoveryDir = Directory('${docsDir.path}${Platform.pathSeparator}sonicwave${Platform.pathSeparator}.recovery');
+        final recoveryDir = Directory(
+          '${docsDir.path}${Platform.pathSeparator}sonicwave${Platform.pathSeparator}.recovery',
+        );
         if (!await recoveryDir.exists()) {
           await recoveryDir.create(recursive: true);
         }
 
         for (final song in album.songs) {
-          final srcPath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
-          if (srcPath != null && srcPath.isNotEmpty && File(srcPath).existsSync()) {
+          final srcPath =
+              song.filePath ?? (song.isLocalFile ? song.videoId : null);
+          if (srcPath != null &&
+              srcPath.isNotEmpty &&
+              File(srcPath).existsSync()) {
             try {
               await StorageLocationService().moveFile(srcPath, recoveryDir);
             } catch (_) {}
@@ -1958,10 +2095,7 @@ class PlayerProvider extends ChangeNotifier {
     final idx = _albums.indexWhere((a) => a.id == albumId);
     if (idx >= 0) {
       final album = _albums[idx];
-      _albums[idx] = album.copyWith(
-        name: newName,
-        lastUpdated: DateTime.now(),
-      );
+      _albums[idx] = album.copyWith(name: newName, lastUpdated: DateTime.now());
       notifyListeners();
       await _saveAlbums();
     }
@@ -2011,8 +2145,14 @@ class PlayerProvider extends ChangeNotifier {
               if (await albumDir.exists()) {
                 await for (final entity in albumDir.list()) {
                   if (entity is File) {
-                    final name = entity.path.split(Platform.pathSeparator).last.toLowerCase();
-                    if (name.startsWith('cover') && (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png'))) {
+                    final name = entity.path
+                        .split(Platform.pathSeparator)
+                        .last
+                        .toLowerCase();
+                    if (name.startsWith('cover') &&
+                        (name.endsWith('.jpg') ||
+                            name.endsWith('.jpeg') ||
+                            name.endsWith('.png'))) {
                       try {
                         await entity.delete();
                       } catch (_) {}
@@ -2022,13 +2162,15 @@ class PlayerProvider extends ChangeNotifier {
               }
             } catch (_) {}
 
-            final targetPath = '${album.folderPath}${Platform.pathSeparator}cover_$timestamp.jpg';
+            final targetPath =
+                '${album.folderPath}${Platform.pathSeparator}cover_$timestamp.jpg';
             final copied = await sourceFile.copy(targetPath);
             coverPath = copied.path;
           } else {
             // Custom virtual album cover saved into meta directory
             final metaDir = await StorageLocationService().getMetaDir();
-            final targetPath = '${metaDir.path}${Platform.pathSeparator}album_${album.id}_$timestamp.jpg';
+            final targetPath =
+                '${metaDir.path}${Platform.pathSeparator}album_${album.id}_$timestamp.jpg';
 
             if (album.coverImagePath != null) {
               try {
@@ -2067,25 +2209,31 @@ class PlayerProvider extends ChangeNotifier {
     if (idx >= 0) {
       final album = _albums[idx];
       final List<Song> finalSongs = [];
-      
+
       for (final song in songs) {
         if (album.isFolderBased && album.folderPath != null) {
-          final sourcePath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
+          final sourcePath =
+              song.filePath ?? (song.isLocalFile ? song.videoId : null);
           if (sourcePath != null && await File(sourcePath).exists()) {
             final fileName = sourcePath.split(Platform.pathSeparator).last;
-            final expectedPath = '${album.folderPath}${Platform.pathSeparator}$fileName';
-            
-            if (sourcePath != expectedPath && !await File(expectedPath).exists()) {
+            final expectedPath =
+                '${album.folderPath}${Platform.pathSeparator}$fileName';
+
+            if (sourcePath != expectedPath &&
+                !await File(expectedPath).exists()) {
               final storageService = StorageLocationService();
               final albumDir = Directory(album.folderPath!);
-              final newPath = await storageService.moveFile(sourcePath, albumDir);
+              final newPath = await storageService.moveFile(
+                sourcePath,
+                albumDir,
+              );
               if (newPath != null) {
                 final updatedSong = song.copyWith(
                   filePath: newPath,
                   albumFolderName: album.name,
                 );
                 finalSongs.add(updatedSong);
-                
+
                 // Keep download service metadata in sync
                 await DownloadService().updateDownloadedSong(updatedSong);
                 continue;
@@ -2121,11 +2269,15 @@ class PlayerProvider extends ChangeNotifier {
           Song finalSong = song;
 
           if (album.isFolderBased && album.folderPath != null) {
-            final sourcePath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
+            final sourcePath =
+                song.filePath ?? (song.isLocalFile ? song.videoId : null);
             if (sourcePath != null && await File(sourcePath).exists()) {
               final storageService = StorageLocationService();
               final albumDir = Directory(album.folderPath!);
-              final newPath = await storageService.moveFile(sourcePath, albumDir);
+              final newPath = await storageService.moveFile(
+                sourcePath,
+                albumDir,
+              );
               if (newPath != null) {
                 finalSong = song.copyWith(
                   filePath: newPath,
@@ -2150,13 +2302,20 @@ class PlayerProvider extends ChangeNotifier {
     final idx = _albums.indexWhere((a) => a.id == albumId);
     if (idx >= 0) {
       final album = _albums[idx];
-      final updatedSongs = album.songs.where((s) => s.videoId != videoId).toList();
+      final updatedSongs = album.songs
+          .where((s) => s.videoId != videoId)
+          .toList();
       await updateAlbumSongs(albumId, updatedSongs);
     }
   }
 
   /// Physically or logically move or copy a song file to another album's folder.
-  Future<bool> moveSongToAnotherAlbumFolder(Song song, String targetAlbumId, {required bool physicalMove, bool isCopyMode = false}) async {
+  Future<bool> moveSongToAnotherAlbumFolder(
+    Song song,
+    String targetAlbumId, {
+    required bool physicalMove,
+    bool isCopyMode = false,
+  }) async {
     final albumIdx = _albums.indexWhere((a) => a.id == targetAlbumId);
     if (albumIdx < 0) return false;
     final targetAlbum = _albums[albumIdx];
@@ -2165,7 +2324,8 @@ class PlayerProvider extends ChangeNotifier {
 
     if (physicalMove) {
       if (targetAlbum.folderPath == null) return false;
-      final sourcePath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
+      final sourcePath =
+          song.filePath ?? (song.isLocalFile ? song.videoId : null);
       if (sourcePath == null) return false;
 
       final sourceFile = File(sourcePath);
@@ -2173,7 +2333,7 @@ class PlayerProvider extends ChangeNotifier {
 
       final storageService = StorageLocationService();
       final targetDir = Directory(targetAlbum.folderPath!);
-      
+
       if (isCopyMode) {
         // "Make a Copy": duplicate into target album while preserving original
         newPath = await storageService.copyFile(sourcePath, targetDir);
@@ -2192,36 +2352,48 @@ class PlayerProvider extends ChangeNotifier {
             filePath: newPath,
             albumFolderName: targetAlbum.name,
           )
-        : song.copyWith(
-            filePath: newPath,
-            albumFolderName: targetAlbum.name,
-          );
+        : song.copyWith(filePath: newPath, albumFolderName: targetAlbum.name);
 
     // 1. Remove the old song reference from its previous folder album if any (only on move)
     if (!isCopyMode && song.albumFolderName != null) {
-      final oldAlbumIdx = _albums.indexWhere((a) => a.name == song.albumFolderName);
+      final oldAlbumIdx = _albums.indexWhere(
+        (a) => a.name == song.albumFolderName,
+      );
       if (oldAlbumIdx >= 0) {
         final oldAlbum = _albums[oldAlbumIdx];
-        final updatedOldSongs = oldAlbum.songs.where((s) => s.videoId != song.videoId).toList();
-        _albums[oldAlbumIdx] = oldAlbum.copyWith(songs: updatedOldSongs, lastUpdated: DateTime.now());
+        final updatedOldSongs = oldAlbum.songs
+            .where((s) => s.videoId != song.videoId)
+            .toList();
+        _albums[oldAlbumIdx] = oldAlbum.copyWith(
+          songs: updatedOldSongs,
+          lastUpdated: DateTime.now(),
+        );
       }
     }
 
     // 2. Add the updated song to the target album
     if (!targetAlbum.songs.any((s) => s.videoId == updatedSong.videoId)) {
-      final updatedTargetSongs = List<Song>.from(targetAlbum.songs)..add(updatedSong);
-      _albums[albumIdx] = targetAlbum.copyWith(songs: updatedTargetSongs, lastUpdated: DateTime.now());
+      final updatedTargetSongs = List<Song>.from(targetAlbum.songs)
+        ..add(updatedSong);
+      _albums[albumIdx] = targetAlbum.copyWith(
+        songs: updatedTargetSongs,
+        lastUpdated: DateTime.now(),
+      );
     }
 
     if (!isCopyMode) {
       // 3. Update the download list if it is tracked as a download
-      final downloadIdx = _downloadedSongs.indexWhere((s) => s.videoId == song.videoId);
+      final downloadIdx = _downloadedSongs.indexWhere(
+        (s) => s.videoId == song.videoId,
+      );
       if (downloadIdx >= 0) {
         _downloadedSongs[downloadIdx] = updatedSong;
       }
-      
+
       // 4. Update the local scanned list if it is scanned
-      final localIdx = _localDeviceSongs.indexWhere((s) => s.videoId == song.videoId);
+      final localIdx = _localDeviceSongs.indexWhere(
+        (s) => s.videoId == song.videoId,
+      );
       if (localIdx >= 0) {
         _localDeviceSongs[localIdx] = updatedSong;
       }
@@ -2240,6 +2412,7 @@ class PlayerProvider extends ChangeNotifier {
   List<Song> _localDeviceSongs = [];
   bool _isScanningLocal = false;
   bool _hasStoragePermission = false;
+
   /// Set true when the user explicitly denied storage permission during a scan,
   /// so the Local tab can show a specific "grant permission" message instead of
   /// the generic "no music found" empty state.
@@ -2250,9 +2423,10 @@ class PlayerProvider extends ChangeNotifier {
   bool get isScanningLocal => _isScanningLocal;
   bool get hasStoragePermission => _hasStoragePermission;
   bool get scanPermissionDenied => _scanPermissionDenied;
-  
+
   bool isNewInSession(Song song) {
-    return _sessionNewSongIds.contains(song.videoId) || _sessionNewSongIds.contains(song.id);
+    return _sessionNewSongIds.contains(song.videoId) ||
+        _sessionNewSongIds.contains(song.id);
   }
 
   List<Song> get localSongsMerged {
@@ -2274,87 +2448,125 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   static List<Song> _scanFsIsolate(List<String> pathsToScan) {
-  final List<Song> foundSongs = [];
-  final Set<String> visited = {};
+    final List<Song> foundSongs = [];
+    final Set<String> visited = {};
 
-  const skipNames = {
-    'android', 'cache', 'temp', 'tmp', '.thumbnails',
-    'whatsapp', 'telegram', 'signal', 'viber', 'messenger',
-    'tiktok', 'instagram', 'snapchat', 'facebook',
-    'ringtones', 'notifications', 'alarms', 'media',
-    'dcim', 'pictures', 'photos', 'documents', 'downloads',
-    'podcasts', 'audiobooks',
-  };
-  const supportedExts = {
-    'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus', 
-    'wma', 'aiff', 'aif', 'alac', 'mka', 'amr', 'm4b', 'mpeg', 'mp2'
-  };
+    const skipNames = {
+      'android',
+      'cache',
+      'temp',
+      'tmp',
+      '.thumbnails',
+      'whatsapp',
+      'telegram',
+      'signal',
+      'viber',
+      'messenger',
+      'tiktok',
+      'instagram',
+      'snapchat',
+      'facebook',
+      'ringtones',
+      'notifications',
+      'alarms',
+      'media',
+      'dcim',
+      'pictures',
+      'photos',
+      'documents',
+      'downloads',
+      'podcasts',
+      'audiobooks',
+    };
+    const supportedExts = {
+      'mp3',
+      'm4a',
+      'wav',
+      'flac',
+      'aac',
+      'ogg',
+      'opus',
+      'wma',
+      'aiff',
+      'aif',
+      'alac',
+      'mka',
+      'amr',
+      'm4b',
+      'mpeg',
+      'mp2',
+    };
 
-  void scanDirSync(Directory dir) {
-    final path = dir.path;
-    if (visited.contains(path)) return;
-    visited.add(path);
+    void scanDirSync(Directory dir) {
+      final path = dir.path;
+      if (visited.contains(path)) return;
+      visited.add(path);
 
-    final name = path.split(Platform.isWindows ? '\\' : '/').last.toLowerCase();
-    if (name.startsWith('.') || skipNames.contains(name)) return;
+      final name = path
+          .split(Platform.isWindows ? '\\' : '/')
+          .last
+          .toLowerCase();
+      if (name.startsWith('.') || skipNames.contains(name)) return;
 
-    try {
-      final list = dir.listSync(followLinks: false);
-      for (final entity in list) {
-        if (entity is File) {
-          final ext = entity.path.split('.').last.toLowerCase();
-          if (supportedExts.contains(ext)) {
-            final filename = entity.uri.pathSegments.isNotEmpty
-                ? entity.uri.pathSegments.last
-                : entity.path.split(Platform.isWindows ? '\\' : '/').last;
-            var nameWithoutExt = filename.contains('.')
-                ? filename.substring(0, filename.lastIndexOf('.'))
-                : filename;
+      try {
+        final list = dir.listSync(followLinks: false);
+        for (final entity in list) {
+          if (entity is File) {
+            final ext = entity.path.split('.').last.toLowerCase();
+            if (supportedExts.contains(ext)) {
+              final filename = entity.uri.pathSegments.isNotEmpty
+                  ? entity.uri.pathSegments.last
+                  : entity.path.split(Platform.isWindows ? '\\' : '/').last;
+              var nameWithoutExt = filename.contains('.')
+                  ? filename.substring(0, filename.lastIndexOf('.'))
+                  : filename;
 
-            nameWithoutExt = nameWithoutExt
-                .replaceAll(RegExp(r'\([mM][pP]3[_\s]*\d+[kK]?\)'), '')
-                .replaceAll(RegExp(r'_\d+[kK]$'), '')
-                .trim();
+              nameWithoutExt = nameWithoutExt
+                  .replaceAll(RegExp(r'\([mM][pP]3[_\s]*\d+[kK]?\)'), '')
+                  .replaceAll(RegExp(r'_\d+[kK]$'), '')
+                  .trim();
 
-            String title = nameWithoutExt;
-            String artist = 'Local Audio';
-            if (nameWithoutExt.contains(' - ')) {
-              final parts = nameWithoutExt.split(' - ');
-              artist = parts[0].trim();
-              title = parts.sublist(1).join(' - ').trim();
-            } else if (nameWithoutExt.contains('-')) {
-              final parts = nameWithoutExt.split('-');
-              artist = parts[0].trim();
-              title = parts.sublist(1).join('-').trim();
+              String title = nameWithoutExt;
+              String artist = 'Local Audio';
+              if (nameWithoutExt.contains(' - ')) {
+                final parts = nameWithoutExt.split(' - ');
+                artist = parts[0].trim();
+                title = parts.sublist(1).join(' - ').trim();
+              } else if (nameWithoutExt.contains('-')) {
+                final parts = nameWithoutExt.split('-');
+                artist = parts[0].trim();
+                title = parts.sublist(1).join('-').trim();
+              }
+
+              foundSongs.add(
+                Song(
+                  id: 'local_${entity.path}',
+                  title: title,
+                  artist: artist,
+                  thumbnailUrl: '',
+                  highResThumbnailUrl: '',
+                  duration: const Duration(minutes: 3),
+                  videoId: entity.path,
+                  filePath: entity.path,
+                ),
+              );
             }
-
-            foundSongs.add(Song(
-              id: 'local_${entity.path}',
-              title: title,
-              artist: artist,
-              thumbnailUrl: '',
-              highResThumbnailUrl: '',
-              duration: const Duration(minutes: 3),
-              videoId: entity.path,
-              filePath: entity.path,
-            ));
+          } else if (entity is Directory) {
+            scanDirSync(entity);
           }
-        } else if (entity is Directory) {
-          scanDirSync(entity);
         }
-      }
-    } catch (_) {}
-  }
-
-  for (final p in pathsToScan) {
-    final dir = Directory(p);
-    if (dir.existsSync()) {
-      scanDirSync(dir);
+      } catch (_) {}
     }
-  }
 
-  return foundSongs;
-}
+    for (final p in pathsToScan) {
+      final dir = Directory(p);
+      if (dir.existsSync()) {
+        scanDirSync(dir);
+      }
+    }
+
+    return foundSongs;
+  }
 
   Future<void> scanLocalSongs() async {
     _isScanningLocal = true;
@@ -2384,7 +2596,9 @@ class PlayerProvider extends ChangeNotifier {
       }
 
       // Track existing known paths before scan to tag new items
-      final previousPaths = _localDeviceSongs.map((s) => s.filePath ?? s.videoId).toSet();
+      final previousPaths = _localDeviceSongs
+          .map((s) => s.filePath ?? s.videoId)
+          .toSet();
 
       final Set<String> pathsToScan = {};
 
@@ -2409,7 +2623,9 @@ class PlayerProvider extends ChangeNotifier {
         }
 
         try {
-          final extDirs = await getExternalStorageDirectories(type: StorageDirectory.music);
+          final extDirs = await getExternalStorageDirectories(
+            type: StorageDirectory.music,
+          );
           if (extDirs != null) {
             for (final dir in extDirs) {
               pathsToScan.add(dir.path);
@@ -2515,7 +2731,11 @@ class PlayerProvider extends ChangeNotifier {
   ///   cannot land in the tree the copy is about to delete.
   /// • The currently-playing song's path is updated so playback of a local
   ///   file doesn't break after the old root is gone.
-  Future<bool> migrateDownloadedFiles(StorageType currentType, StorageType targetType, {String? sdCardPath}) async {
+  Future<bool> migrateDownloadedFiles(
+    StorageType currentType,
+    StorageType targetType, {
+    String? sdCardPath,
+  }) async {
     if (_isMigrating) return false;
     _isMigrating = true;
     try {
@@ -2549,8 +2769,10 @@ class PlayerProvider extends ChangeNotifier {
       // Verify every source file landed at the destination before deleting.
       final destCount = await _countFiles(newRootDir);
       if (sourceCount > 0 && destCount < sourceCount) {
-        debugPrint('[PlayerProvider] Migration copy incomplete '
-            '($destCount/$sourceCount files). Aborting delete.');
+        debugPrint(
+          '[PlayerProvider] Migration copy incomplete '
+          '($destCount/$sourceCount files). Aborting delete.',
+        );
         return false;
       }
 
@@ -2597,12 +2819,18 @@ class PlayerProvider extends ChangeNotifier {
       for (int i = 0; i < _albums.length; i++) {
         final album = _albums[i];
         final updatedSongs = album.songs.map((s) {
-          if (s.filePath != null) return s.copyWith(filePath: updatePath(s.filePath!));
+          if (s.filePath != null) {
+            return s.copyWith(filePath: updatePath(s.filePath!));
+          }
           return s;
         }).toList();
         _albums[i] = album.copyWith(
-          folderPath: album.folderPath != null ? updatePath(album.folderPath!) : null,
-          coverImagePath: album.coverImagePath != null ? updatePath(album.coverImagePath!) : null,
+          folderPath: album.folderPath != null
+              ? updatePath(album.folderPath!)
+              : null,
+          coverImagePath: album.coverImagePath != null
+              ? updatePath(album.coverImagePath!)
+              : null,
           songs: updatedSongs,
         );
       }
@@ -2654,7 +2882,10 @@ class PlayerProvider extends ChangeNotifier {
     try {
       if (!await dir.exists()) return 0;
       int count = 0;
-      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+      await for (final entity in dir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
         if (entity is File) count++;
       }
       return count;
@@ -2663,7 +2894,10 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _copyDirectoryRecursive(Directory source, Directory destination) async {
+  Future<void> _copyDirectoryRecursive(
+    Directory source,
+    Directory destination,
+  ) async {
     if (!await destination.exists()) {
       await destination.create(recursive: true);
     }
@@ -2700,8 +2934,9 @@ class PlayerProvider extends ChangeNotifier {
       for (final folderInfo in folderAlbums) {
         // Check if this folder album already exists
         final existingIdx = _albums.indexWhere(
-          (a) => a.folderPath == folderInfo.folderPath || 
-                 (a.isFolderBased && a.name == folderInfo.folderName),
+          (a) =>
+              a.folderPath == folderInfo.folderPath ||
+              (a.isFolderBased && a.name == folderInfo.folderName),
         );
 
         // Build Song objects for the folder's audio files
@@ -2730,7 +2965,9 @@ class PlayerProvider extends ChangeNotifier {
           );
         }).toList();
 
-        final enrichedFolderSongs = await LocalMetadataService().enrichSongs(folderSongs);
+        final enrichedFolderSongs = await LocalMetadataService().enrichSongs(
+          folderSongs,
+        );
 
         if (existingIdx >= 0) {
           // Update existing folder album with current files
@@ -2741,14 +2978,16 @@ class PlayerProvider extends ChangeNotifier {
           );
         } else {
           // Create new folder-based album
-          _albums.add(UserAlbum(
-            id: 'folder_${folderInfo.folderName.hashCode.abs()}',
-            name: folderInfo.folderName,
-            songs: enrichedFolderSongs,
-            isCustom: false,
-            folderPath: folderInfo.folderPath,
-            isFolderBased: true,
-          ));
+          _albums.add(
+            UserAlbum(
+              id: 'folder_${folderInfo.folderName.hashCode.abs()}',
+              name: folderInfo.folderName,
+              songs: enrichedFolderSongs,
+              isCustom: false,
+              folderPath: folderInfo.folderPath,
+              isFolderBased: true,
+            ),
+          );
         }
       }
 
@@ -2816,7 +3055,9 @@ class PlayerProvider extends ChangeNotifier {
     bool albumChanged = false;
     for (int i = 0; i < _albums.length; i++) {
       final before = _albums[i].songs.length;
-      final updatedSongs = _albums[i].songs.where((s) => s.videoId != videoId).toList();
+      final updatedSongs = _albums[i].songs
+          .where((s) => s.videoId != videoId)
+          .toList();
       if (updatedSongs.length != before) {
         _albums[i] = _albums[i].copyWith(songs: updatedSongs);
         albumChanged = true;
@@ -2830,8 +3071,14 @@ class PlayerProvider extends ChangeNotifier {
   // ===== Move to App Folder =====
 
   /// Move scanned songs into the app's storage folder, optionally into an album subfolder.
-  Future<List<Song>> moveScannedSongsToAppFolder(List<Song> songs, {String? albumName}) async {
-    final movedSongs = await DownloadService().moveAllToAppFolder(songs, albumName: albumName);
+  Future<List<Song>> moveScannedSongsToAppFolder(
+    List<Song> songs, {
+    String? albumName,
+  }) async {
+    final movedSongs = await DownloadService().moveAllToAppFolder(
+      songs,
+      albumName: albumName,
+    );
     await loadDownloads();
 
     // If album name specified, update or create the album
@@ -2849,14 +3096,16 @@ class PlayerProvider extends ChangeNotifier {
       } else {
         final storageService = StorageLocationService();
         final albumDir = await storageService.getAlbumDir(albumName);
-        _albums.add(UserAlbum(
-          id: 'folder_${albumName.hashCode.abs()}',
-          name: albumName,
-          songs: movedSongs,
-          isCustom: true,
-          folderPath: albumDir.path,
-          isFolderBased: true,
-        ));
+        _albums.add(
+          UserAlbum(
+            id: 'folder_${albumName.hashCode.abs()}',
+            name: albumName,
+            songs: movedSongs,
+            isCustom: true,
+            folderPath: albumDir.path,
+            isFolderBased: true,
+          ),
+        );
       }
       await _saveAlbums();
     }
@@ -2867,7 +3116,10 @@ class PlayerProvider extends ChangeNotifier {
 
   /// Move a single downloaded song into an album folder
   Future<void> moveSongToAlbumFolder(String videoId, String albumName) async {
-    final newPath = await DownloadService().moveFileToAlbumFolder(videoId, albumName);
+    final newPath = await DownloadService().moveFileToAlbumFolder(
+      videoId,
+      albumName,
+    );
     if (newPath != null) {
       await loadDownloads();
       notifyListeners();

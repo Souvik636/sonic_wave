@@ -14,7 +14,8 @@ import 'diagnostic_log_service.dart';
 import 'ytdlp_runtime.dart';
 import 'network_resilience_service.dart';
 
-class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHandler {
+class SonicWaveAudioHandler extends BaseAudioHandler
+    with SeekHandler, QueueHandler {
   late final AudioPlayer _player;
   final YouTubeService _youtubeService = YouTubeService();
   AndroidEqualizer? _equalizer;
@@ -132,7 +133,8 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   /// slow connections ExoPlayer will greedily cache up to 2 minutes ahead,
   /// preventing rebuffers on spotty 2G/3G networks. The back buffer keeps a
   /// seek-back window in memory so scrubbing backwards doesn't force a re-fetch.
-  static AudioLoadConfiguration get _loadConfiguration => AudioLoadConfiguration(
+  static AudioLoadConfiguration get _loadConfiguration =>
+      AudioLoadConfiguration(
         androidLoadControl: const AndroidLoadControl(
           minBufferDuration: Duration(seconds: 15),
           maxBufferDuration: Duration(seconds: 120),
@@ -152,12 +154,14 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       _player = AudioPlayer(
         audioPipeline: pipeline,
         audioLoadConfiguration: _loadConfiguration,
-        userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+        userAgent:
+            'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
       );
     } else {
       _player = AudioPlayer(
         audioLoadConfiguration: _loadConfiguration,
-        userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+        userAgent:
+            'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
       );
     }
     _init();
@@ -170,17 +174,21 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     // own playbackState.add() throws "Bad state: You cannot add items while items
     // are being added from addStream" — an unhandled exception that kills the
     // audio service mid-stop and crashes the app on next launch (see run_log.txt).
-    _player.playbackEventStream.map(_transformEvent).listen(
-      playbackState.add,
-      onError: (Object e, StackTrace st) {
-        // just_audio surfaces player errors on this stream; reflect them in
-        // playbackState instead of letting them escape as unhandled errors.
-        debugPrint('[AudioHandler] playbackEventStream error: $e');
-        playbackState.add(playbackState.value.copyWith(
-          processingState: AudioProcessingState.error,
-        ));
-      },
-    );
+    _player.playbackEventStream
+        .map(_transformEvent)
+        .listen(
+          playbackState.add,
+          onError: (Object e, StackTrace st) {
+            // just_audio surfaces player errors on this stream; reflect them in
+            // playbackState instead of letting them escape as unhandled errors.
+            debugPrint('[AudioHandler] playbackEventStream error: $e');
+            playbackState.add(
+              playbackState.value.copyWith(
+                processingState: AudioProcessingState.error,
+              ),
+            );
+          },
+        );
 
     // Listen for when current song completes
     _player.processingStateStream.listen((state) {
@@ -206,7 +214,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       try {
         await session.configure(const AudioSessionConfiguration.music());
         session.becomingNoisyEventStream.listen((_) {
-          debugPrint('[AudioHandler] Headphones/Bluetooth disconnected. Auto-pausing.');
+          debugPrint(
+            '[AudioHandler] Headphones/Bluetooth disconnected. Auto-pausing.',
+          );
           pause();
         });
       } catch (e) {
@@ -258,7 +268,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   /// all network resources, and tells audio_service to tear down the
   /// foreground service — which dismisses the media notification.
   Future<void> _onIdleTimeout() async {
-    debugPrint('[AudioHandler] 8-minute idle timeout — stopping player and dismissing notification');
+    debugPrint(
+      '[AudioHandler] 8-minute idle timeout — stopping player and dismissing notification',
+    );
 
     // Let the provider save session state BEFORE we wipe the queue.
     onIdleTimeout?.call();
@@ -334,23 +346,26 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
     final remaining = total - _player.position.inMilliseconds;
     // 20s before the end (or crossfade window + 10s, whichever is larger).
-    final triggerMs = (crossfadeSeconds > 0 ? (crossfadeSeconds + 10) * 1000 : 20000);
+    final triggerMs = (crossfadeSeconds > 0
+        ? (crossfadeSeconds + 10) * 1000
+        : 20000);
     if (remaining > 0 && remaining <= triggerMs) {
       _nearEndPrefetchedIndex = _currentIndex;
       final nextSong = _playlist[_currentIndex + 1];
       if (!nextSong.isLocalFile) {
-        debugPrint('[AudioHandler] Near-end prefetch for next track: ${nextSong.title}');
+        debugPrint(
+          '[AudioHandler] Near-end prefetch for next track: ${nextSong.title}',
+        );
         _youtubeService.prefetchStreamUrl(nextSong.videoId);
       }
     }
   }
 
-
-
   AudioPlayer get player => _player;
   List<Song> get playlist => List.unmodifiable(_playlist);
   int get currentIndex => _currentIndex;
-  Song? get currentSong => _currentIndex >= 0 && _currentIndex < _playlist.length
+  Song? get currentSong =>
+      _currentIndex >= 0 && _currentIndex < _playlist.length
       ? _playlist[_currentIndex]
       : null;
   bool get isShuffled => _isShuffled;
@@ -393,7 +408,8 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
     // Playing anything other than the restored song discards the saved resume
     // position — it belonged to a previous session's context.
-    if (_pendingRestoreSongId != null && _pendingRestoreSongId != song.videoId) {
+    if (_pendingRestoreSongId != null &&
+        _pendingRestoreSongId != song.videoId) {
       _pendingRestoreSongId = null;
       _pendingRestorePosition = null;
     }
@@ -407,7 +423,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
     try {
       // Update playlist immediately so UI reflects the correct song
-      final existingIndex = _playlist.indexWhere((s) => s.videoId == song.videoId);
+      final existingIndex = _playlist.indexWhere(
+        (s) => s.videoId == song.videoId,
+      );
       if (existingIndex >= 0) {
         _currentIndex = existingIndex;
       } else {
@@ -420,11 +438,18 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
       // Instant Fast-Path for Local Media & Offline Downloads (0ms resolution)
       String? localPath;
-      if (song.filePath != null && song.filePath!.isNotEmpty && File(song.filePath!).existsSync()) {
+      if (song.filePath != null &&
+          song.filePath!.isNotEmpty &&
+          File(song.filePath!).existsSync()) {
         localPath = song.filePath;
-      } else if (song.videoId.startsWith('content://') || song.videoId.startsWith('file://') || song.videoId.startsWith('/')) {
-        final cleanPath = song.videoId.startsWith('file://') ? Uri.parse(song.videoId).toFilePath() : song.videoId;
-        if (cleanPath.startsWith('content://') || File(cleanPath).existsSync()) {
+      } else if (song.videoId.startsWith('content://') ||
+          song.videoId.startsWith('file://') ||
+          song.videoId.startsWith('/')) {
+        final cleanPath = song.videoId.startsWith('file://')
+            ? Uri.parse(song.videoId).toFilePath()
+            : song.videoId;
+        if (cleanPath.startsWith('content://') ||
+            File(cleanPath).existsSync()) {
           localPath = cleanPath;
         }
       } else {
@@ -436,13 +461,15 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       if (localPath != null && localPath.isNotEmpty) {
         final mediaItem = MediaItem(
           id: song.videoId,
-          album: song.albumFolderName ?? (song.isLocalFile ? 'Local Storage' : 'Downloads'),
+          album:
+              song.albumFolderName ??
+              (song.isLocalFile ? 'Local Storage' : 'Downloads'),
           title: song.title,
           artist: song.artist,
           artUri: song.thumbnailUrl.isNotEmpty
               ? (song.thumbnailUrl.startsWith('http')
-                  ? Uri.parse(song.thumbnailUrl)
-                  : Uri.file(song.thumbnailUrl))
+                    ? Uri.parse(song.thumbnailUrl)
+                    : Uri.file(song.thumbnailUrl))
               : null,
           duration: song.duration,
         );
@@ -470,8 +497,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         // loadDownloads() has populated the index.
         String? resolvedLocalPath;
         if (!DownloadService().isIndexLoaded) {
-          final isDownloaded =
-              await DownloadService().isSongDownloaded(song.videoId);
+          final isDownloaded = await DownloadService().isSongDownloaded(
+            song.videoId,
+          );
           if (_playGeneration != thisGeneration) return;
 
           resolvedLocalPath = await _resolveLocalPath(song, isDownloaded);
@@ -490,8 +518,8 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
                   artist: song.artist,
                   artUri: song.thumbnailUrl.isNotEmpty
                       ? (song.thumbnailUrl.startsWith('http')
-                          ? Uri.parse(song.thumbnailUrl)
-                          : Uri.file(song.thumbnailUrl))
+                            ? Uri.parse(song.thumbnailUrl)
+                            : Uri.file(song.thumbnailUrl))
                       : null,
                   duration: song.duration,
                 ),
@@ -576,7 +604,13 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     try {
       if (song.isolationMode == 'vocal') {
         _isKaraokeMode = false;
-        await _applyCustomEqualizerGains(const [-12.0, -12.0, 12.0, 12.0, -12.0]);
+        await _applyCustomEqualizerGains(const [
+          -12.0,
+          -12.0,
+          12.0,
+          12.0,
+          -12.0,
+        ]);
       } else if (song.isolationMode == 'instrument') {
         _isKaraokeMode = true;
         await _applyEqualizerPreset(_lastAppliedEnhancerMode);
@@ -629,68 +663,86 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
   /// Resolve stream URL and load it with agile self-healing across app switches & network drops.
   Future<void> _resolveAndLoadStream(Song song, int thisGeneration) async {
-    await NetworkResilienceService().runWithAutoHeal(
-      () async {
-        if (_playGeneration != thisGeneration) return;
+    await NetworkResilienceService()
+        .runWithAutoHeal(
+          () async {
+            if (_playGeneration != thisGeneration) return;
 
-        ResolvedStream? resolved = _takePrefetched(song.videoId);
-        if (resolved != null) {
-          debugPrint('[AudioHandler] Pre-fetched stream hit: ${song.title}');
-        } else {
-          resolved = await StreamResolverService().resolve(song, forceRefresh: false);
-        }
+            ResolvedStream? resolved = _takePrefetched(song.videoId);
+            if (resolved != null) {
+              debugPrint(
+                '[AudioHandler] Pre-fetched stream hit: ${song.title}',
+              );
+            } else {
+              resolved = await StreamResolverService().resolve(
+                song,
+                forceRefresh: false,
+              );
+            }
 
-        if (resolved == null) {
-          throw Exception('Could not resolve stream for ${song.title}');
-        }
-        if (_playGeneration != thisGeneration) return;
+            if (resolved == null) {
+              throw Exception('Could not resolve stream for ${song.title}');
+            }
+            if (_playGeneration != thisGeneration) return;
 
-        try {
-          await _loadResolvedSource(resolved, song, thisGeneration);
-          DiagnosticLogService().log(
-            DiagnosticLogService.playLoaded,
-            {'videoId': song.videoId, 'source': resolved.source},
+            try {
+              await _loadResolvedSource(resolved, song, thisGeneration);
+              DiagnosticLogService().log(DiagnosticLogService.playLoaded, {
+                'videoId': song.videoId,
+                'source': resolved.source,
+              });
+            } catch (playerError) {
+              debugPrint(
+                '[AudioHandler] Primary source failed (${resolved.source}): $playerError',
+              );
+              DiagnosticLogService().log(DiagnosticLogService.playSourceFail, {
+                'videoId': song.videoId,
+                'source': resolved.source,
+                'error': playerError.toString(),
+              });
+
+              YouTubeService.invalidateStreamUrl(song.videoId);
+              YouTubeService.refreshExplodeClient();
+              await YtDlpRuntime.forceReinitialize();
+
+              // Force refresh stream resolution
+              final fresh = await StreamResolverService().resolve(
+                song,
+                forceRefresh: true,
+              );
+              if (fresh == null) {
+                throw Exception('Re-resolution produced no playable URL');
+              }
+              if (_playGeneration != thisGeneration) return;
+              await _loadResolvedSource(fresh, song, thisGeneration);
+            }
+          },
+          name: 'resolve_and_load_stream',
+          maxAttempts: 3,
+        )
+        .catchError((e) {
+          debugPrint(
+            '[AudioHandler] Playback resolution failed after 3 self-healing attempts: $e',
           );
-        } catch (playerError) {
-          debugPrint('[AudioHandler] Primary source failed (${resolved.source}): $playerError');
-          DiagnosticLogService().log(
-            DiagnosticLogService.playSourceFail,
-            {'videoId': song.videoId, 'source': resolved.source, 'error': playerError.toString()},
-          );
-
+          DiagnosticLogService().log(DiagnosticLogService.playError, {
+            'videoId': song.videoId,
+            'title': song.title,
+            'error': e.toString(),
+          });
           YouTubeService.invalidateStreamUrl(song.videoId);
-          YouTubeService.refreshExplodeClient();
-          await YtDlpRuntime.forceReinitialize();
-
-          // Force refresh stream resolution
-          final fresh = await StreamResolverService().resolve(song, forceRefresh: true);
-          if (fresh == null) {
-            throw Exception('Re-resolution produced no playable URL');
-          }
-          if (_playGeneration != thisGeneration) return;
-          await _loadResolvedSource(fresh, song, thisGeneration);
-        }
-      },
-      name: 'resolve_and_load_stream',
-      maxAttempts: 3,
-    ).catchError((e) {
-      debugPrint('[AudioHandler] Playback resolution failed after 3 self-healing attempts: $e');
-      DiagnosticLogService().log(
-        DiagnosticLogService.playError,
-        {'videoId': song.videoId, 'title': song.title, 'error': e.toString()},
-      );
-      YouTubeService.invalidateStreamUrl(song.videoId);
-      throw Exception(
-        'Unable to play this song. Your internet connection may be slow or the song is temporarily unavailable.',
-      );
-    });
+          throw Exception(
+            'Unable to play this song. Your internet connection may be slow or the song is temporarily unavailable.',
+          );
+        });
   }
 
   /// Convert raw exception messages into user-friendly error messages.
   String _friendlyErrorMessage(dynamic error) {
     final msg = error.toString().toLowerCase();
 
-    if (msg.contains('socketexception') || msg.contains('connection refused') || msg.contains('network is unreachable')) {
+    if (msg.contains('socketexception') ||
+        msg.contains('connection refused') ||
+        msg.contains('network is unreachable')) {
       return 'No internet connection. Please check your network and try again.';
     }
     if (msg.contains('handshakeexception') || msg.contains('certificate')) {
@@ -720,17 +772,23 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   }
 
   Future<void> _loadResolvedSource(
-      ResolvedStream resolved, Song song, int thisGeneration) async {
-    final isLocal = song.isLocalFile || song.filePath != null || resolved.source == 'local';
+    ResolvedStream resolved,
+    Song song,
+    int thisGeneration,
+  ) async {
+    final isLocal =
+        song.isLocalFile || song.filePath != null || resolved.source == 'local';
     final defaultAlbum = isLocal
         ? 'Local Storage'
         : (resolved.source == 'radio'
-            ? 'Live Radio'
-            : (resolved.source == 'jamendo'
-                ? 'Jamendo'
-                : (resolved.source == 'jiosaavn'
-                    ? 'JioSaavn'
-                    : (resolved.source == 'archive' ? 'Archive' : 'YouTube'))));
+              ? 'Live Radio'
+              : (resolved.source == 'jamendo'
+                    ? 'Jamendo'
+                    : (resolved.source == 'jiosaavn'
+                          ? 'JioSaavn'
+                          : (resolved.source == 'archive'
+                                ? 'Archive'
+                                : 'YouTube'))));
 
     final mediaItem = MediaItem(
       id: song.videoId,
@@ -739,18 +797,21 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       artist: song.artist,
       artUri: song.thumbnailUrl.isNotEmpty
           ? (song.thumbnailUrl.startsWith('http')
-              ? Uri.parse(song.thumbnailUrl)
-              : Uri.file(song.thumbnailUrl))
+                ? Uri.parse(song.thumbnailUrl)
+                : Uri.file(song.thumbnailUrl))
           : null,
       duration: song.duration,
     );
 
     await _withPlayerLock(thisGeneration, () async {
       if (resolved.isLive) {
-        final headers = resolved.headers ?? const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': '*/*',
-        };
+        final headers =
+            resolved.headers ??
+            const {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': '*/*',
+            };
         await _player.setAudioSource(
           AudioSource.uri(
             Uri.parse(resolved.url),
@@ -760,7 +821,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         );
       } else if (resolved.url.startsWith('file://') ||
           resolved.url.startsWith('/') ||
-          (resolved.url.length >= 3 && resolved.url[1] == ':' && (resolved.url[2] == '/' || resolved.url[2] == '\\'))) {
+          (resolved.url.length >= 3 &&
+              resolved.url[1] == ':' &&
+              (resolved.url[2] == '/' || resolved.url[2] == '\\'))) {
         final filePath = resolved.url.startsWith('file://')
             ? Uri.parse(resolved.url).toFilePath()
             : resolved.url;
@@ -770,10 +833,13 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         );
       } else {
         debugPrint('[AudioHandler] Playing HTTP stream URL: ${resolved.url}');
-        final headers = resolved.headers ?? const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': '*/*',
-        };
+        final headers =
+            resolved.headers ??
+            const {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': '*/*',
+            };
         await _player.setAudioSource(
           await _cachingSourceFor(resolved, song, mediaItem, headers),
         );
@@ -810,12 +876,15 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     final streamHeaders = Map<String, String>.from(headers);
     streamHeaders.putIfAbsent(
       'User-Agent',
-      () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      () =>
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     );
     streamHeaders.putIfAbsent('Accept', () => '*/*');
 
     // 1. Check if the song has already been cached to disk
-    if (!resolved.isLive && song.videoId.isNotEmpty && resolved.url.startsWith('http')) {
+    if (!resolved.isLive &&
+        song.videoId.isNotEmpty &&
+        resolved.url.startsWith('http')) {
       try {
         final cache = StreamCacheService();
         final file = await cache.fileFor(
@@ -836,7 +905,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     // on range requests when the app enters the background or switches networks, causing continuous
     // buffering spinners during background playback. Native ExoPlayer manages background network
     // sockets, wake locks, and cellular buffering natively without proxy overhead.
-    debugPrint('[AudioHandler] Streaming direct via native ExoPlayer AudioSource.uri for ${song.title} (${resolved.source})');
+    debugPrint(
+      '[AudioHandler] Streaming direct via native ExoPlayer AudioSource.uri for ${song.title} (${resolved.source})',
+    );
     return AudioSource.uri(
       Uri.parse(resolved.url),
       headers: streamHeaders,
@@ -858,11 +929,15 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     }
     try {
       final cachedPath = DownloadService().getCachedLocalPathSync(song.videoId);
-      if (cachedPath != null && await File(cachedPath).exists()) return cachedPath;
+      if (cachedPath != null && await File(cachedPath).exists()) {
+        return cachedPath;
+      }
     } catch (_) {}
     if (isDownloaded) {
       try {
-        final localPath = await DownloadService().getLocalAudioPath(song.videoId);
+        final localPath = await DownloadService().getLocalAudioPath(
+          song.videoId,
+        );
         if (await File(localPath).exists()) return localPath;
       } catch (_) {}
     }
@@ -901,41 +976,57 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
       // Resolve both in parallel — the old sequential await made the +2 song
       // wait for the +1 song's full network round-trip.
-      await Future.wait(targets.map((nextSong) async {
-        try {
-          final resolved = await StreamResolverService().resolve(nextSong);
-          if (resolved != null) {
-            _prefetchedStreams[nextSong.videoId] =
-                _PrefetchedStream(resolved, DateTime.now());
-            debugPrint('[AudioHandler] Pre-resolved stream: ${nextSong.title}');
-          }
-        } catch (_) {}
-      }));
+      await Future.wait(
+        targets.map((nextSong) async {
+          try {
+            final resolved = await StreamResolverService().resolve(nextSong);
+            if (resolved != null) {
+              _prefetchedStreams[nextSong.videoId] = _PrefetchedStream(
+                resolved,
+                DateTime.now(),
+              );
+              debugPrint(
+                '[AudioHandler] Pre-resolved stream: ${nextSong.title}',
+              );
+            }
+          } catch (_) {}
+        }),
+      );
     });
   }
 
   void _updateMediaItem(Song song) {
-    final bool isHttp = song.thumbnailUrl.startsWith('http://') || song.thumbnailUrl.startsWith('https://');
-    final bool isLocal = song.thumbnailUrl.isNotEmpty && !isHttp &&
+    final bool isHttp =
+        song.thumbnailUrl.startsWith('http://') ||
+        song.thumbnailUrl.startsWith('https://');
+    final bool isLocal =
+        song.thumbnailUrl.isNotEmpty &&
+        !isHttp &&
         (song.thumbnailUrl.startsWith('/') ||
-         (song.thumbnailUrl.length >= 3 && song.thumbnailUrl[1] == ':' && (song.thumbnailUrl[2] == '/' || song.thumbnailUrl[2] == '\\')));
-        
+            (song.thumbnailUrl.length >= 3 &&
+                song.thumbnailUrl[1] == ':' &&
+                (song.thumbnailUrl[2] == '/' || song.thumbnailUrl[2] == '\\')));
+
     Uri? artUri;
     if (song.thumbnailUrl.isNotEmpty) {
       try {
-        artUri = isLocal ? Uri.file(song.thumbnailUrl) : Uri.parse(song.thumbnailUrl);
+        artUri = isLocal
+            ? Uri.file(song.thumbnailUrl)
+            : Uri.parse(song.thumbnailUrl);
       } catch (e) {
         debugPrint('Error parsing artUri: $e');
       }
     }
 
-    mediaItem.add(MediaItem(
-      id: song.videoId,
-      title: song.title,
-      artist: song.artist,
-      artUri: artUri,
-      duration: song.duration,
-    ));
+    mediaItem.add(
+      MediaItem(
+        id: song.videoId,
+        title: song.title,
+        artist: song.artist,
+        artUri: artUri,
+        duration: song.duration,
+      ),
+    );
   }
 
   void updateMediaItemCustom(Song song) {
@@ -1050,12 +1141,14 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     _currentIndex = -1;
     _playlist.clear();
     mediaItem.add(null);
-    playbackState.add(PlaybackState(
-      controls: const [],
-      systemActions: const {},
-      processingState: AudioProcessingState.idle,
-      playing: false,
-    ));
+    playbackState.add(
+      PlaybackState(
+        controls: const [],
+        systemActions: const {},
+        processingState: AudioProcessingState.idle,
+        playing: false,
+      ),
+    );
     await super.stop();
   }
 
@@ -1071,8 +1164,10 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   /// leaving it moved after a failure desynced the app from what was audible:
   /// the player screen, queue sheet and notification all advanced past a track
   /// that never started, and the next skip then jumped two songs ahead.
-  Future<void> _moveToIndexAndPlay(int index,
-      {bool announceNearEnd = false}) async {
+  Future<void> _moveToIndexAndPlay(
+    int index, {
+    bool announceNearEnd = false,
+  }) async {
     final previousIndex = _currentIndex;
     _currentIndex = index;
     _updateMediaItem(_playlist[_currentIndex]);
@@ -1216,9 +1311,11 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       _updateMediaItem(song);
       return;
     }
-    
+
     // Remove if already in playlist
-    final existingIndex = _playlist.indexWhere((s) => s.videoId == song.videoId);
+    final existingIndex = _playlist.indexWhere(
+      (s) => s.videoId == song.videoId,
+    );
     if (existingIndex >= 0) {
       if (existingIndex == _currentIndex) return; // Already playing
       final existingSong = _playlist.removeAt(existingIndex);
@@ -1260,7 +1357,10 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     );
   }
 
-  Future<void> _applyEqualizerPreset(SoundEnhancer mode, {bool smooth = false}) async {
+  Future<void> _applyEqualizerPreset(
+    SoundEnhancer mode, {
+    bool smooth = false,
+  }) async {
     if (_equalizer == null) return;
     try {
       await _equalizer!.setEnabled(true);
@@ -1278,13 +1378,22 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       };
 
       final targetGains = presets[mode] ?? [0.0, 0.0, 0.0, 0.0, 0.0];
-      await _applyGains(bands, targetGains, parameters.minDecibels, parameters.maxDecibels, smooth);
+      await _applyGains(
+        bands,
+        targetGains,
+        parameters.minDecibels,
+        parameters.maxDecibels,
+        smooth,
+      );
     } catch (e) {
       // Fail silently
     }
   }
 
-  Future<void> _applyCustomEqualizerGains(List<double> gains, {bool smooth = false}) async {
+  Future<void> _applyCustomEqualizerGains(
+    List<double> gains, {
+    bool smooth = false,
+  }) async {
     if (_equalizer == null) return;
     try {
       await _equalizer!.setEnabled(true);
@@ -1352,7 +1461,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
           futures.add(bands[i].setGain(intermediate));
         }
         await Future.wait(futures);
-        await Future.delayed(const Duration(milliseconds: 30)); // 180ms total transition time
+        await Future.delayed(
+          const Duration(milliseconds: 30),
+        ); // 180ms total transition time
       }
     } else {
       final List<Future<void>> futures = [];
@@ -1370,10 +1481,14 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     _cancelIdleTimer();
     _cancelPrefetchCleanupTimer();
     if (!_player.playing) {
-      debugPrint('[AudioHandler] App removed from recents while paused — releasing media player');
+      debugPrint(
+        '[AudioHandler] App removed from recents while paused — releasing media player',
+      );
       await stop();
     } else {
-      debugPrint('[AudioHandler] App removed from recents while playing — background playback continues');
+      debugPrint(
+        '[AudioHandler] App removed from recents while playing — background playback continues',
+      );
     }
     await super.onTaskRemoved();
   }

@@ -34,26 +34,28 @@ class NetworkResilienceService {
           throw Exception('Operation $name returned invalid/empty result');
         }
         if (attempt > 1) {
-          debugPrint('[Resilience] $name succeeded on attempt #$attempt after self-healing');
-          DiagnosticLogService().log(
-            DiagnosticLogService.autoRecovery,
-            {'operation': name, 'attempt': attempt, 'status': 'success'},
+          debugPrint(
+            '[Resilience] $name succeeded on attempt #$attempt after self-healing',
           );
+          DiagnosticLogService().log(DiagnosticLogService.autoRecovery, {
+            'operation': name,
+            'attempt': attempt,
+            'status': 'success',
+          });
         }
         return result;
       } catch (e) {
         lastError = e;
-        debugPrint('[Resilience] $name failed on attempt #$attempt/$maxAttempts: $e');
-
-        DiagnosticLogService().log(
-          DiagnosticLogService.autoRecovery,
-          {
-            'operation': name,
-            'attempt': attempt,
-            'maxAttempts': maxAttempts,
-            'error': e.toString(),
-          },
+        debugPrint(
+          '[Resilience] $name failed on attempt #$attempt/$maxAttempts: $e',
         );
+
+        DiagnosticLogService().log(DiagnosticLogService.autoRecovery, {
+          'operation': name,
+          'attempt': attempt,
+          'maxAttempts': maxAttempts,
+          'error': e.toString(),
+        });
 
         if (attempt < maxAttempts) {
           await _applyHealingProtocol(attempt, e);
@@ -63,14 +65,17 @@ class NetworkResilienceService {
       }
     }
 
-    throw lastError ?? Exception('$name failed after $maxAttempts self-healing attempts');
+    throw lastError ??
+        Exception('$name failed after $maxAttempts self-healing attempts');
   }
 
   /// Apply progressive multi-level self-healing protocols based on attempt number and error type.
   Future<void> _applyHealingProtocol(int attempt, dynamic error) async {
     final errStr = error.toString().toLowerCase();
 
-    debugPrint('[Resilience] Applying Level $attempt Self-Healing Protocol for error: $errStr');
+    debugPrint(
+      '[Resilience] Applying Level $attempt Self-Healing Protocol for error: $errStr',
+    );
 
     // Level 1: Purge stale stream cache
     YouTubeService.clearStreamCacheOnResume();

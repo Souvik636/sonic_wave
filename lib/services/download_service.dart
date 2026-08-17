@@ -324,7 +324,10 @@ class DownloadTask {
         ..connectionTimeout = const Duration(seconds: 8)
         ..idleTimeout = const Duration(seconds: 15);
       final request = await _httpClient!.getUrl(streamUrl);
-      request.headers.set('User-Agent', 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36');
+      request.headers.set(
+        'User-Agent',
+        'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+      );
       if (headers != null) {
         headers.forEach((k, v) => request.headers.set(k, v));
       }
@@ -339,14 +342,17 @@ class DownloadTask {
 
     if (resumeFrom > 0) {
       if (response.statusCode == HttpStatus.partialContent) {
-        final total =
-            _totalFromContentRange(response.headers.value(HttpHeaders.contentRangeHeader));
+        final total = _totalFromContentRange(
+          response.headers.value(HttpHeaders.contentRangeHeader),
+        );
         if (totalSize > 0 && total != null && total != totalSize) {
           // The server is handing back a different rendition than the one that
           // produced the partial. Appending would splice two encodings into a
           // single file, which decodes as noise — start over instead.
-          debugPrint('[DownloadTask] Resume rejected for ${song.title}: '
-              'server reports $total bytes, partial belongs to $totalSize');
+          debugPrint(
+            '[DownloadTask] Resume rejected for ${song.title}: '
+            'server reports $total bytes, partial belongs to $totalSize',
+          );
           await response.drain();
           resumeFrom = 0;
           totalSize = 0;
@@ -359,7 +365,8 @@ class DownloadTask {
             totalSize = resumeFrom + response.contentLength;
           }
         }
-      } else if (response.statusCode == HttpStatus.requestedRangeNotSatisfiable) {
+      } else if (response.statusCode ==
+          HttpStatus.requestedRangeNotSatisfiable) {
         // Everything the server has is already on disk.
         await response.drain();
         _httpClient?.close();
@@ -373,13 +380,16 @@ class DownloadTask {
       } else {
         // 200 means the server ignored Range and is sending the whole body from
         // byte 0, so the partial is worthless.
-        debugPrint('[DownloadTask] Server ignored Range for ${song.title} '
-            '(status ${response.statusCode}) — restarting from 0');
+        debugPrint(
+          '[DownloadTask] Server ignored Range for ${song.title} '
+          '(status ${response.statusCode}) — restarting from 0',
+        );
         resumeFrom = 0;
       }
     }
 
-    if (response.statusCode != HttpStatus.ok && response.statusCode != HttpStatus.partialContent) {
+    if (response.statusCode != HttpStatus.ok &&
+        response.statusCode != HttpStatus.partialContent) {
       await response.drain();
       _httpClient!.close();
       throw Exception('Server returned status ${response.statusCode}');
@@ -387,9 +397,11 @@ class DownloadTask {
 
     if (appending) {
       bytesDownloaded = resumeFrom;
-      debugPrint('[DownloadTask] Resuming ${song.title} at '
-          '${DownloadItem.formatFileSize(resumeFrom)} of '
-          '${DownloadItem.formatFileSize(totalSize)}');
+      debugPrint(
+        '[DownloadTask] Resuming ${song.title} at '
+        '${DownloadItem.formatFileSize(resumeFrom)} of '
+        '${DownloadItem.formatFileSize(totalSize)}',
+      );
     } else {
       bytesDownloaded = 0;
       // On a full response the SERVER's length wins over whatever the caller
@@ -413,7 +425,9 @@ class DownloadTask {
     try {
       await part.parent.create(recursive: true);
     } catch (_) {}
-    _output = part.openWrite(mode: appending ? FileMode.append : FileMode.write);
+    _output = part.openWrite(
+      mode: appending ? FileMode.append : FileMode.write,
+    );
     final completer = Completer<void>();
 
     _startSpeedTracking();
@@ -452,7 +466,8 @@ class DownloadTask {
         // leaving the user with a track that cuts off.
         if (totalSize > 0 && bytesDownloaded < totalSize) {
           status = DownloadStatus.failed;
-          errorMessage = 'Connection closed after '
+          errorMessage =
+              'Connection closed after '
               '${DownloadItem.formatFileSize(bytesDownloaded)} of '
               '${DownloadItem.formatFileSize(totalSize)}';
           if (onStateChanged != null) onStateChanged!();
@@ -596,7 +611,15 @@ class DownloadService {
   /// Audio extensions a download may end up with, used when checking whether a
   /// title-derived name is already claimed on disk.
   static const List<String> _knownAudioExts = [
-    'm4a', 'mp3', 'aac', 'flac', 'ogg', 'opus', 'wav', 'webm', 'mp4'
+    'm4a',
+    'mp3',
+    'aac',
+    'flac',
+    'ogg',
+    'opus',
+    'wav',
+    'webm',
+    'mp4',
   ];
 
   static String _basenameOf(String path) => path.split(RegExp(r'[/\\]')).last;
@@ -667,7 +690,8 @@ class DownloadService {
         // without this a second song with the same title would look at an empty
         // slot, reserve the identical name, and the two would write over each
         // other's staging file.
-        if (File(candidate).existsSync() || File('$candidate.part').existsSync()) {
+        if (File(candidate).existsSync() ||
+            File('$candidate.part').existsSync()) {
           clash = true;
           break;
         }
@@ -677,7 +701,8 @@ class DownloadService {
       if (!clash) {
         for (final t in _activeTasks.values) {
           if (t.song.videoId == song.videoId) continue;
-          if (_stemOf(_pathKey(t.audioFile.path)) == _pathKey('${dir.path}$sep$stem')) {
+          if (_stemOf(_pathKey(t.audioFile.path)) ==
+              _pathKey('${dir.path}$sep$stem')) {
             clash = true;
             break;
           }
@@ -702,7 +727,10 @@ class DownloadService {
   /// lands under a new name; without this the old file stays behind as an
   /// orphan that no index entry points at, invisible to the app but still
   /// eating the user's storage and still listed by every other music player.
-  Future<void> _removeSupersededFile(String? previousPath, String newPath) async {
+  Future<void> _removeSupersededFile(
+    String? previousPath,
+    String newPath,
+  ) async {
     if (previousPath == null || previousPath.isEmpty) return;
     if (_pathKey(previousPath) == _pathKey(newPath)) return;
     try {
@@ -823,14 +851,19 @@ class DownloadService {
     final image = bytes;
     if (image == null || image.isEmpty) return null;
 
-    debugPrint('[DownloadService] Could not embed art into '
-        '${_basenameOf(audioFile.path)} — keeping a hidden sidecar cover');
+    debugPrint(
+      '[DownloadService] Could not embed art into '
+      '${_basenameOf(audioFile.path)} — keeping a hidden sidecar cover',
+    );
     return _writeCoverFile(song.videoId, image, isPng: isPng);
   }
 
   /// Write the fallback cover into the hidden folder. Returns its path, or null.
-  Future<String?> _writeCoverFile(String videoId, Uint8List bytes,
-      {bool isPng = false}) async {
+  Future<String?> _writeCoverFile(
+    String videoId,
+    Uint8List bytes, {
+    bool isPng = false,
+  }) async {
     try {
       // coverPathFor always names the file .jpg; keep a PNG honest so decoders
       // that trust the extension don't choke on it.
@@ -873,8 +906,9 @@ class DownloadService {
     final cached = _artCacheDir;
     if (cached != null && await cached.exists()) return cached;
     final support = await getApplicationSupportDirectory();
-    final dir =
-        Directory('${support.path}${Platform.pathSeparator}downloadart');
+    final dir = Directory(
+      '${support.path}${Platform.pathSeparator}downloadart',
+    );
     if (!await dir.exists()) await dir.create(recursive: true);
     _artCacheDir = dir;
     return dir;
@@ -883,17 +917,22 @@ class DownloadService {
   /// Store the render copy of [videoId]'s embedded art. Returns its path, or
   /// null on failure — in which case the caller falls back to the remote URL,
   /// so a failed cache write costs artwork offline and nothing else.
-  Future<String?> _writeArtCache(String videoId, Uint8List bytes,
-      {bool isPng = false}) async {
+  Future<String?> _writeArtCache(
+    String videoId,
+    Uint8List bytes, {
+    bool isPng = false,
+  }) async {
     try {
       final dir = await _getArtCacheDir();
       final file = File(
-          '${dir.path}${Platform.pathSeparator}$videoId.${isPng ? 'png' : 'jpg'}');
+        '${dir.path}${Platform.pathSeparator}$videoId.${isPng ? 'png' : 'jpg'}',
+      );
       await file.writeAsBytes(bytes, flush: true);
       // A re-download can change the format; leave no stale twin behind for the
       // index to point at.
       final other = File(
-          '${dir.path}${Platform.pathSeparator}$videoId.${isPng ? 'jpg' : 'png'}');
+        '${dir.path}${Platform.pathSeparator}$videoId.${isPng ? 'jpg' : 'png'}',
+      );
       if (await other.exists()) await other.delete();
       return file.path;
     } catch (e) {
@@ -908,8 +947,7 @@ class DownloadService {
     try {
       final dir = await _getArtCacheDir();
       for (final ext in const ['jpg', 'png']) {
-        final file =
-            File('${dir.path}${Platform.pathSeparator}$videoId.$ext');
+        final file = File('${dir.path}${Platform.pathSeparator}$videoId.$ext');
         if (await file.exists()) await file.delete();
       }
     } catch (_) {}
@@ -934,7 +972,9 @@ class DownloadService {
     final songIdx = _downloadedSongs.indexWhere((s) => s.videoId == videoId);
     if (songIdx >= 0) {
       final song = _downloadedSongs[songIdx];
-      if (song.filePath != null && song.filePath!.isNotEmpty && File(song.filePath!).existsSync()) {
+      if (song.filePath != null &&
+          song.filePath!.isNotEmpty &&
+          File(song.filePath!).existsSync()) {
         return song.filePath!;
       }
     }
@@ -952,7 +992,10 @@ class DownloadService {
   /// Move a downloaded song file into an album's folder.
   ///
   /// Returns the new file path, or null on failure.
-  Future<String?> moveFileToAlbumFolder(String videoId, String albumName) async {
+  Future<String?> moveFileToAlbumFolder(
+    String videoId,
+    String albumName,
+  ) async {
     await loadDownloads();
     final songIdx = _downloadedSongs.indexWhere((s) => s.videoId == videoId);
     if (songIdx < 0) return null;
@@ -976,7 +1019,10 @@ class DownloadService {
   ///
   /// Optionally place them into an album subfolder.
   /// Returns the list of songs with updated file paths.
-  Future<List<Song>> moveAllToAppFolder(List<Song> songs, {String? albumName}) async {
+  Future<List<Song>> moveAllToAppFolder(
+    List<Song> songs, {
+    String? albumName,
+  }) async {
     final movedSongs = <Song>[];
     final targetDir = albumName != null
         ? await _storageService.getAlbumDir(albumName)
@@ -999,7 +1045,9 @@ class DownloadService {
         if (!_downloadedSongs.any((s) => s.videoId == song.videoId)) {
           _downloadedSongs.add(updatedSong);
         } else {
-          final idx = _downloadedSongs.indexWhere((s) => s.videoId == song.videoId);
+          final idx = _downloadedSongs.indexWhere(
+            (s) => s.videoId == song.videoId,
+          );
           _downloadedSongs[idx] = updatedSong;
         }
       }
@@ -1052,7 +1100,8 @@ class DownloadService {
 
       // 1. Strip prepended ID3 tags if accidentally injected into non-MP3 container
       if (header[0] == 0x49 && header[1] == 0x44 && header[2] == 0x33) {
-        final existingTagSize = (header[6] & 0x7F) << 21 |
+        final existingTagSize =
+            (header[6] & 0x7F) << 21 |
             (header[7] & 0x7F) << 14 |
             (header[8] & 0x7F) << 7 |
             (header[9] & 0x7F);
@@ -1071,19 +1120,44 @@ class DownloadService {
             await probe.close();
           }
 
-          final isM4a = payloadHead.length >= 8 && payloadHead[4] == 0x66 && payloadHead[5] == 0x74 && payloadHead[6] == 0x79 && payloadHead[7] == 0x70;
-          final isWebm = payloadHead.length >= 4 && payloadHead[0] == 0x1A && payloadHead[1] == 0x45 && payloadHead[2] == 0xDF && payloadHead[3] == 0xA3;
-          final isOgg = payloadHead.length >= 4 && payloadHead[0] == 0x4F && payloadHead[1] == 0x67 && payloadHead[2] == 0x67 && payloadHead[3] == 0x53;
-          final isFlac = payloadHead.length >= 4 && payloadHead[0] == 0x66 && payloadHead[1] == 0x4C && payloadHead[2] == 0x61 && payloadHead[3] == 0x43;
+          final isM4a =
+              payloadHead.length >= 8 &&
+              payloadHead[4] == 0x66 &&
+              payloadHead[5] == 0x74 &&
+              payloadHead[6] == 0x79 &&
+              payloadHead[7] == 0x70;
+          final isWebm =
+              payloadHead.length >= 4 &&
+              payloadHead[0] == 0x1A &&
+              payloadHead[1] == 0x45 &&
+              payloadHead[2] == 0xDF &&
+              payloadHead[3] == 0xA3;
+          final isOgg =
+              payloadHead.length >= 4 &&
+              payloadHead[0] == 0x4F &&
+              payloadHead[1] == 0x67 &&
+              payloadHead[2] == 0x67 &&
+              payloadHead[3] == 0x53;
+          final isFlac =
+              payloadHead.length >= 4 &&
+              payloadHead[0] == 0x66 &&
+              payloadHead[1] == 0x4C &&
+              payloadHead[2] == 0x61 &&
+              payloadHead[3] == 0x43;
 
           if (isM4a || isWebm || isOgg || isFlac) {
-            debugPrint('[DownloadService] Stripped prepended ID3 header from non-MP3 container: ${audioFile.path}');
+            debugPrint(
+              '[DownloadService] Stripped prepended ID3 header from non-MP3 container: ${audioFile.path}',
+            );
             // Only now is the full read justified.
             final all = await audioFile.readAsBytes();
             final payload = Uint8List.sublistView(all, tagLen);
             await audioFile.writeAsBytes(payload, flush: true);
             header = Uint8List.sublistView(
-                payload, 0, payload.length < 16 ? payload.length : 16);
+              payload,
+              0,
+              payload.length < 16 ? payload.length : 16,
+            );
           }
         }
       }
@@ -1091,22 +1165,44 @@ class DownloadService {
       // 2. Determine authentic container extension from magic bytes
       final bytes = header;
       String correctExt = 'mp3';
-      if (bytes.length >= 8 && bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70) {
+      if (bytes.length >= 8 &&
+          bytes[4] == 0x66 &&
+          bytes[5] == 0x74 &&
+          bytes[6] == 0x79 &&
+          bytes[7] == 0x70) {
         correctExt = 'm4a';
-      } else if (bytes.length >= 4 && bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) {
+      } else if (bytes.length >= 4 &&
+          bytes[0] == 0x1A &&
+          bytes[1] == 0x45 &&
+          bytes[2] == 0xDF &&
+          bytes[3] == 0xA3) {
         correctExt = 'webm';
-      } else if (bytes.length >= 4 && bytes[0] == 0x4F && bytes[1] == 0x67 && bytes[2] == 0x67 && bytes[3] == 0x53) {
+      } else if (bytes.length >= 4 &&
+          bytes[0] == 0x4F &&
+          bytes[1] == 0x67 &&
+          bytes[2] == 0x67 &&
+          bytes[3] == 0x53) {
         correctExt = 'ogg';
-      } else if (bytes.length >= 4 && bytes[0] == 0x66 && bytes[1] == 0x4C && bytes[2] == 0x61 && bytes[3] == 0x43) {
+      } else if (bytes.length >= 4 &&
+          bytes[0] == 0x66 &&
+          bytes[1] == 0x4C &&
+          bytes[2] == 0x61 &&
+          bytes[3] == 0x43) {
         correctExt = 'flac';
-      } else if (bytes.length >= 4 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) {
+      } else if (bytes.length >= 4 &&
+          bytes[0] == 0x52 &&
+          bytes[1] == 0x49 &&
+          bytes[2] == 0x46 &&
+          bytes[3] == 0x46) {
         correctExt = 'wav';
       }
 
       // 3. Rename file to correct extension if needed
       final currentPath = audioFile.path;
       final dotIdx = currentPath.lastIndexOf('.');
-      final basePath = dotIdx != -1 ? currentPath.substring(0, dotIdx) : currentPath;
+      final basePath = dotIdx != -1
+          ? currentPath.substring(0, dotIdx)
+          : currentPath;
       final targetPath = '$basePath.$correctExt';
 
       if (currentPath != targetPath) {
@@ -1115,7 +1211,9 @@ class DownloadService {
           await targetFile.delete();
         }
         final renamed = await audioFile.rename(targetPath);
-        debugPrint('[DownloadService] Fixed container extension: $currentPath -> ${renamed.path}');
+        debugPrint(
+          '[DownloadService] Fixed container extension: $currentPath -> ${renamed.path}',
+        );
         return renamed.path;
       }
       return currentPath;
@@ -1192,9 +1290,14 @@ class DownloadService {
       final legacyIndex = File('${downloadDir.path}${sep}metadata.json');
       if (!await newIndex.exists() && await legacyIndex.exists()) {
         try {
-          await newIndex.writeAsString(await legacyIndex.readAsString(), flush: true);
+          await newIndex.writeAsString(
+            await legacyIndex.readAsString(),
+            flush: true,
+          );
           await legacyIndex.delete();
-          debugPrint('[DownloadService] Moved metadata.json into the hidden meta folder');
+          debugPrint(
+            '[DownloadService] Moved metadata.json into the hidden meta folder',
+          );
         } catch (e) {
           debugPrint('[DownloadService] metadata.json migration failed: $e');
         }
@@ -1212,7 +1315,10 @@ class DownloadService {
         final thumb = (map['thumbnailUrl'] as String?) ?? '';
         if (thumb.isEmpty || thumb.startsWith('http')) continue;
         // Only relocate covers that are actually sitting in the visible folder.
-        if (!thumb.replaceAll('\\', '/').toLowerCase().startsWith(downloadPath)) {
+        if (!thumb
+            .replaceAll('\\', '/')
+            .toLowerCase()
+            .startsWith(downloadPath)) {
           continue;
         }
 
@@ -1233,14 +1339,18 @@ class DownloadService {
           removedPaths.add(source.path);
           changed = true;
         } catch (e) {
-          debugPrint('[DownloadService] Cover migration failed for $videoId: $e');
+          debugPrint(
+            '[DownloadService] Cover migration failed for $videoId: $e',
+          );
         }
       }
 
       if (changed) {
         await newIndex.writeAsString(json.encode(raw), flush: true);
-        debugPrint('[DownloadService] Moved ${removedPaths.length} cover(s) '
-            'into the hidden cover folder');
+        debugPrint(
+          '[DownloadService] Moved ${removedPaths.length} cover(s) '
+          'into the hidden cover folder',
+        );
       }
       // Drop the stale MediaStore rows so the images leave the Gallery.
       await MediaStoreScanner.scanAll(removedPaths);
@@ -1291,15 +1401,21 @@ class DownloadService {
     try {
       final dlDir = await _storageService.getDownloadDir();
       if (await dlDir.exists()) {
-        await for (final entity in dlDir.list(recursive: true, followLinks: false)) {
+        await for (final entity in dlDir.list(
+          recursive: true,
+          followLinks: false,
+        )) {
           if (entity is File) {
             final name = entity.path.toLowerCase();
-            if (name.endsWith('.part') || name.endsWith('.tmp') || name.endsWith('.download')) {
+            if (name.endsWith('.part') ||
+                name.endsWith('.tmp') ||
+                name.endsWith('.download')) {
               try {
                 await entity.delete();
                 cleanedTemp++;
               } catch (_) {}
-            } else if (await entity.length() == 0 && !name.endsWith('.nomedia')) {
+            } else if (await entity.length() == 0 &&
+                !name.endsWith('.nomedia')) {
               try {
                 await entity.delete();
                 cleanedTemp++;
@@ -1316,13 +1432,25 @@ class DownloadService {
     try {
       final dlDir = await _storageService.getDownloadDir();
       if (await dlDir.exists()) {
-        final audioExts = {'.mp3', '.m4a', '.aac', '.flac', '.ogg', '.opus', '.wav', '.webm'};
+        final audioExts = {
+          '.mp3',
+          '.m4a',
+          '.aac',
+          '.flac',
+          '.ogg',
+          '.opus',
+          '.wav',
+          '.webm',
+        };
         final indexedPaths = _downloadedSongs
             .where((s) => s.filePath != null && s.filePath!.isNotEmpty)
             .map((s) => s.filePath!.replaceAll('\\', '/').toLowerCase())
             .toSet();
 
-        await for (final entity in dlDir.list(recursive: true, followLinks: false)) {
+        await for (final entity in dlDir.list(
+          recursive: true,
+          followLinks: false,
+        )) {
           if (entity is File) {
             final path = entity.path;
             final ext = _extensionOf(path).toLowerCase();
@@ -1332,7 +1460,8 @@ class DownloadService {
                 final fileLen = await entity.length();
                 if (fileLen > 1024) {
                   final stem = _stemOf(_basenameOf(path));
-                  final videoId = 'local_${entity.statSync().modified.millisecondsSinceEpoch}_${stem.hashCode.abs()}';
+                  final videoId =
+                      'local_${entity.statSync().modified.millisecondsSinceEpoch}_${stem.hashCode.abs()}';
                   Song orphanSong = Song(
                     id: videoId,
                     videoId: videoId,
@@ -1345,7 +1474,9 @@ class DownloadService {
                     albumFolderName: 'Downloads',
                   );
                   try {
-                    orphanSong = await LocalMetadataService().enrichSong(orphanSong);
+                    orphanSong = await LocalMetadataService().enrichSong(
+                      orphanSong,
+                    );
                   } catch (_) {}
                   _downloadedSongs.add(orphanSong);
                   indexedPaths.add(normPath);
@@ -1426,12 +1557,24 @@ class DownloadService {
 
     try {
       final dlDir = await _storageService.getDownloadDir();
-      final audioExts = {'.mp3', '.m4a', '.aac', '.flac', '.ogg', '.opus', '.wav', '.webm'};
+      final audioExts = {
+        '.mp3',
+        '.m4a',
+        '.aac',
+        '.flac',
+        '.ogg',
+        '.opus',
+        '.wav',
+        '.webm',
+      };
 
       final candidates = <File>[];
 
       if (await dlDir.exists()) {
-        await for (final entity in dlDir.list(recursive: true, followLinks: false)) {
+        await for (final entity in dlDir.list(
+          recursive: true,
+          followLinks: false,
+        )) {
           if (entity is File) {
             final ext = _extensionOf(entity.path).toLowerCase();
             if (audioExts.contains('.$ext')) {
@@ -1464,11 +1607,13 @@ class DownloadService {
     final List<DuplicateAudioGroup> result = [];
     groups.forEach((key, files) {
       if (files.length > 1) {
-        result.add(DuplicateAudioGroup(
-          songTitle: titles[key] ?? 'Audio Track',
-          artist: 'Storage File',
-          candidateFiles: files,
-        ));
+        result.add(
+          DuplicateAudioGroup(
+            songTitle: titles[key] ?? 'Audio Track',
+            artist: 'Storage File',
+            candidateFiles: files,
+          ),
+        );
       }
     });
 
@@ -1476,14 +1621,13 @@ class DownloadService {
   }
 
   static String _cleanTitleKey(String input) {
-    return input
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]'), '')
-        .trim();
+    return input.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '').trim();
   }
 
   /// Deletes selected duplicate files from disk and purges their metadata index entries.
-  Future<int> deleteSelectedDuplicateFiles(List<String> filePathsToDelete) async {
+  Future<int> deleteSelectedDuplicateFiles(
+    List<String> filePathsToDelete,
+  ) async {
     int freedBytes = 0;
     for (final path in filePathsToDelete) {
       try {
@@ -1493,7 +1637,9 @@ class DownloadService {
           await f.delete();
         }
         final normPath = path.replaceAll('\\', '/').toLowerCase();
-        _downloadedSongs.removeWhere((s) => s.filePath?.replaceAll('\\', '/').toLowerCase() == normPath);
+        _downloadedSongs.removeWhere(
+          (s) => s.filePath?.replaceAll('\\', '/').toLowerCase() == normPath,
+        );
       } catch (e) {
         debugPrint('[DownloadService] Error deleting duplicate file $path: $e');
       }
@@ -1537,7 +1683,9 @@ class DownloadService {
       } else {
         changed = true;
         await _removeArtCache(song.videoId);
-        debugPrint('[DownloadService] Purged ghost download: ${song.title} ($path)');
+        debugPrint(
+          '[DownloadService] Purged ghost download: ${song.title} ($path)',
+        );
       }
     }
 
@@ -1578,11 +1726,22 @@ class DownloadService {
   String? getCachedLocalPathSync(String videoId) {
     for (final s in _downloadedSongs) {
       if (s.videoId == videoId) {
-        if (s.filePath != null && s.filePath!.isNotEmpty && File(s.filePath!).existsSync()) {
+        if (s.filePath != null &&
+            s.filePath!.isNotEmpty &&
+            File(s.filePath!).existsSync()) {
           return s.filePath;
         }
         if (_cachedDownloadDirPath != null) {
-          final exts = ['mp3', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'wav', 'webm'];
+          final exts = [
+            'mp3',
+            'm4a',
+            'aac',
+            'flac',
+            'ogg',
+            'opus',
+            'wav',
+            'webm',
+          ];
           for (final ext in exts) {
             final candidate = '$_cachedDownloadDirPath/$videoId.$ext';
             if (File(candidate).existsSync()) {
@@ -1620,18 +1779,23 @@ class DownloadService {
   /// real error instead of a guess, so this now only ever logs.
   Future<bool> isNetworkAvailable() async {
     try {
-      final result = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 8));
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 8));
       if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) return true;
-      debugPrint('[DownloadService] DNS probe returned no address — '
-          'letting the transfer decide');
+      debugPrint(
+        '[DownloadService] DNS probe returned no address — '
+        'letting the transfer decide',
+      );
       return true;
     } on TimeoutException {
       debugPrint('[DownloadService] DNS probe timed out — assuming online');
       return true;
     } catch (e) {
-      debugPrint('[DownloadService] DNS probe failed ($e) — assuming online; '
-          'the transfer will report the real error');
+      debugPrint(
+        '[DownloadService] DNS probe failed ($e) — assuming online; '
+        'the transfer will report the real error',
+      );
       return true;
     }
   }
@@ -1656,19 +1820,30 @@ class DownloadService {
   }
 
   /// Enqueue a download — respects max concurrent limit
-  Future<void> downloadSong(Song song, ValueChanged<double>? onProgress, {VoidCallback? onStateChanged, AudioQuality quality = AudioQuality.high}) async {
+  Future<void> downloadSong(
+    Song song,
+    ValueChanged<double>? onProgress, {
+    VoidCallback? onStateChanged,
+    AudioQuality quality = AudioQuality.high,
+  }) async {
     if (song.isLiveRadio) {
-      throw Exception('Live radio streams cannot be downloaded for offline playback.');
+      throw Exception(
+        'Live radio streams cannot be downloaded for offline playback.',
+      );
     }
 
     DiagnosticLogService().log(DiagnosticLogService.downloadStart, {
-      'videoId': song.videoId, 'title': song.title,
-      'quality': quality.name, 'queued': _runningCount >= maxConcurrent,
+      'videoId': song.videoId,
+      'title': song.title,
+      'quality': quality.name,
+      'queued': _runningCount >= maxConcurrent,
     });
 
     final hasNetwork = await isNetworkAvailable();
     if (!hasNetwork) {
-      throw Exception('No network connection. Please check your internet and try again.');
+      throw Exception(
+        'No network connection. Please check your internet and try again.',
+      );
     }
 
     // Verify storage directory exists and is writable
@@ -1684,7 +1859,12 @@ class DownloadService {
     if (_runningCount < maxConcurrent) {
       _runningCount++;
       try {
-        await _executeDownload(song, onProgress, onStateChanged: onStateChanged, quality: quality);
+        await _executeDownload(
+          song,
+          onProgress,
+          onStateChanged: onStateChanged,
+          quality: quality,
+        );
       } finally {
         _runningCount--;
         _processQueue();
@@ -1692,13 +1872,15 @@ class DownloadService {
     } else {
       // Enqueue
       final completer = Completer<void>();
-      _queue.add(_QueuedDownload(
-        song: song,
-        onProgress: onProgress,
-        onStateChanged: onStateChanged,
-        completer: completer,
-        quality: quality,
-      ));
+      _queue.add(
+        _QueuedDownload(
+          song: song,
+          onProgress: onProgress,
+          onStateChanged: onStateChanged,
+          completer: completer,
+          quality: quality,
+        ),
+      );
 
       // Create a placeholder task so UI shows queued state
       await loadDownloads();
@@ -1723,33 +1905,50 @@ class DownloadService {
       final queued = _queue.removeAt(0);
       _runningCount++;
 
-      _executeDownload(queued.song, queued.onProgress, onStateChanged: queued.onStateChanged, quality: queued.quality).then((_) {
-        queued.completer.complete();
-      }).catchError((e) {
-        queued.completer.completeError(e);
-      }).whenComplete(() {
-        _runningCount--;
-        _processQueue();
-      });
+      _executeDownload(
+            queued.song,
+            queued.onProgress,
+            onStateChanged: queued.onStateChanged,
+            quality: queued.quality,
+          )
+          .then((_) {
+            queued.completer.complete();
+          })
+          .catchError((e) {
+            queued.completer.completeError(e);
+          })
+          .whenComplete(() {
+            _runningCount--;
+            _processQueue();
+          });
     }
   }
 
   /// Select the best audio stream based on user's quality preference.
   /// Strongly prefers M4A/AAC streams over WebM/Opus to avoid WebM output
   /// and enable native cover art embedding.
-  AudioOnlyStreamInfo _pickStreamByQuality(StreamManifest manifest, AudioQuality quality) {
+  AudioOnlyStreamInfo _pickStreamByQuality(
+    StreamManifest manifest,
+    AudioQuality quality,
+  ) {
     final streams = manifest.audioOnly.toList();
     if (streams.isEmpty) throw Exception('No audio streams available');
 
     // Separate M4A/AAC streams from WebM/Opus
-    final m4aStreams = streams.where((s) =>
-        s.container.name.toLowerCase() == 'm4a' ||
-        s.audioCodec.toLowerCase().contains('mp4a') ||
-        s.audioCodec.toLowerCase().contains('aac')).toList();
+    final m4aStreams = streams
+        .where(
+          (s) =>
+              s.container.name.toLowerCase() == 'm4a' ||
+              s.audioCodec.toLowerCase().contains('mp4a') ||
+              s.audioCodec.toLowerCase().contains('aac'),
+        )
+        .toList();
     final candidates = m4aStreams.isNotEmpty ? m4aStreams : streams;
 
     // Sort by bitrate ascending
-    candidates.sort((a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond));
+    candidates.sort(
+      (a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond),
+    );
 
     switch (quality) {
       case AudioQuality.low:
@@ -1784,7 +1983,12 @@ class DownloadService {
       return false;
     }
     const foreignPrefixes = [
-      'jiosaavn_', 'jamendo_', 'radio_', 'archive_', 'audius_', 'local_'
+      'jiosaavn_',
+      'jamendo_',
+      'radio_',
+      'archive_',
+      'audius_',
+      'local_',
     ];
     for (final p in foreignPrefixes) {
       if (videoId.startsWith(p)) return false;
@@ -1858,7 +2062,8 @@ class DownloadService {
       if (task.speedBytesPerSec <= 0) {
         task.speedBytesPerSec = bytesThisSec;
       } else {
-        task.speedBytesPerSec = task.speedBytesPerSec * 0.7 + bytesThisSec * 0.3;
+        task.speedBytesPerSec =
+            task.speedBytesPerSec * 0.7 + bytesThisSec * 0.3;
       }
       task.onStateChanged?.call();
     });
@@ -1889,8 +2094,11 @@ class DownloadService {
       final targetName = producedExt == preferredContainer
           ? _basenameOf(plannedAudio.path)
           : '${_stemOf(plannedAudio.path)}.$producedExt';
-      final movedAudio = await _storageService
-          .moveFile(result.audioPath, dir, fileName: targetName);
+      final movedAudio = await _storageService.moveFile(
+        result.audioPath,
+        dir,
+        fileName: targetName,
+      );
       if (movedAudio == null) {
         throw Exception('Could not move downloaded audio into $dir');
       }
@@ -1914,16 +2122,18 @@ class DownloadService {
       await loadDownloads();
       await _removeSupersededFile(previousPath, movedAudio);
       _downloadedSongs.removeWhere((s) => s.videoId == song.videoId);
-      _downloadedSongs.add(Song(
-        id: song.id,
-        videoId: song.videoId,
-        title: song.title,
-        artist: song.artist,
-        thumbnailUrl: coverPath ?? song.thumbnailUrl,
-        highResThumbnailUrl: coverPath ?? song.highResThumbnailUrl,
-        duration: song.duration,
-        filePath: movedAudio,
-      ));
+      _downloadedSongs.add(
+        Song(
+          id: song.id,
+          videoId: song.videoId,
+          title: song.title,
+          artist: song.artist,
+          thumbnailUrl: coverPath ?? song.thumbnailUrl,
+          highResThumbnailUrl: coverPath ?? song.highResThumbnailUrl,
+          duration: song.duration,
+          filePath: movedAudio,
+        ),
+      );
       await _saveMetadata();
 
       // Make the AUDIO visible to other music apps / file managers when it
@@ -1954,14 +2164,15 @@ class DownloadService {
   Future<_CoverBytes?> _fetchCoverBytes(Song song) async {
     final candidates = <String>[];
     for (final url in [song.highResThumbnailUrl, song.thumbnailUrl]) {
-      if (url.isNotEmpty && url.startsWith('http') && !candidates.contains(url)) {
+      if (url.isNotEmpty &&
+          url.startsWith('http') &&
+          !candidates.contains(url)) {
         candidates.add(url);
       }
     }
     if (candidates.isEmpty) return null;
 
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 8);
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
     try {
       for (final url in candidates) {
         try {
@@ -1975,7 +2186,8 @@ class DownloadService {
           if (bytes.isEmpty) continue;
           // Trust the magic bytes over the URL: YouTube serves .jpg URLs that
           // are actually WebP, and a mislabelled PNG breaks strict decoders.
-          final isPng = bytes.length >= 4 &&
+          final isPng =
+              bytes.length >= 4 &&
               bytes[0] == 0x89 &&
               bytes[1] == 0x50 &&
               bytes[2] == 0x4E &&
@@ -1991,7 +2203,14 @@ class DownloadService {
     }
   }
 
-  Future<void> _executeDownload(Song song, ValueChanged<double>? onProgress, {VoidCallback? onStateChanged, int attempt = 0, AudioQuality quality = AudioQuality.high, File? reservedAudioFile}) async {
+  Future<void> _executeDownload(
+    Song song,
+    ValueChanged<double>? onProgress, {
+    VoidCallback? onStateChanged,
+    int attempt = 0,
+    AudioQuality quality = AudioQuality.high,
+    File? reservedAudioFile,
+  }) async {
     // Preferred path for YouTube: let yt-dlp + FFmpeg do the download, the
     // container conversion and the artwork embedding natively. Falls through to
     // the HTTP path below on any failure, so this can only add capability.
@@ -2021,8 +2240,10 @@ class DownloadService {
           return;
         }
       } catch (e) {
-        debugPrint('[DownloadService] yt-dlp path failed for ${song.title}: $e '
-            '— falling back to direct HTTP download');
+        debugPrint(
+          '[DownloadService] yt-dlp path failed for ${song.title}: $e '
+          '— falling back to direct HTTP download',
+        );
       }
     }
 
@@ -2064,12 +2285,18 @@ class DownloadService {
       // stopped working — handing the same one back made all three attempts
       // fail identically and turned the retry loop into a slow way of
       // reporting the first error.
-      final resolved =
-          await StreamResolverService().resolve(song, forceRefresh: attempt > 0);
-      if (resolved != null && resolved.url.isNotEmpty && !resolved.url.startsWith('file://')) {
+      final resolved = await StreamResolverService().resolve(
+        song,
+        forceRefresh: attempt > 0,
+      );
+      if (resolved != null &&
+          resolved.url.isNotEmpty &&
+          !resolved.url.startsWith('file://')) {
         streamUrl = Uri.parse(resolved.url);
         headers = resolved.headers;
-        debugPrint('[DownloadService] Resolved online stream via StreamResolver (${resolved.source}): ${song.title}');
+        debugPrint(
+          '[DownloadService] Resolved online stream via StreamResolver (${resolved.source}): ${song.title}',
+        );
       } else {
         // Fallback to YoutubeExplode if StreamResolver returned null
         final yt = YoutubeExplode();
@@ -2085,7 +2312,9 @@ class DownloadService {
           final streamInfo = _pickStreamByQuality(manifest, quality);
           streamUrl = streamInfo.url;
           totalBytes = streamInfo.size.totalBytes;
-          debugPrint('Download via YoutubeExplode: ${song.title} at ${streamInfo.bitrate.bitsPerSecond ~/ 1000}kbps (${quality.name})');
+          debugPrint(
+            'Download via YoutubeExplode: ${song.title} at ${streamInfo.bitrate.bitsPerSecond ~/ 1000}kbps (${quality.name})',
+          );
         } finally {
           yt.close();
         }
@@ -2181,20 +2410,28 @@ class DownloadService {
           failedTask.bytesDownloaded > 0 &&
           failedTask.totalSize > 0 &&
           !failedTask.isCancelled) {
-        _resumeHints[song.videoId] =
-            _ResumeHint(usedFormatKey, failedTask.totalSize);
-        debugPrint('[DownloadService] Kept ${DownloadItem.formatFileSize(failedTask.bytesDownloaded)} '
-            'of ${song.title} for resume');
+        _resumeHints[song.videoId] = _ResumeHint(
+          usedFormatKey,
+          failedTask.totalSize,
+        );
+        debugPrint(
+          '[DownloadService] Kept ${DownloadItem.formatFileSize(failedTask.bytesDownloaded)} '
+          'of ${song.title} for resume',
+        );
       } else {
         _resumeHints.remove(song.videoId);
       }
 
       // Retry logic
       if (attempt < maxRetries - 1) {
-        debugPrint('Download attempt ${attempt + 1} failed for ${song.title}, retrying...');
+        debugPrint(
+          'Download attempt ${attempt + 1} failed for ${song.title}, retrying...',
+        );
         DiagnosticLogService().log(DiagnosticLogService.downloadRetry, {
-          'videoId': song.videoId, 'title': song.title,
-          'attempt': attempt + 1, 'max': maxRetries,
+          'videoId': song.videoId,
+          'title': song.title,
+          'attempt': attempt + 1,
+          'max': maxRetries,
           'error': e.toString(),
           'resume_bytes': _resumeHints[song.videoId]?.total ?? 0,
         });
@@ -2206,11 +2443,14 @@ class DownloadService {
           if (onStateChanged != null) onStateChanged();
         }
         await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
-        return _executeDownload(song, onProgress,
-            onStateChanged: onStateChanged,
-            attempt: attempt + 1,
-            quality: quality,
-            reservedAudioFile: audioFile);
+        return _executeDownload(
+          song,
+          onProgress,
+          onStateChanged: onStateChanged,
+          attempt: attempt + 1,
+          quality: quality,
+          reservedAudioFile: audioFile,
+        );
       }
 
       // Final failure.
@@ -2229,8 +2469,10 @@ class DownloadService {
       }
       debugPrint('Download error after $maxRetries attempts: $e');
       DiagnosticLogService().log(DiagnosticLogService.downloadError, {
-        'videoId': song.videoId, 'title': song.title,
-        'attempts': attempt + 1, 'error': e.toString(),
+        'videoId': song.videoId,
+        'title': song.title,
+        'attempts': attempt + 1,
+        'error': e.toString(),
       });
       rethrow;
     }
@@ -2297,7 +2539,8 @@ class DownloadService {
             removed.add(file.path);
           }
         }
-        if (song.thumbnailUrl.isNotEmpty && !song.thumbnailUrl.startsWith('http')) {
+        if (song.thumbnailUrl.isNotEmpty &&
+            !song.thumbnailUrl.startsWith('http')) {
           final thumb = File(song.thumbnailUrl);
           if (await thumb.exists()) {
             await thumb.delete();
@@ -2348,7 +2591,8 @@ class DownloadService {
             removed.add(file.path);
           }
         }
-        if (song.thumbnailUrl.isNotEmpty && !song.thumbnailUrl.startsWith('http')) {
+        if (song.thumbnailUrl.isNotEmpty &&
+            !song.thumbnailUrl.startsWith('http')) {
           final thumb = File(song.thumbnailUrl);
           if (await thumb.exists()) {
             await thumb.delete();
@@ -2429,7 +2673,9 @@ class DownloadService {
 
   Future<void> updateDownloadedSong(Song updatedSong) async {
     await loadDownloads();
-    final idx = _downloadedSongs.indexWhere((s) => s.videoId == updatedSong.videoId);
+    final idx = _downloadedSongs.indexWhere(
+      (s) => s.videoId == updatedSong.videoId,
+    );
     if (idx >= 0) {
       _downloadedSongs[idx] = updatedSong.copyWith(isEdited: true);
       await _saveMetadata();
@@ -2444,16 +2690,23 @@ class DownloadService {
     await _saveMetadata();
   }
 
-  Future<void> saveNewSongCopy(Song originalSong, Song newSong, String sourceFilePath) async {
+  Future<void> saveNewSongCopy(
+    Song originalSong,
+    Song newSong,
+    String sourceFilePath,
+  ) async {
     await loadDownloads();
     final sourceFile = File(sourceFilePath);
-    final ext = sourceFilePath.contains('.') ? sourceFilePath.split('.').last.toLowerCase() : 'mp3';
+    final ext = sourceFilePath.contains('.')
+        ? sourceFilePath.split('.').last.toLowerCase()
+        : 'mp3';
     final dir = await _downloadDir;
-    final newPath = '${dir.path}${Platform.pathSeparator}${newSong.videoId}.$ext';
+    final newPath =
+        '${dir.path}${Platform.pathSeparator}${newSong.videoId}.$ext';
     if (await sourceFile.exists()) {
       await sourceFile.copy(newPath);
     }
-    
+
     // Add to list and save metadata
     final savedSong = newSong.copyWith(filePath: newPath, isEdited: true);
     _downloadedSongs.add(savedSong);
@@ -2463,7 +2716,9 @@ class DownloadService {
   Future<void> _saveMetadata() async {
     try {
       final file = await _metadataFile;
-      final jsonContent = json.encode(_downloadedSongs.map((s) => s.toJson()).toList());
+      final jsonContent = json.encode(
+        _downloadedSongs.map((s) => s.toJson()).toList(),
+      );
       await file.writeAsString(jsonContent);
     } catch (e) {
       debugPrint('Error saving downloads metadata: $e');

@@ -32,7 +32,11 @@ class GeminiClient {
     const singleKeyEnv = String.fromEnvironment('GEMINI_KEY');
 
     if (keysEnv.isNotEmpty) {
-      return keysEnv.split(',').map((k) => k.trim()).where((k) => k.isNotEmpty).toList();
+      return keysEnv
+          .split(',')
+          .map((k) => k.trim())
+          .where((k) => k.isNotEmpty)
+          .toList();
     }
     if (singleKeyEnv.isNotEmpty) {
       return [singleKeyEnv];
@@ -63,7 +67,10 @@ class GeminiClient {
     List<String> songRepresentations,
     List<String> categories,
   ) async {
-    if (_aborted || apiKeys.isEmpty || songRepresentations.isEmpty || categories.isEmpty) {
+    if (_aborted ||
+        apiKeys.isEmpty ||
+        songRepresentations.isEmpty ||
+        categories.isEmpty) {
       return null;
     }
 
@@ -73,11 +80,15 @@ class GeminiClient {
 
     // Build the batch classification prompt
     final buffer = StringBuffer();
-    buffer.write('Classify each song into exactly one of these categories: ${json.encode(categories)}. Songs:\n');
+    buffer.write(
+      'Classify each song into exactly one of these categories: ${json.encode(categories)}. Songs:\n',
+    );
     for (int i = 0; i < songRepresentations.length; i++) {
       buffer.write('${i + 1}. ${songRepresentations[i]}\n');
     }
-    buffer.write('If no category fits with confidence >= 0.5, use "UNASSIGNED".');
+    buffer.write(
+      'If no category fits with confidence >= 0.5, use "UNASSIGNED".',
+    );
 
     final promptText = buffer.toString();
 
@@ -85,9 +96,9 @@ class GeminiClient {
       "contents": [
         {
           "parts": [
-            {"text": promptText}
-          ]
-        }
+            {"text": promptText},
+          ],
+        },
       ],
       "generationConfig": {
         "temperature": 0.1,
@@ -99,12 +110,12 @@ class GeminiClient {
             "properties": {
               "index": {"type": "INTEGER"},
               "category": {"type": "STRING"},
-              "confidence": {"type": "NUMBER"}
+              "confidence": {"type": "NUMBER"},
             },
-            "required": ["index", "category", "confidence"]
-          }
-        }
-      }
+            "required": ["index", "category", "confidence"],
+          },
+        },
+      },
     };
 
     // Rotate keys randomly to distribute load
@@ -115,7 +126,7 @@ class GeminiClient {
       final request = await _client.postUrl(url);
       request.headers.set('x-goog-api-key', apiKey);
       request.headers.set('Content-Type', 'application/json; charset=utf-8');
-      
+
       // Explicitly encode to UTF-8 to prevent encoding exceptions on Unicode characters
       request.add(utf8.encode(json.encode(body)));
 
@@ -127,22 +138,31 @@ class GeminiClient {
       }
 
       final decoded = json.decode(bodyStr);
-      final jsonText = decoded['candidates'][0]['content']['parts'][0]['text'] as String;
+      final jsonText =
+          decoded['candidates'][0]['content']['parts'][0]['text'] as String;
 
       final resultsList = json.decode(jsonText) as List;
       final results = resultsList
-          .map((item) => GeminiClassificationResult.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => GeminiClassificationResult.fromJson(
+              item as Map<String, dynamic>,
+            ),
+          )
           .toList();
 
       _consecutiveFailures = 0;
       return results;
     } catch (e) {
       _consecutiveFailures++;
-      debugPrint('[Gemini Client] Batch classification failed ($e). Failure count: $_consecutiveFailures');
-      
+      debugPrint(
+        '[Gemini Client] Batch classification failed ($e). Failure count: $_consecutiveFailures',
+      );
+
       if (_consecutiveFailures >= 3) {
         _aborted = true;
-        debugPrint('[Gemini Client] Circuit breaker tripped. Gemini classification disabled.');
+        debugPrint(
+          '[Gemini Client] Circuit breaker tripped. Gemini classification disabled.',
+        );
       }
       return null;
     }

@@ -114,8 +114,11 @@ void showQueueSheet(BuildContext context, PlayerProvider playerProvider) {
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 24),
                           color: Colors.redAccent.withValues(alpha: 0.25),
-                          child: const Icon(Icons.delete_outline_rounded,
-                              color: Colors.redAccent, size: 22),
+                          child: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: Colors.redAccent,
+                            size: 22,
+                          ),
                         ),
                         onDismissed: (_) {
                           AppHaptics.medium();
@@ -165,9 +168,7 @@ class _QueueTile extends StatelessWidget {
       leading: Container(
         width: 44,
         height: 44,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: song.thumbnailUrl.startsWith('http')
@@ -180,18 +181,21 @@ class _QueueTile extends StatelessWidget {
                       Container(color: AppColors.surfaceVariant),
                 )
               : (song.thumbnailUrl.isNotEmpty &&
-                      File(song.thumbnailUrl).existsSync())
-                  ? Image.file(
-                      File(song.thumbnailUrl),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                          Container(color: AppColors.surfaceVariant),
-                    )
-                  : Container(
-                      color: AppColors.surfaceVariant,
-                      child: const Icon(Icons.music_note_rounded,
-                          color: AppColors.textTertiary, size: 18),
-                    ),
+                    File(song.thumbnailUrl).existsSync())
+              ? Image.file(
+                  File(song.thumbnailUrl),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      Container(color: AppColors.surfaceVariant),
+                )
+              : Container(
+                  color: AppColors.surfaceVariant,
+                  child: const Icon(
+                    Icons.music_note_rounded,
+                    color: AppColors.textTertiary,
+                    size: 18,
+                  ),
+                ),
         ),
       ),
       title: Text(
@@ -208,10 +212,7 @@ class _QueueTile extends StatelessWidget {
       ),
       subtitle: Text(
         song.artist,
-        style: const TextStyle(
-          color: AppColors.textTertiary,
-          fontSize: 12,
-        ),
+        style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -219,11 +220,7 @@ class _QueueTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isCurrent)
-            const AnimatedEqualizer(
-              height: 16,
-              barWidth: 2,
-              barCount: 3,
-            )
+            const AnimatedEqualizer(height: 16, barWidth: 2, barCount: 3)
           else
             Text(
               song.formattedDuration,
@@ -235,8 +232,11 @@ class _QueueTile extends StatelessWidget {
           const SizedBox(width: 8),
           ReorderableDragStartListener(
             index: index,
-            child: const Icon(Icons.drag_handle_rounded,
-                color: AppColors.textTertiary, size: 20),
+            child: const Icon(
+              Icons.drag_handle_rounded,
+              color: AppColors.textTertiary,
+              size: 20,
+            ),
           ),
         ],
       ),

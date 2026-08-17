@@ -22,8 +22,7 @@ class ShimmerSongTile extends StatelessWidget {
       baseColor: AppColors.shimmerBase,
       // A whisper of the theme accent in the sweep keeps even the skeleton
       // on-theme.
-      highlightColor:
-          Color.lerp(AppColors.shimmerHighlight, accent, 0.18)!,
+      highlightColor: Color.lerp(AppColors.shimmerHighlight, accent, 0.18)!,
       period: const Duration(milliseconds: 1400),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -88,11 +87,7 @@ class ShimmerCard extends StatelessWidget {
   final double width;
   final double height;
 
-  const ShimmerCard({
-    super.key,
-    this.width = 160,
-    this.height = 200,
-  });
+  const ShimmerCard({super.key, this.width = 160, this.height = 200});
 
   @override
   Widget build(BuildContext context) {
@@ -181,10 +176,8 @@ class ShimmerHorizontalList extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: itemCount,
-        itemBuilder: (context, index) => ShimmerCard(
-          width: cardWidth,
-          height: cardHeight,
-        ),
+        itemBuilder: (context, index) =>
+            ShimmerCard(width: cardWidth, height: cardHeight),
       ),
     );
   }

@@ -41,16 +41,22 @@ class JioSaavnService {
       final Set<String> pids = {};
 
       // 1. Search albums via official JioSaavn API
-      final albumSearchUrl = '$_officialApiBase?__call=search.getAlbumResults&_format=json&_marker=0&api_version=4&ctx=web64bit&q=${Uri.encodeComponent(cleanQuery)}&n=6';
+      final albumSearchUrl =
+          '$_officialApiBase?__call=search.getAlbumResults&_format=json&_marker=0&api_version=4&ctx=web64bit&q=${Uri.encodeComponent(cleanQuery)}&n=6';
       try {
-        final request = await _client.getUrl(Uri.parse(albumSearchUrl)).timeout(const Duration(seconds: 4));
-        final response = await request.close().timeout(const Duration(seconds: 4));
+        final request = await _client
+            .getUrl(Uri.parse(albumSearchUrl))
+            .timeout(const Duration(seconds: 4));
+        final response = await request.close().timeout(
+          const Duration(seconds: 4),
+        );
         if (response.statusCode == 200) {
           final body = await response.transform(utf8.decoder).join();
           final data = jsonDecode(body);
           if (data is Map && data['results'] is List) {
             for (final album in data['results']) {
-              final songPidsStr = album['more_info']?['song_pids']?.toString() ?? '';
+              final songPidsStr =
+                  album['more_info']?['song_pids']?.toString() ?? '';
               if (songPidsStr.isNotEmpty) {
                 for (final pid in songPidsStr.split(',')) {
                   final clean = pid.trim();
@@ -67,10 +73,15 @@ class JioSaavnService {
       }
 
       // 2. Search autocomplete via official JioSaavn API
-      final autoUrl = '$_officialApiBase?__call=autocomplete.get&_format=json&_marker=0&api_version=4&ctx=web64bit&query=${Uri.encodeComponent(cleanQuery)}';
+      final autoUrl =
+          '$_officialApiBase?__call=autocomplete.get&_format=json&_marker=0&api_version=4&ctx=web64bit&query=${Uri.encodeComponent(cleanQuery)}';
       try {
-        final request = await _client.getUrl(Uri.parse(autoUrl)).timeout(const Duration(seconds: 4));
-        final response = await request.close().timeout(const Duration(seconds: 4));
+        final request = await _client
+            .getUrl(Uri.parse(autoUrl))
+            .timeout(const Duration(seconds: 4));
+        final response = await request.close().timeout(
+          const Duration(seconds: 4),
+        );
         if (response.statusCode == 200) {
           final body = await response.transform(utf8.decoder).join();
           final data = jsonDecode(body);
@@ -78,7 +89,8 @@ class JioSaavnService {
             final albumsData = data['albums']?['data'] as List?;
             if (albumsData != null) {
               for (final album in albumsData) {
-                final songPidsStr = album['more_info']?['song_pids']?.toString() ?? '';
+                final songPidsStr =
+                    album['more_info']?['song_pids']?.toString() ?? '';
                 if (songPidsStr.isNotEmpty) {
                   for (final pid in songPidsStr.split(',')) {
                     final clean = pid.trim();
@@ -99,13 +111,20 @@ class JioSaavnService {
       if (pids.isEmpty) {
         for (final base in _wrapperUrls) {
           try {
-            final searchUrl = '$base/api/search?query=${Uri.encodeComponent(cleanQuery)}';
-            final request = await _client.getUrl(Uri.parse(searchUrl)).timeout(const Duration(seconds: 4));
-            final response = await request.close().timeout(const Duration(seconds: 4));
+            final searchUrl =
+                '$base/api/search?query=${Uri.encodeComponent(cleanQuery)}';
+            final request = await _client
+                .getUrl(Uri.parse(searchUrl))
+                .timeout(const Duration(seconds: 4));
+            final response = await request.close().timeout(
+              const Duration(seconds: 4),
+            );
             if (response.statusCode == 200) {
               final body = await response.transform(utf8.decoder).join();
               final data = jsonDecode(body);
-              if (data is Map && data['success'] == true && data['data'] != null) {
+              if (data is Map &&
+                  data['success'] == true &&
+                  data['data'] != null) {
                 final albums = data['data']['albums']?['results'] as List?;
                 if (albums != null) {
                   for (final album in albums) {
@@ -130,10 +149,15 @@ class JioSaavnService {
 
       // 4. Fetch full song details for collected PIDs
       final pidsChunk = pids.take(maxResults).join(',');
-      final detailsUrl = '$_officialApiBase?__call=song.getDetails&pids=$pidsChunk&_format=json';
+      final detailsUrl =
+          '$_officialApiBase?__call=song.getDetails&pids=$pidsChunk&_format=json';
 
-      final request = await _client.getUrl(Uri.parse(detailsUrl)).timeout(const Duration(seconds: 4));
-      final response = await request.close().timeout(const Duration(seconds: 4));
+      final request = await _client
+          .getUrl(Uri.parse(detailsUrl))
+          .timeout(const Duration(seconds: 4));
+      final response = await request.close().timeout(
+        const Duration(seconds: 4),
+      );
 
       if (response.statusCode != 200) {
         await response.drain();
@@ -141,7 +165,8 @@ class JioSaavnService {
       }
 
       final body = await response.transform(utf8.decoder).join();
-      final Map<String, dynamic> songMap = jsonDecode(body) as Map<String, dynamic>;
+      final Map<String, dynamic> songMap =
+          jsonDecode(body) as Map<String, dynamic>;
 
       final List<Song> songs = [];
       for (final entry in songMap.entries) {
@@ -152,7 +177,9 @@ class JioSaavnService {
         final rawName = (data['song'] ?? data['title'] ?? '').toString().trim();
         if (id.isEmpty || rawName.isEmpty) continue;
 
-        final rawArtist = (data['primary_artists'] ?? data['singers'] ?? 'JioSaavn Artist').toString();
+        final rawArtist =
+            (data['primary_artists'] ?? data['singers'] ?? 'JioSaavn Artist')
+                .toString();
         final rawImage = (data['image'] ?? '').toString();
 
         final name = EncodingSanitizer.sanitize(rawName);
@@ -164,15 +191,17 @@ class JioSaavnService {
             ? (data['duration'] as num).toInt()
             : int.tryParse(data['duration']?.toString() ?? '0') ?? 0;
 
-        songs.add(Song(
-          id: 'jiosaavn_$id',
-          videoId: 'jiosaavn_$id',
-          title: name.isNotEmpty ? name : 'Unknown Track',
-          artist: artistName.isNotEmpty ? artistName : 'JioSaavn Artist',
-          thumbnailUrl: lowResImage,
-          highResThumbnailUrl: imageUrl,
-          duration: Duration(seconds: durationSecs),
-        ));
+        songs.add(
+          Song(
+            id: 'jiosaavn_$id',
+            videoId: 'jiosaavn_$id',
+            title: name.isNotEmpty ? name : 'Unknown Track',
+            artist: artistName.isNotEmpty ? artistName : 'JioSaavn Artist',
+            thumbnailUrl: lowResImage,
+            highResThumbnailUrl: imageUrl,
+            duration: Duration(seconds: durationSecs),
+          ),
+        );
       }
 
       return songs;
@@ -197,8 +226,12 @@ class JioSaavnService {
     for (final base in _wrapperUrls) {
       final url = '$base/api/songs/$cleanId';
       try {
-        final request = await _client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 4));
-        final response = await request.close().timeout(const Duration(seconds: 4));
+        final request = await _client
+            .getUrl(Uri.parse(url))
+            .timeout(const Duration(seconds: 4));
+        final response = await request.close().timeout(
+          const Duration(seconds: 4),
+        );
         if (response.statusCode != 200) {
           await response.drain();
           continue;
@@ -240,7 +273,9 @@ class JioSaavnService {
             return fallbackLink;
           }
 
-          final lastLink = downloadUrls.last['link']?.toString() ?? downloadUrls.last['url']?.toString();
+          final lastLink =
+              downloadUrls.last['link']?.toString() ??
+              downloadUrls.last['url']?.toString();
           if (lastLink != null && lastLink.isNotEmpty) {
             _putCache(cleanId, lastLink);
             return lastLink;
@@ -253,9 +288,14 @@ class JioSaavnService {
 
     // 2. Fallback: try official JioSaavn song.getDetails endpoint for media_preview_url / vlink
     try {
-      final detailsUrl = '$_officialApiBase?__call=song.getDetails&pids=$cleanId&_format=json';
-      final request = await _client.getUrl(Uri.parse(detailsUrl)).timeout(const Duration(seconds: 4));
-      final response = await request.close().timeout(const Duration(seconds: 4));
+      final detailsUrl =
+          '$_officialApiBase?__call=song.getDetails&pids=$cleanId&_format=json';
+      final request = await _client
+          .getUrl(Uri.parse(detailsUrl))
+          .timeout(const Duration(seconds: 4));
+      final response = await request.close().timeout(
+        const Duration(seconds: 4),
+      );
 
       if (response.statusCode == 200) {
         final body = await response.transform(utf8.decoder).join();
@@ -265,7 +305,8 @@ class JioSaavnService {
           final mediaPreviewUrl = item['media_preview_url']?.toString() ?? '';
           final vlink = item['vlink']?.toString() ?? '';
 
-          if (mediaPreviewUrl.isNotEmpty && mediaPreviewUrl.startsWith('http')) {
+          if (mediaPreviewUrl.isNotEmpty &&
+              mediaPreviewUrl.startsWith('http')) {
             _putCache(cleanId, mediaPreviewUrl);
             return mediaPreviewUrl;
           }

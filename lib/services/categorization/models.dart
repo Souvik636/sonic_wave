@@ -1,4 +1,3 @@
-
 // ══════════════════════════════════════════════════════════════
 // ENUMS
 // ══════════════════════════════════════════════════════════════
@@ -6,14 +5,14 @@
 /// Strategies the user can reorder to control classification priority.
 enum GroupingStrategy {
   existingAlbumsFirst, // match Custom + Default albums
-  byRealAlbum,         // MusicBrainz release clustering
-  byFolder,            // local files: folder = album
-  byArtist,            // canonical artist grouping
-  byGenre,             // MusicBrainz tags → keyword fallback
-  byMood,              // keyword themes
-  byUserCategories,    // Gemini classification against the user's own labels
-  bySimilarity,        // REMOVED (was HF embedding clustering) — no longer run
-  smartAuto,           // expands to a sensible default order
+  byRealAlbum, // MusicBrainz release clustering
+  byFolder, // local files: folder = album
+  byArtist, // canonical artist grouping
+  byGenre, // MusicBrainz tags → keyword fallback
+  byMood, // keyword themes
+  byUserCategories, // Gemini classification against the user's own labels
+  bySimilarity, // REMOVED (was HF embedding clustering) — no longer run
+  smartAuto, // expands to a sensible default order
 }
 
 enum ProposalAction { addToExisting, createNew }
@@ -226,11 +225,7 @@ class StageProgress {
   final int done;
   final int total;
 
-  const StageProgress({
-    required this.label,
-    this.done = 0,
-    this.total = 0,
-  });
+  const StageProgress({required this.label, this.done = 0, this.total = 0});
 }
 
 /// Cooperative cancellation token — checked by strategies inside I/O loops.

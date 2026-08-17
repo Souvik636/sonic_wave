@@ -40,13 +40,16 @@ class UserAlbum {
     DateTime? lastUpdated,
   }) : lastUpdated = lastUpdated ?? DateTime.now();
 
-  String get thumbnail => coverImagePath ?? (songs.isNotEmpty ? songs.first.thumbnailUrl : '');
+  String get thumbnail =>
+      coverImagePath ?? (songs.isNotEmpty ? songs.first.thumbnailUrl : '');
 
   int get songCount => songs.length;
 
   /// Whether this album is backed by a real folder on disk
   AlbumStorageType get storageType =>
-      (folderPath != null && folderPath!.isNotEmpty) ? AlbumStorageType.physical : AlbumStorageType.virtual;
+      (folderPath != null && folderPath!.isNotEmpty)
+      ? AlbumStorageType.physical
+      : AlbumStorageType.virtual;
 
   /// Total size of all audio files in this album, in bytes.
   ///
@@ -79,15 +82,15 @@ class UserAlbum {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'songs': songs.map((s) => s.toJson()).toList(),
-        'isCustom': isCustom,
-        'folderPath': folderPath,
-        'isFolderBased': isFolderBased,
-        'coverImagePath': coverImagePath,
-        'lastUpdated': lastUpdated.millisecondsSinceEpoch,
-      };
+    'id': id,
+    'name': name,
+    'songs': songs.map((s) => s.toJson()).toList(),
+    'isCustom': isCustom,
+    'folderPath': folderPath,
+    'isFolderBased': isFolderBased,
+    'coverImagePath': coverImagePath,
+    'lastUpdated': lastUpdated.millisecondsSinceEpoch,
+  };
 
   factory UserAlbum.fromJson(Map<String, dynamic> json) {
     return UserAlbum(
@@ -122,7 +125,9 @@ class UserAlbum {
       isCustom: isCustom,
       folderPath: folderPath ?? this.folderPath,
       isFolderBased: isFolderBased ?? this.isFolderBased,
-      coverImagePath: clearCoverImage ? null : (coverImagePath ?? this.coverImagePath),
+      coverImagePath: clearCoverImage
+          ? null
+          : (coverImagePath ?? this.coverImagePath),
       lastUpdated: lastUpdated ?? this.lastUpdated,
     );
   }

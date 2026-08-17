@@ -85,27 +85,30 @@ class PremiumPageRoute<T> extends PageRouteBuilder<T> {
   final Widget page;
 
   PremiumPageRoute({required this.page, super.settings})
-      : super(
-          transitionDuration: const Duration(milliseconds: 360),
-          reverseTransitionDuration: const Duration(milliseconds: 280),
-          pageBuilder: (context, animation, secondaryAnimation) => page,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            // Use `drive(CurveTween(...))` (an Animatable view) rather than
-            // constructing a CurvedAnimation here: transitionsBuilder runs every
-            // frame, and a CurvedAnimation with a reverseCurve attaches a status
-            // listener that is only freed on dispose() — which never happens for
-            // per-frame instances, leaking listeners. drive() adds none.
-            const curve = Curves.easeOutCubic;
-            final fade = animation.drive(CurveTween(curve: curve));
-            final scale = animation.drive(
-              Tween<double>(begin: 0.97, end: 1.0).chain(CurveTween(curve: curve)),
-            );
-            return FadeTransition(
-              opacity: fade,
-              child: ScaleTransition(scale: scale, child: child),
-            );
-          },
-        );
+    : super(
+        transitionDuration: const Duration(milliseconds: 360),
+        reverseTransitionDuration: const Duration(milliseconds: 280),
+        pageBuilder: (context, animation, secondaryAnimation) => page,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          // Use `drive(CurveTween(...))` (an Animatable view) rather than
+          // constructing a CurvedAnimation here: transitionsBuilder runs every
+          // frame, and a CurvedAnimation with a reverseCurve attaches a status
+          // listener that is only freed on dispose() — which never happens for
+          // per-frame instances, leaking listeners. drive() adds none.
+          const curve = Curves.easeOutCubic;
+          final fade = animation.drive(CurveTween(curve: curve));
+          final scale = animation.drive(
+            Tween<double>(
+              begin: 0.97,
+              end: 1.0,
+            ).chain(CurveTween(curve: curve)),
+          );
+          return FadeTransition(
+            opacity: fade,
+            child: ScaleTransition(scale: scale, child: child),
+          );
+        },
+      );
 }
 
 /// A one-shot entrance that fades + rises its child, staggered by list [index]
@@ -144,14 +147,18 @@ class _StaggeredRevealState extends State<StaggeredReveal>
     vsync: this,
     duration: widget.duration,
   );
-  late final Animation<double> _curved =
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+  late final Animation<double> _curved = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
 
   @override
   void initState() {
     super.initState();
-    final delayMs =
-        (widget.index * widget.step.inMilliseconds).clamp(0, widget.maxDelay.inMilliseconds);
+    final delayMs = (widget.index * widget.step.inMilliseconds).clamp(
+      0,
+      widget.maxDelay.inMilliseconds,
+    );
     Future.delayed(Duration(milliseconds: delayMs), () {
       if (mounted) _controller.forward();
     });
@@ -241,10 +248,10 @@ class GradientHeadline extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
+          fontSize: fontSize,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
       ),
     );
   }
@@ -295,9 +302,9 @@ class GlowEmptyState extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           if (subtitle != null) ...[
             const SizedBox(height: 6),
@@ -310,10 +317,7 @@ class GlowEmptyState extends StatelessWidget {
               ),
             ),
           ],
-          if (action != null) ...[
-            const SizedBox(height: 18),
-            action!,
-          ],
+          if (action != null) ...[const SizedBox(height: 18), action!],
         ],
       ),
     );

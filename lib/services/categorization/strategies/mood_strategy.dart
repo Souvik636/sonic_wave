@@ -21,36 +21,101 @@ class MoodStrategy extends CategorizationStrategy {
   /// Theme definitions with keyword lists and descriptions.
   static const Map<String, _ThemeConfig> _themes = {
     'Lofi & Chill': _ThemeConfig(
-      keywords: ['lofi', 'chill', 'relax', 'sleep', 'ambient', 'calm', 'dreamy', 'soothing'],
-      description: 'Relaxing beats and ambient lofi vibes for studying or winding down.',
+      keywords: [
+        'lofi',
+        'chill',
+        'relax',
+        'sleep',
+        'ambient',
+        'calm',
+        'dreamy',
+        'soothing',
+      ],
+      description:
+          'Relaxing beats and ambient lofi vibes for studying or winding down.',
     ),
     'Acoustic & Mellow': _ThemeConfig(
-      keywords: ['acoustic', 'unplugged', 'piano', 'guitar', 'mellow', 'ballad', 'soft'],
-      description: 'Mellow acoustic performances, keyboard, and unplugged melodies.',
+      keywords: [
+        'acoustic',
+        'unplugged',
+        'piano',
+        'guitar',
+        'mellow',
+        'ballad',
+        'soft',
+      ],
+      description:
+          'Mellow acoustic performances, keyboard, and unplugged melodies.',
     ),
     'Rock & Energetic': _ThemeConfig(
       keywords: ['rock', 'metal', 'punk', 'grunge', 'electric', 'riff'],
-      description: 'High energy tracks, live concerts, and guitar-driven rhythms.',
+      description:
+          'High energy tracks, live concerts, and guitar-driven rhythms.',
     ),
     'Electronic & Dance': _ThemeConfig(
-      keywords: ['remix', 'dance', 'edm', 'club', 'house', 'techno', 'trance', 'bass', 'drop'],
+      keywords: [
+        'remix',
+        'dance',
+        'edm',
+        'club',
+        'house',
+        'techno',
+        'trance',
+        'bass',
+        'drop',
+      ],
       description: 'Upbeat dance mixes, electronic synths, and club remixes.',
     ),
     'Hip-Hop & Rap': _ThemeConfig(
-      keywords: ['rap', 'hiphop', 'trap', 'freestyle', 'flow', 'bars', 'cypher'],
+      keywords: [
+        'rap',
+        'hiphop',
+        'trap',
+        'freestyle',
+        'flow',
+        'bars',
+        'cypher',
+      ],
       description: 'Hip-hop beats, rap flows, and urban rhythms.',
     ),
     'Classical & Instrumental': _ThemeConfig(
-      keywords: ['classical', 'instrumental', 'orchestra', 'symphony', 'sonata', 'concerto', 'opus'],
-      description: 'Classical compositions, orchestral works, and instrumental performances.',
+      keywords: [
+        'classical',
+        'instrumental',
+        'orchestra',
+        'symphony',
+        'sonata',
+        'concerto',
+        'opus',
+      ],
+      description:
+          'Classical compositions, orchestral works, and instrumental performances.',
     ),
     'Focus & Study': _ThemeConfig(
-      keywords: ['focus', 'study', 'concentration', 'meditation', 'zen', 'mindful'],
-      description: 'Focus music and study aids for productivity and concentration.',
+      keywords: [
+        'focus',
+        'study',
+        'concentration',
+        'meditation',
+        'zen',
+        'mindful',
+      ],
+      description:
+          'Focus music and study aids for productivity and concentration.',
     ),
     'Bollywood & Indian': _ThemeConfig(
-      keywords: ['bollywood', 'hindi', 'punjabi', 'bhojpuri', 'tamil', 'telugu', 'desi', 'sufi'],
-      description: 'Indian music spanning Bollywood, regional, and Sufi traditions.',
+      keywords: [
+        'bollywood',
+        'hindi',
+        'punjabi',
+        'bhojpuri',
+        'tamil',
+        'telugu',
+        'desi',
+        'sufi',
+      ],
+      description:
+          'Indian music spanning Bollywood, regional, and Sufi traditions.',
     ),
   };
 
@@ -64,18 +129,23 @@ class MoodStrategy extends CategorizationStrategy {
     final songs = unclaimed(ctx, classifiedIds);
     if (songs.isEmpty) return [];
 
-    onProgress(StageProgress(
-      label: 'Analyzing song moods',
-      done: 0,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(
+        label: 'Analyzing song moods',
+        done: 0,
+        total: songs.length,
+      ),
+    );
 
     // Pre-compile word-boundary regexes for each theme
     final compiledThemes = <String, List<RegExp>>{};
     for (final entry in _themes.entries) {
       compiledThemes[entry.key] = entry.value.keywords.map((kw) {
         // Word-boundary regex: matches whole words only
-        return RegExp(r'(^|\W)' + RegExp.escape(kw) + r'(\W|$)', caseSensitive: false);
+        return RegExp(
+          r'(^|\W)' + RegExp.escape(kw) + r'(\W|$)',
+          caseSensitive: false,
+        );
       }).toList();
     }
 
@@ -121,11 +191,13 @@ class MoodStrategy extends CategorizationStrategy {
       }
 
       if (i % 10 == 0) {
-        onProgress(StageProgress(
-          label: 'Analyzing song moods',
-          done: i + 1,
-          total: songs.length,
-        ));
+        onProgress(
+          StageProgress(
+            label: 'Analyzing song moods',
+            done: i + 1,
+            total: songs.length,
+          ),
+        );
       }
     }
 
@@ -134,22 +206,26 @@ class MoodStrategy extends CategorizationStrategy {
     for (final entry in themeGroups.entries) {
       if (entry.value.isEmpty) continue;
 
-      proposals.add(AiProposedAlbum(
-        id: _uuid.v4(),
-        name: entry.key,
-        description: _themes[entry.key]!.description,
-        songIds: List.unmodifiable(entry.value.map((s) => s.videoId)),
-        action: ProposalAction.createNew,
-        source: ProposalSource.mood,
-        confidence: 0.65,
-      ));
+      proposals.add(
+        AiProposedAlbum(
+          id: _uuid.v4(),
+          name: entry.key,
+          description: _themes[entry.key]!.description,
+          songIds: List.unmodifiable(entry.value.map((s) => s.videoId)),
+          action: ProposalAction.createNew,
+          source: ProposalSource.mood,
+          confidence: 0.65,
+        ),
+      );
     }
 
-    onProgress(StageProgress(
-      label: 'Analyzing song moods',
-      done: songs.length,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(
+        label: 'Analyzing song moods',
+        done: songs.length,
+        total: songs.length,
+      ),
+    );
 
     return proposals;
   }

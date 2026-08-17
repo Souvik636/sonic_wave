@@ -31,10 +31,8 @@ class UpdateDialog extends StatefulWidget {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.82),
-      builder: (ctx) => UpdateDialog(
-        updateClient: updateClient,
-        release: release,
-      ),
+      builder: (ctx) =>
+          UpdateDialog(updateClient: updateClient, release: release),
     );
   }
 
@@ -109,24 +107,25 @@ class _UpdateDialogState extends State<UpdateDialog>
       } catch (_) {}
       final destFile = File('${downloadDir.path}/${asset.name}');
 
-      _downloadSub =
-          widget.updateClient.downloadAsset(asset, destFile).listen(
-        (progress) {
-          setState(() {
-            _progress = progress;
-          });
-        },
-        onError: (err) {
-          setState(() {
-            _status = UpdateStatus.error;
-            _errorMessage = 'APK Download failed: $err';
-          });
-        },
-        onDone: () async {
-          _downloadedFile = destFile;
-          await _verifyAndPrepare(destFile);
-        },
-      );
+      _downloadSub = widget.updateClient
+          .downloadAsset(asset, destFile)
+          .listen(
+            (progress) {
+              setState(() {
+                _progress = progress;
+              });
+            },
+            onError: (err) {
+              setState(() {
+                _status = UpdateStatus.error;
+                _errorMessage = 'APK Download failed: $err';
+              });
+            },
+            onDone: () async {
+              _downloadedFile = destFile;
+              await _verifyAndPrepare(destFile);
+            },
+          );
     } catch (e) {
       setState(() {
         _status = UpdateStatus.error;
@@ -154,8 +153,10 @@ class _UpdateDialogState extends State<UpdateDialog>
     } catch (e) {
       setState(() {
         _status = UpdateStatus.error;
-        _errorMessage =
-            e.toString().replaceAll('ChecksumMismatchException:', '').trim();
+        _errorMessage = e
+            .toString()
+            .replaceAll('ChecksumMismatchException:', '')
+            .trim();
       });
     }
   }
@@ -207,8 +208,10 @@ class _UpdateDialogState extends State<UpdateDialog>
       if (!mounted) return;
       setState(() {
         _status = UpdateStatus.error;
-        _errorMessage =
-            e.toString().replaceAll('InstallerExecutionException:', '').trim();
+        _errorMessage = e
+            .toString()
+            .replaceAll('InstallerExecutionException:', '')
+            .trim();
       });
     }
   }
@@ -245,8 +248,10 @@ class _UpdateDialogState extends State<UpdateDialog>
         child: Dialog(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 24,
+          ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(28),
             child: BackdropFilter(
@@ -333,8 +338,9 @@ class _UpdateDialogState extends State<UpdateDialog>
                                   borderRadius: BorderRadius.circular(18),
                                   boxShadow: [
                                     BoxShadow(
-                                      color:
-                                          primaryAccent.withValues(alpha: 0.45),
+                                      color: primaryAccent.withValues(
+                                        alpha: 0.45,
+                                      ),
                                       blurRadius: 14,
                                     ),
                                   ],
@@ -365,15 +371,21 @@ class _UpdateDialogState extends State<UpdateDialog>
                                         // Version jump pill
                                         Container(
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 2.5),
+                                            horizontal: 8,
+                                            vertical: 2.5,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color: primaryAccent
-                                                .withValues(alpha: 0.18),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
+                                            color: primaryAccent.withValues(
+                                              alpha: 0.18,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                             border: Border.all(
-                                                color: primaryAccent
-                                                    .withValues(alpha: 0.45)),
+                                              color: primaryAccent.withValues(
+                                                alpha: 0.45,
+                                              ),
+                                            ),
                                           ),
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
@@ -388,7 +400,8 @@ class _UpdateDialogState extends State<UpdateDialog>
                                               ),
                                               const Padding(
                                                 padding: EdgeInsets.symmetric(
-                                                    horizontal: 4),
+                                                  horizontal: 4,
+                                                ),
                                                 child: Icon(
                                                   Icons.arrow_forward_rounded,
                                                   color: Color(0xFFA855F7),
@@ -398,7 +411,9 @@ class _UpdateDialogState extends State<UpdateDialog>
                                               Text(
                                                 widget.release.tag,
                                                 style: GoogleFonts.inter(
-                                                  color: const Color(0xFFC084FC),
+                                                  color: const Color(
+                                                    0xFFC084FC,
+                                                  ),
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -410,15 +425,19 @@ class _UpdateDialogState extends State<UpdateDialog>
                                         // Architecture pill
                                         Container(
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 7, vertical: 2.5),
+                                            horizontal: 7,
+                                            vertical: 2.5,
+                                          ),
                                           decoration: BoxDecoration(
                                             color: Colors.greenAccent
                                                 .withValues(alpha: 0.15),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                             border: Border.all(
-                                                color: Colors.greenAccent
-                                                    .withValues(alpha: 0.3)),
+                                              color: Colors.greenAccent
+                                                  .withValues(alpha: 0.3),
+                                            ),
                                           ),
                                           child: const Text(
                                             '64-Bit · ARM',
@@ -436,8 +455,11 @@ class _UpdateDialogState extends State<UpdateDialog>
                               ),
                               if (_status == UpdateStatus.available)
                                 IconButton(
-                                  icon: const Icon(Icons.close_rounded,
-                                      color: Colors.white54, size: 22),
+                                  icon: const Icon(
+                                    Icons.close_rounded,
+                                    color: Colors.white54,
+                                    size: 22,
+                                  ),
                                   onPressed: () {
                                     Navigator.of(context).pop();
                                     widget.onDismiss?.call();
@@ -452,13 +474,19 @@ class _UpdateDialogState extends State<UpdateDialog>
 
                           // ── Dynamic Body State Switcher ───────────────
                           _buildBodyContent(
-                              primaryAccent, secondaryAccent, pinkAccent),
+                            primaryAccent,
+                            secondaryAccent,
+                            pinkAccent,
+                          ),
 
                           const SizedBox(height: 22),
 
                           // ── Action Controls Footer ────────────────────
                           _buildActionFooter(
-                              context, primaryAccent, secondaryAccent),
+                            context,
+                            primaryAccent,
+                            secondaryAccent,
+                          ),
                         ],
                       ),
                     ),
@@ -473,7 +501,10 @@ class _UpdateDialogState extends State<UpdateDialog>
   }
 
   Widget _buildBodyContent(
-      Color primaryAccent, Color secondaryAccent, Color pinkAccent) {
+    Color primaryAccent,
+    Color secondaryAccent,
+    Color pinkAccent,
+  ) {
     switch (_status) {
       case UpdateStatus.available:
         return Column(
@@ -491,8 +522,10 @@ class _UpdateDialogState extends State<UpdateDialog>
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(6),
@@ -500,7 +533,9 @@ class _UpdateDialogState extends State<UpdateDialog>
                   child: Text(
                     widget.release.targetAsset?.formattedSize ?? 'Latest APK',
                     style: const TextStyle(
-                        color: AppColors.textTertiary, fontSize: 10),
+                      color: AppColors.textTertiary,
+                      fontSize: 10,
+                    ),
                   ),
                 ),
               ],
@@ -523,9 +558,9 @@ class _UpdateDialogState extends State<UpdateDialog>
                     widget.release.releaseNotes.isNotEmpty
                         ? widget.release.releaseNotes
                         : '• Performance improvements and memory optimizations.\n'
-                            '• Enhanced yt-dlp native extraction and background streaming.\n'
-                            '• Audio equalizer, sound studio, and storage enhancements.\n'
-                            '• Native 64-Bit Android arm64-v8a system stability.',
+                              '• Enhanced yt-dlp native extraction and background streaming.\n'
+                              '• Audio equalizer, sound studio, and storage enhancements.\n'
+                              '• Native 64-Bit Android arm64-v8a system stability.',
                     style: GoogleFonts.inter(
                       color: Colors.white.withValues(alpha: 0.82),
                       fontSize: 12.5,
@@ -552,7 +587,9 @@ class _UpdateDialogState extends State<UpdateDialog>
                       width: 14,
                       height: 14,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Color(0xFF06B6D4)),
+                        strokeWidth: 2,
+                        color: Color(0xFF06B6D4),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Text(
@@ -588,10 +625,7 @@ class _UpdateDialogState extends State<UpdateDialog>
                       child: Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [
-                              Color(0xFF8B5CF6),
-                              Color(0xFF06B6D4),
-                            ],
+                            colors: [Color(0xFF8B5CF6), Color(0xFF06B6D4)],
                           ),
                         ),
                       ),
@@ -628,7 +662,8 @@ class _UpdateDialogState extends State<UpdateDialog>
             color: const Color(0xFF06B6D4).withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-                color: const Color(0xFF06B6D4).withValues(alpha: 0.35)),
+              color: const Color(0xFF06B6D4).withValues(alpha: 0.35),
+            ),
           ),
           child: const Row(
             children: [
@@ -636,7 +671,9 @@ class _UpdateDialogState extends State<UpdateDialog>
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Color(0xFF06B6D4)),
+                  strokeWidth: 2.5,
+                  color: Color(0xFF06B6D4),
+                ),
               ),
               SizedBox(width: 14),
               Expanded(
@@ -646,9 +683,10 @@ class _UpdateDialogState extends State<UpdateDialog>
                     Text(
                       'Verifying SHA-256 Checksum',
                       style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     SizedBox(height: 2),
                     Text(
@@ -668,8 +706,9 @@ class _UpdateDialogState extends State<UpdateDialog>
           decoration: BoxDecoration(
             color: Colors.greenAccent.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(16),
-            border:
-                Border.all(color: Colors.greenAccent.withValues(alpha: 0.35)),
+            border: Border.all(
+              color: Colors.greenAccent.withValues(alpha: 0.35),
+            ),
           ),
           child: const Row(
             children: [
@@ -677,7 +716,9 @@ class _UpdateDialogState extends State<UpdateDialog>
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: Colors.greenAccent),
+                  strokeWidth: 2.5,
+                  color: Colors.greenAccent,
+                ),
               ),
               SizedBox(width: 14),
               Expanded(
@@ -687,9 +728,10 @@ class _UpdateDialogState extends State<UpdateDialog>
                     Text(
                       'Opening Package Installer',
                       style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     SizedBox(height: 2),
                     Text(
@@ -745,9 +787,10 @@ class _UpdateDialogState extends State<UpdateDialog>
                           ? 'APK Ready (Unverified Hash)'
                           : 'APK Verified & Ready to Install!',
                       style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -755,7 +798,9 @@ class _UpdateDialogState extends State<UpdateDialog>
                           ? 'Package downloaded. Tap Install below.'
                           : 'Cryptographic SHA-256 hash matched perfectly.',
                       style: const TextStyle(
-                          color: Colors.white70, fontSize: 11.5),
+                        color: Colors.white70,
+                        fontSize: 11.5,
+                      ),
                     ),
                   ],
                 ),
@@ -775,15 +820,21 @@ class _UpdateDialogState extends State<UpdateDialog>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.error_outline_rounded,
-                  color: Colors.redAccent, size: 22),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.redAccent,
+                size: 22,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   _errorMessage ??
                       'An unexpected error occurred during update.',
                   style: const TextStyle(
-                      color: Colors.white, fontSize: 12, height: 1.4),
+                    color: Colors.white,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
                 ),
               ),
             ],
@@ -796,7 +847,10 @@ class _UpdateDialogState extends State<UpdateDialog>
   }
 
   Widget _buildActionFooter(
-      BuildContext context, Color primaryAccent, Color secondaryAccent) {
+    BuildContext context,
+    Color primaryAccent,
+    Color secondaryAccent,
+  ) {
     if (_status == UpdateStatus.available) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.end,
@@ -809,9 +863,10 @@ class _UpdateDialogState extends State<UpdateDialog>
             child: Text(
               'Remind Later',
               style: GoogleFonts.inter(
-                  color: Colors.white54,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500),
+                color: Colors.white54,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -821,7 +876,8 @@ class _UpdateDialogState extends State<UpdateDialog>
               backgroundColor: primaryAccent,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(14),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
               elevation: 6,
               shadowColor: primaryAccent.withValues(alpha: 0.5),
@@ -830,7 +886,9 @@ class _UpdateDialogState extends State<UpdateDialog>
             label: Text(
               'Update Now',
               style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.bold, fontSize: 13.5),
+                fontWeight: FontWeight.bold,
+                fontSize: 13.5,
+              ),
             ),
           ),
         ],
@@ -845,12 +903,15 @@ class _UpdateDialogState extends State<UpdateDialog>
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.redAccent,
             side: const BorderSide(color: Colors.redAccent),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             padding: const EdgeInsets.symmetric(vertical: 12),
           ),
-          child: const Text('Cancel Download',
-              style: TextStyle(fontWeight: FontWeight.w600)),
+          child: const Text(
+            'Cancel Download',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
       );
     }
@@ -863,8 +924,9 @@ class _UpdateDialogState extends State<UpdateDialog>
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.greenAccent.shade700,
             foregroundColor: Colors.white,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             padding: const EdgeInsets.symmetric(vertical: 14),
             elevation: 8,
             shadowColor: Colors.greenAccent.withValues(alpha: 0.4),
@@ -873,7 +935,9 @@ class _UpdateDialogState extends State<UpdateDialog>
           label: Text(
             'Install APK Update Now',
             style: GoogleFonts.outfit(
-                fontWeight: FontWeight.bold, fontSize: 14.5),
+              fontWeight: FontWeight.bold,
+              fontSize: 14.5,
+            ),
           ),
         ),
       );
@@ -897,7 +961,8 @@ class _UpdateDialogState extends State<UpdateDialog>
               backgroundColor: primaryAccent,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+                borderRadius: BorderRadius.circular(14),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             ),
             icon: Icon(

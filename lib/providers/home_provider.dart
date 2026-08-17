@@ -40,14 +40,16 @@ class HomeProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isOffline => _isOffline;
   DateTime? get lastRefreshed => _lastRefreshed;
-  bool isCategoryLoading(String category) => _loadingCategories.contains(category);
+  bool isCategoryLoading(String category) =>
+      _loadingCategories.contains(category);
 
   /// Check connectivity status using direct DNS lookup
   Future<void> checkConnection() async {
     bool newOfflineState = false;
     try {
-      final result = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 5));
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 5));
       newOfflineState = result.isEmpty || result.first.rawAddress.isEmpty;
     } on TimeoutException {
       // Fail OPEN on timeout — a slow DNS probe on weak mobile data is not a dead connection.
@@ -70,7 +72,10 @@ class HomeProvider extends ChangeNotifier {
   }
 
   /// Load a category dynamically on-demand
-  Future<void> loadCategory(String category, {bool forceRefresh = false}) async {
+  Future<void> loadCategory(
+    String category, {
+    bool forceRefresh = false,
+  }) async {
     if (!forceRefresh &&
         _categorySongs.containsKey(category) &&
         _categorySongs[category]!.isNotEmpty) {
@@ -82,7 +87,10 @@ class HomeProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final songs = await _youtubeService.getSongsByCategory(category, forceRefresh: forceRefresh);
+      final songs = await _youtubeService.getSongsByCategory(
+        category,
+        forceRefresh: forceRefresh,
+      );
       if (songs.isNotEmpty || !_categorySongs.containsKey(category)) {
         _categorySongs[category] = songs;
       }
@@ -107,7 +115,9 @@ class HomeProvider extends ChangeNotifier {
 
     try {
       // Fetch trending songs
-      final trending = await _youtubeService.getTrendingMusic(forceRefresh: forceRefresh);
+      final trending = await _youtubeService.getTrendingMusic(
+        forceRefresh: forceRefresh,
+      );
       if (trending.isNotEmpty) {
         _trendingSongs = trending;
       }
@@ -131,8 +141,10 @@ class HomeProvider extends ChangeNotifier {
     // data arrives, and one slow/failed category never blocks the rest.
     await Future.wait(
       categories.map(
-        (category) => loadCategory(category, forceRefresh: forceRefresh)
-            .catchError((e) => debugPrint('Error loading $category: $e')),
+        (category) => loadCategory(
+          category,
+          forceRefresh: forceRefresh,
+        ).catchError((e) => debugPrint('Error loading $category: $e')),
       ),
     );
   }

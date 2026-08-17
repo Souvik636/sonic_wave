@@ -72,11 +72,7 @@ class AppColors {
   );
 
   static const RadialGradient glowGradient = RadialGradient(
-    colors: [
-      Color(0x336C63FF),
-      Color(0x116C63FF),
-      Color(0x00060612),
-    ],
+    colors: [Color(0x336C63FF), Color(0x116C63FF), Color(0x00060612)],
     radius: 0.8,
   );
 

@@ -17,7 +17,9 @@ void main(List<String> args) {
   // ── 1. Read pubspec.yaml ──────────────────────────────────────────────────
   final pubspecFile = File('${root.path}${Platform.pathSeparator}pubspec.yaml');
   if (!pubspecFile.existsSync()) {
-    stderr.writeln('[sync_version] ERROR: pubspec.yaml not found at ${pubspecFile.path}');
+    stderr.writeln(
+      '[sync_version] ERROR: pubspec.yaml not found at ${pubspecFile.path}',
+    );
     exit(1);
   }
 
@@ -32,7 +34,9 @@ void main(List<String> args) {
   }
 
   if (rawVersion == null) {
-    stderr.writeln('[sync_version] ERROR: No "version:" field found in pubspec.yaml');
+    stderr.writeln(
+      '[sync_version] ERROR: No "version:" field found in pubspec.yaml',
+    );
     exit(1);
   }
 
@@ -58,19 +62,27 @@ void main(List<String> args) {
     ..writeln('//     dart run tool/sync_version.dart')
     ..writeln('//')
     ..writeln('// The SINGLE SOURCE OF TRUTH for the version is pubspec.yaml.')
-    ..writeln('// Change the version there, then run the command above (or push — CI does it).')
+    ..writeln(
+      '// Change the version there, then run the command above (or push — CI does it).',
+    )
     ..writeln()
-    ..writeln('/// Application version constants, always in sync with pubspec.yaml.')
+    ..writeln(
+      '/// Application version constants, always in sync with pubspec.yaml.',
+    )
     ..writeln('class AppVersion {')
     ..writeln('  AppVersion._();')
     ..writeln()
-    ..writeln('  /// Semantic version string (e.g. "1.3.0").  Matches the GitHub release tag.')
+    ..writeln(
+      '  /// Semantic version string (e.g. "1.3.0").  Matches the GitHub release tag.',
+    )
     ..writeln("  static const String current = '$semver';")
     ..writeln()
     ..writeln('  /// Build number — the +N suffix from pubspec.yaml.')
     ..writeln('  static const int buildNumber = $build;')
     ..writeln()
-    ..writeln('  /// Full version string including build number (e.g. "1.3.0+1").')
+    ..writeln(
+      '  /// Full version string including build number (e.g. "1.3.0+1").',
+    )
     ..writeln("  static const String full = '$rawVersion';")
     ..writeln('}');
   final content = buf.toString();
@@ -85,10 +97,14 @@ void main(List<String> args) {
 /// Walk up from the script location until we find pubspec.yaml.
 Directory _projectRoot() {
   var dir = File(Platform.script.toFilePath()).parent;
-  while (!File('${dir.path}${Platform.pathSeparator}pubspec.yaml').existsSync()) {
+  while (!File(
+    '${dir.path}${Platform.pathSeparator}pubspec.yaml',
+  ).existsSync()) {
     final parent = dir.parent;
     if (parent.path == dir.path) {
-      stderr.writeln('[sync_version] ERROR: Could not locate project root (pubspec.yaml)');
+      stderr.writeln(
+        '[sync_version] ERROR: Could not locate project root (pubspec.yaml)',
+      );
       exit(1);
     }
     dir = parent;

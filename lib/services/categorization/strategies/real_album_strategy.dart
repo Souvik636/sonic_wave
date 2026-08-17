@@ -22,11 +22,13 @@ class RealAlbumStrategy extends CategorizationStrategy {
     final songs = unclaimed(ctx, classifiedIds);
     if (songs.isEmpty || ctx.mbClient == null) return [];
 
-    onProgress(StageProgress(
-      label: 'Querying MusicBrainz database',
-      done: 0,
-      total: songs.length,
-    ));
+    onProgress(
+      StageProgress(
+        label: 'Querying MusicBrainz database',
+        done: 0,
+        total: songs.length,
+      ),
+    );
 
     // Groups based on albumTitle: title -> list of song IDs
     final Map<String, List<String>> groups = {};
@@ -42,28 +44,34 @@ class RealAlbumStrategy extends CategorizationStrategy {
         maxLookups: ctx.request.maxMetadataLookups,
       );
 
-      if (result.found && result.albumTitle != null && result.albumTitle!.trim().isNotEmpty) {
+      if (result.found &&
+          result.albumTitle != null &&
+          result.albumTitle!.trim().isNotEmpty) {
         groups.putIfAbsent(result.albumTitle!, () => []).add(song.videoId);
       }
 
-      onProgress(StageProgress(
-        label: 'Querying MusicBrainz database',
-        done: i + 1,
-        total: songs.length,
-      ));
+      onProgress(
+        StageProgress(
+          label: 'Querying MusicBrainz database',
+          done: i + 1,
+          total: songs.length,
+        ),
+      );
     }
 
     final proposals = <AiProposedAlbum>[];
     groups.forEach((albumTitle, songIds) {
-      proposals.add(AiProposedAlbum(
-        id: _uuid.v4(),
-        name: albumTitle,
-        description: 'Album identified via MusicBrainz database matching.',
-        songIds: List.unmodifiable(songIds),
-        action: ProposalAction.createNew,
-        source: ProposalSource.musicbrainz,
-        confidence: 0.85,
-      ));
+      proposals.add(
+        AiProposedAlbum(
+          id: _uuid.v4(),
+          name: albumTitle,
+          description: 'Album identified via MusicBrainz database matching.',
+          songIds: List.unmodifiable(songIds),
+          action: ProposalAction.createNew,
+          source: ProposalSource.musicbrainz,
+          confidence: 0.85,
+        ),
+      );
     });
 
     return proposals;

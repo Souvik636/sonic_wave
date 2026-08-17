@@ -39,7 +39,12 @@ class StorageBreakdown {
   });
 
   int get total =>
-      downloadedSongs + albumFolders + streamCache + imageCache + coverArt + metadata;
+      downloadedSongs +
+      albumFolders +
+      streamCache +
+      imageCache +
+      coverArt +
+      metadata;
 
   /// Total clearable cache (everything except downloaded songs & albums).
   int get clearable => streamCache + imageCache + coverArt + metadata;
@@ -85,7 +90,10 @@ class StorageAnalyzer {
     try {
       final dlDir = await storage.getDownloadDir();
       if (await dlDir.exists()) {
-        await for (final entity in dlDir.list(recursive: true, followLinks: false)) {
+        await for (final entity in dlDir.list(
+          recursive: true,
+          followLinks: false,
+        )) {
           if (entity is File) {
             final normalized = entity.path.replaceAll('\\', '/').toLowerCase();
             if (!countedPaths.contains(normalized)) {
@@ -130,7 +138,9 @@ class StorageAnalyzer {
     // 5. Cover art — localart/ + native_art_* (temporary cover caches)
     try {
       final support = await getApplicationSupportDirectory();
-      final localArt = Directory('${support.path}${Platform.pathSeparator}localart');
+      final localArt = Directory(
+        '${support.path}${Platform.pathSeparator}localart',
+      );
       coverArtBytes += await _dirSize(localArt);
     } catch (_) {}
     try {
@@ -156,7 +166,9 @@ class StorageAnalyzer {
     } catch (_) {}
     try {
       final support = await getApplicationSupportDirectory();
-      final indexFile = File('${support.path}${Platform.pathSeparator}local_meta_index.json');
+      final indexFile = File(
+        '${support.path}${Platform.pathSeparator}local_meta_index.json',
+      );
       if (await indexFile.exists()) {
         metadataBytes += await indexFile.length();
       }
@@ -205,7 +217,9 @@ class StorageAnalyzer {
       final tempDir = await getTemporaryDirectory();
       final cacheDirs = [
         Directory('${tempDir.path}${Platform.pathSeparator}libCachedImageData'),
-        Directory('${tempDir.path}${Platform.pathSeparator}flutter_cache_manager'),
+        Directory(
+          '${tempDir.path}${Platform.pathSeparator}flutter_cache_manager',
+        ),
       ];
       for (final dir in cacheDirs) {
         if (await dir.exists()) {
@@ -213,7 +227,9 @@ class StorageAnalyzer {
         }
       }
     } catch (e) {
-      debugPrint('[StorageAnalyzer] physical image cache directory delete failed: $e');
+      debugPrint(
+        '[StorageAnalyzer] physical image cache directory delete failed: $e',
+      );
     }
   }
 
@@ -222,7 +238,9 @@ class StorageAnalyzer {
   Future<void> clearCoverArt() async {
     try {
       final support = await getApplicationSupportDirectory();
-      final localArt = Directory('${support.path}${Platform.pathSeparator}localart');
+      final localArt = Directory(
+        '${support.path}${Platform.pathSeparator}localart',
+      );
       if (await localArt.exists()) {
         await localArt.delete(recursive: true);
       }
@@ -252,7 +270,10 @@ class StorageAnalyzer {
     int total = 0;
     try {
       if (!await dir.exists()) return 0;
-      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+      await for (final entity in dir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
         if (entity is File) {
           try {
             total += await entity.length();
@@ -270,7 +291,9 @@ class StorageAnalyzer {
       final tempDir = await getTemporaryDirectory();
       final dirs = [
         Directory('${tempDir.path}${Platform.pathSeparator}libCachedImageData'),
-        Directory('${tempDir.path}${Platform.pathSeparator}flutter_cache_manager'),
+        Directory(
+          '${tempDir.path}${Platform.pathSeparator}flutter_cache_manager',
+        ),
       ];
       for (final d in dirs) {
         total += await _dirSize(d);
@@ -290,4 +313,3 @@ class StorageAnalyzer {
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 }
-

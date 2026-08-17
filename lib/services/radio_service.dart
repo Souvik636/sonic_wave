@@ -53,8 +53,11 @@ class RadioService {
 
   /// Parse one Radio-Browser station JSON entry into a Song, applying the
   /// same safety rules everywhere (HTTPS-only, playable container, dedupe).
-  Song? _stationFromJson(dynamic item, Set<String> seenUrls,
-      {String fallbackGenre = 'RADIO'}) {
+  Song? _stationFromJson(
+    dynamic item,
+    Set<String> seenUrls, {
+    String fallbackGenre = 'RADIO',
+  }) {
     final uuid = item['stationuuid'] as String?;
     final name = (item['name'] as String? ?? '').trim();
     final url =
@@ -106,15 +109,20 @@ class RadioService {
     for (final server in _apiServers) {
       try {
         final uri = Uri.parse(
-            '$server/json/stations/search?name=${Uri.encodeComponent(clean)}'
-            '&limit=$limit&order=clickcount&reverse=true'
-            '&hidebroken=true&is_https=true');
-        final request =
-            await _client.getUrl(uri).timeout(const Duration(seconds: 4));
-        request.headers
-            .set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
-        final response =
-            await request.close().timeout(const Duration(seconds: 4));
+          '$server/json/stations/search?name=${Uri.encodeComponent(clean)}'
+          '&limit=$limit&order=clickcount&reverse=true'
+          '&hidebroken=true&is_https=true',
+        );
+        final request = await _client
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 4));
+        request.headers.set(
+          HttpHeaders.userAgentHeader,
+          'MusicApp/1.0 (Flutter)',
+        );
+        final response = await request.close().timeout(
+          const Duration(seconds: 4),
+        );
         if (response.statusCode == 200) {
           final body = await response
               .transform(utf8.decoder)
@@ -135,15 +143,20 @@ class RadioService {
       for (final server in _apiServers) {
         try {
           final uri = Uri.parse(
-              '$server/json/stations/bytag/${Uri.encodeComponent(clean.toLowerCase())}'
-              '?limit=$limit&order=clickcount&reverse=true'
-              '&hidebroken=true&is_https=true');
-          final request =
-              await _client.getUrl(uri).timeout(const Duration(seconds: 4));
-          request.headers
-              .set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
-          final response =
-              await request.close().timeout(const Duration(seconds: 4));
+            '$server/json/stations/bytag/${Uri.encodeComponent(clean.toLowerCase())}'
+            '?limit=$limit&order=clickcount&reverse=true'
+            '&hidebroken=true&is_https=true',
+          );
+          final request = await _client
+              .getUrl(uri)
+              .timeout(const Duration(seconds: 4));
+          request.headers.set(
+            HttpHeaders.userAgentHeader,
+            'MusicApp/1.0 (Flutter)',
+          );
+          final response = await request.close().timeout(
+            const Duration(seconds: 4),
+          );
           if (response.statusCode == 200) {
             final body = await response
                 .transform(utf8.decoder)
@@ -188,14 +201,19 @@ class RadioService {
         // is_https=true  -> only TLS streams (no cleartext problems, no rewriting)
         // hidebroken=true -> API excludes stations that failed its own checks
         final uri = Uri.parse(
-            '$server/json/stations/search?limit=60'
-            '&order=clickcount&reverse=true&hidebroken=true&is_https=true');
-        final request =
-            await _client.getUrl(uri).timeout(const Duration(seconds: 4));
-        request.headers
-            .set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
-        final response =
-            await request.close().timeout(const Duration(seconds: 4));
+          '$server/json/stations/search?limit=60'
+          '&order=clickcount&reverse=true&hidebroken=true&is_https=true',
+        );
+        final request = await _client
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 4));
+        request.headers.set(
+          HttpHeaders.userAgentHeader,
+          'MusicApp/1.0 (Flutter)',
+        );
+        final response = await request.close().timeout(
+          const Duration(seconds: 4),
+        );
 
         if (response.statusCode == 200) {
           final body = await response
@@ -239,18 +257,21 @@ class RadioService {
         }
         if (!seenUrls.add(url)) continue;
 
-        final genre =
-            tags.isNotEmpty ? tags.split(',')[0].trim().toUpperCase() : 'INDIA';
+        final genre = tags.isNotEmpty
+            ? tags.split(',')[0].trim().toUpperCase()
+            : 'INDIA';
 
-        stations.add(Song(
-          id: '$idPrefix$uuid$_urlMarker$url',
-          videoId: '$idPrefix$uuid$_urlMarker$url',
-          title: name,
-          artist: 'Radio • $genre',
-          thumbnailUrl: favicon,
-          highResThumbnailUrl: favicon,
-          duration: Duration.zero, // live stream
-        ));
+        stations.add(
+          Song(
+            id: '$idPrefix$uuid$_urlMarker$url',
+            videoId: '$idPrefix$uuid$_urlMarker$url',
+            title: name,
+            artist: 'Radio • $genre',
+            thumbnailUrl: favicon,
+            highResThumbnailUrl: favicon,
+            duration: Duration.zero, // live stream
+          ),
+        );
       }
     }
 
@@ -258,9 +279,11 @@ class RadioService {
     final curated = _curatedStations();
     for (final cur in curated.reversed) {
       final curUrl = streamUrlFromId(cur.videoId);
-      final exists = stations.any((s) =>
-          s.title.toLowerCase() == cur.title.toLowerCase() ||
-          streamUrlFromId(s.videoId) == curUrl);
+      final exists = stations.any(
+        (s) =>
+            s.title.toLowerCase() == cur.title.toLowerCase() ||
+            streamUrlFromId(s.videoId) == curUrl,
+      );
       if (!exists) stations.insert(0, cur);
     }
 
@@ -281,20 +304,27 @@ class RadioService {
         HttpHeaders.userAgentHeader,
         'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
       );
-      final response =
-          await request.close().timeout(const Duration(seconds: 4));
+      final response = await request.close().timeout(
+        const Duration(seconds: 4),
+      );
       final ok = response.statusCode >= 200 && response.statusCode < 400;
       // We only needed the headers; detach and destroy the socket.
-      unawaited(response.detachSocket().then((s) => s.destroy()).catchError(
-          (_) {}));
+      unawaited(
+        response.detachSocket().then((s) => s.destroy()).catchError((_) {}),
+      );
       return ok;
     } catch (_) {
       return false;
     }
   }
 
-  Song _station(String key, String url, String title, String genre,
-      {String icon = ''}) {
+  Song _station(
+    String key,
+    String url,
+    String title,
+    String genre, {
+    String icon = '',
+  }) {
     final id = '$idPrefix$key$_urlMarker$url';
     return Song(
       id: id,

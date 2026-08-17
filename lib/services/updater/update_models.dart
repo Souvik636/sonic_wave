@@ -100,7 +100,9 @@ class AppRelease {
 
     for (final asset in parsedAssets) {
       final nameLower = asset.name.toLowerCase();
-      if (nameLower.endsWith('.sha256') || nameLower.endsWith('.sha256sum') || nameLower == 'checksums.txt') {
+      if (nameLower.endsWith('.sha256') ||
+          nameLower.endsWith('.sha256sum') ||
+          nameLower == 'checksums.txt') {
         checksum = asset;
       } else if (asset.isAndroid64BitBinary) {
         target = asset;
@@ -109,16 +111,21 @@ class AppRelease {
 
     // Fallback: if no explicit arm64 tag in name, pick main .apk file
     target ??= parsedAssets.cast<ReleaseAsset?>().firstWhere(
-          (a) => a != null && a.name.toLowerCase().endsWith('.apk') && !ReleaseAsset.v7aOrNonAndroidPattern.hasMatch(a.name.toLowerCase()),
-          orElse: () => null,
-        );
+      (a) =>
+          a != null &&
+          a.name.toLowerCase().endsWith('.apk') &&
+          !ReleaseAsset.v7aOrNonAndroidPattern.hasMatch(a.name.toLowerCase()),
+      orElse: () => null,
+    );
 
     return AppRelease(
       tag: json['tag_name'] as String? ?? '',
       name: json['name'] as String? ?? json['tag_name'] as String? ?? '',
       releaseNotes: json['body'] as String? ?? '',
       isPrerelease: json['prerelease'] as bool? ?? false,
-      publishedAt: DateTime.tryParse(json['published_at'] as String? ?? '') ?? DateTime.now(),
+      publishedAt:
+          DateTime.tryParse(json['published_at'] as String? ?? '') ??
+          DateTime.now(),
       targetAsset: target,
       checksumAsset: checksum,
     );
@@ -137,7 +144,8 @@ class UpdateProgress {
     required this.speedBytesPerSec,
   });
 
-  double get fraction => totalBytes > 0 ? (downloadedBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
+  double get fraction =>
+      totalBytes > 0 ? (downloadedBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
   int get percentage => (fraction * 100).round();
   double get downloadedMB => downloadedBytes / (1024 * 1024);
   double get totalMB => totalBytes / (1024 * 1024);

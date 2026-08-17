@@ -84,14 +84,18 @@ class _SplashScreenState extends State<SplashScreen>
       CurvedAnimation(parent: _exitController, curve: Curves.easeInBack),
     );
     _exitOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _exitController, curve: const Interval(0.0, 0.7, curve: Curves.easeOut)),
+      CurvedAnimation(
+        parent: _exitController,
+        curve: const Interval(0.0, 0.7, curve: Curves.easeOut),
+      ),
     );
-    _exitSlide = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(0.0, -0.2),
-    ).animate(
-      CurvedAnimation(parent: _exitController, curve: Curves.easeInOutCubic),
-    );
+    _exitSlide = Tween<Offset>(begin: Offset.zero, end: const Offset(0.0, -0.2))
+        .animate(
+          CurvedAnimation(
+            parent: _exitController,
+            curve: Curves.easeInOutCubic,
+          ),
+        );
 
     // Trigger animations sequentially (Motion Choreography)
     _logoController.forward().then((_) {
@@ -108,29 +112,30 @@ class _SplashScreenState extends State<SplashScreen>
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) =>
                   const HomeScreen(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                final curve = CurvedAnimation(
-                  parent: animation,
-                  curve: Curves.easeInOutQuart,
-                );
-                
-                final scale = Tween<double>(begin: 0.90, end: 1.0).animate(curve);
-                final slide = Tween<Offset>(
-                  begin: const Offset(0.0, 0.06),
-                  end: Offset.zero,
-                ).animate(curve);
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    final curve = CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeInOutQuart,
+                    );
 
-                return SlideTransition(
-                  position: slide,
-                  child: ScaleTransition(
-                    scale: scale,
-                    child: FadeTransition(
-                      opacity: animation,
-                      child: child,
-                    ),
-                  ),
-                );
-              },
+                    final scale = Tween<double>(
+                      begin: 0.90,
+                      end: 1.0,
+                    ).animate(curve);
+                    final slide = Tween<Offset>(
+                      begin: const Offset(0.0, 0.06),
+                      end: Offset.zero,
+                    ).animate(curve);
+
+                    return SlideTransition(
+                      position: slide,
+                      child: ScaleTransition(
+                        scale: scale,
+                        child: FadeTransition(opacity: animation, child: child),
+                      ),
+                    );
+                  },
               transitionDuration: const Duration(milliseconds: 900),
             ),
           );
@@ -197,8 +202,9 @@ class _SplashScreenState extends State<SplashScreen>
                   painter: _AuroraBackgroundPainter(
                     progress: _auroraController.value,
                     accent: Provider.of<SettingsProvider>(context).accentColor,
-                    accentDark:
-                        Provider.of<SettingsProvider>(context).accentColorDark,
+                    accentDark: Provider.of<SettingsProvider>(
+                      context,
+                    ).accentColorDark,
                   ),
                 ),
               );
@@ -225,16 +231,17 @@ class _SplashScreenState extends State<SplashScreen>
           // 3. Central Glassmorphic Card containing Logo + App Name
           Center(
             child: AnimatedBuilder(
-              animation: Listenable.merge([_logoController, _exitController, _textController]),
+              animation: Listenable.merge([
+                _logoController,
+                _exitController,
+                _textController,
+              ]),
               builder: (context, child) {
                 return Transform.scale(
                   scale: _exitScale.value,
                   child: SlideTransition(
                     position: _exitSlide,
-                    child: Opacity(
-                      opacity: _exitOpacity.value,
-                      child: child,
-                    ),
+                    child: Opacity(opacity: _exitOpacity.value, child: child),
                   ),
                 );
               },
@@ -255,20 +262,21 @@ class _SplashScreenState extends State<SplashScreen>
                             height: 110,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: Provider.of<SettingsProvider>(context)
-                                  .accentGradient,
+                              gradient: Provider.of<SettingsProvider>(
+                                context,
+                              ).accentGradient,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Provider.of<SettingsProvider>(context)
-                                      .accentColor
-                                      .withValues(alpha: 0.45),
+                                  color: Provider.of<SettingsProvider>(
+                                    context,
+                                  ).accentColor.withValues(alpha: 0.45),
                                   blurRadius: 40,
                                   spreadRadius: 8,
                                 ),
                                 BoxShadow(
-                                  color: Provider.of<SettingsProvider>(context)
-                                      .accentColorDark
-                                      .withValues(alpha: 0.35),
+                                  color: Provider.of<SettingsProvider>(
+                                    context,
+                                  ).accentColorDark.withValues(alpha: 0.35),
                                   blurRadius: 25,
                                   spreadRadius: 2,
                                   offset: const Offset(4, 4),
@@ -286,7 +294,9 @@ class _SplashScreenState extends State<SplashScreen>
                                     shape: BoxShape.circle,
                                     color: Colors.black.withValues(alpha: 0.15),
                                     border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.25),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.25,
+                                      ),
                                       width: 1,
                                     ),
                                   ),
@@ -345,7 +355,9 @@ class _SplashScreenState extends State<SplashScreen>
                             letterSpacing: -0.7,
                             shadows: [
                               Shadow(
-                                color: Provider.of<SettingsProvider>(context).accentColor.withValues(alpha: 0.6),
+                                color: Provider.of<SettingsProvider>(
+                                  context,
+                                ).accentColor.withValues(alpha: 0.6),
                                 blurRadius: 15,
                                 offset: const Offset(0, 4),
                               ),
@@ -380,7 +392,11 @@ class _SplashScreenState extends State<SplashScreen>
             right: 0,
             child: Center(
               child: AnimatedBuilder(
-                animation: Listenable.merge([_textController, _auroraController, _exitController]),
+                animation: Listenable.merge([
+                  _textController,
+                  _auroraController,
+                  _exitController,
+                ]),
                 builder: (context, child) {
                   return Opacity(
                     opacity: _textController.value * _exitOpacity.value,
@@ -389,8 +405,11 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Transform.translate(
                         offset: Offset(
                           0,
-                          (20 * (1.0 - _textController.value)) + 
-                          (4 * math.sin(_auroraController.value * 2 * math.pi)),
+                          (20 * (1.0 - _textController.value)) +
+                              (4 *
+                                  math.sin(
+                                    _auroraController.value * 2 * math.pi,
+                                  )),
                         ),
                         child: child,
                       ),
@@ -418,7 +437,9 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                       // Neon Glow Layers
                       Shadow(
-                        color: Provider.of<SettingsProvider>(context).accentColor.withValues(alpha: 0.6),
+                        color: Provider.of<SettingsProvider>(
+                          context,
+                        ).accentColor.withValues(alpha: 0.6),
                         blurRadius: 8,
                       ),
                       Shadow(
@@ -454,10 +475,7 @@ class _AuroraBackgroundPainter extends CustomPainter {
     final rect = Offset.zero & size;
 
     // Deep base violet-indigo background
-    canvas.drawRect(
-      rect,
-      Paint()..color = const Color(0xFF04040A),
-    );
+    canvas.drawRect(rect, Paint()..color = const Color(0xFF04040A));
 
     // Glowing Neon Blob 1 (Indigo shifting position)
     final paint1 = Paint()
@@ -496,10 +514,7 @@ class _AuroraBackgroundPainter extends CustomPainter {
     // Glowing Neon Blob 3 (Teal highlighting top right corner)
     final paint3 = Paint()
       ..shader = ui.Gradient.radial(
-        Offset(
-          size.width * 0.9,
-          size.height * 0.1,
-        ),
+        Offset(size.width * 0.9, size.height * 0.1),
         size.width * 0.6,
         [
           const Color(0xFF00C9A7).withValues(alpha: 0.12),

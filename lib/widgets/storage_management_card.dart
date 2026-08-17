@@ -29,7 +29,8 @@ class _StorageManagementCardState extends State<StorageManagementCard>
     with SingleTickerProviderStateMixin {
   StorageBreakdown? _breakdown;
   bool _loading = true;
-  String? _clearingCategory; // null = idle, 'all' | 'stream' | 'image' | 'cover' | 'history'
+  String?
+  _clearingCategory; // null = idle, 'all' | 'stream' | 'image' | 'cover' | 'history'
   bool _scanning = false;
   String? _scanResult;
 
@@ -38,11 +39,11 @@ class _StorageManagementCardState extends State<StorageManagementCard>
 
   // Category colors
   static const _colDownloads = Color(0xFF6C63FF); // primary purple
-  static const _colStream = Color(0xFF00C9A7);    // teal
-  static const _colImages = Color(0xFFFF6584);     // accent pink
-  static const _colCover = Color(0xFFFFB74D);      // amber
-  static const _colMeta = Color(0xFF78909C);       // blue grey
-  static const _colAlbums = Color(0xFF448AFF);     // blue
+  static const _colStream = Color(0xFF00C9A7); // teal
+  static const _colImages = Color(0xFFFF6584); // accent pink
+  static const _colCover = Color(0xFFFFB74D); // amber
+  static const _colMeta = Color(0xFF78909C); // blue grey
+  static const _colAlbums = Color(0xFF448AFF); // blue
 
   @override
   void initState() {
@@ -160,7 +161,9 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                   children: [
                     Text(
                       'Storage & Cache Usage',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleLarge?.copyWith(fontSize: 16),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -168,8 +171,8 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                           ? 'Analyzing disk storage...'
                           : 'Total App Footprint: ${StorageAnalyzer.formatBytes(_breakdown?.total ?? 0)}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textTertiary,
-                          ),
+                        color: AppColors.textTertiary,
+                      ),
                     ),
                   ],
                 ),
@@ -303,7 +306,10 @@ class _StorageManagementCardState extends State<StorageManagementCard>
 
   Widget _buildStatBadges(BuildContext context) {
     final b = _breakdown;
-    final downloadedCount = context.watch<PlayerProvider>().downloadedSongs.length;
+    final downloadedCount = context
+        .watch<PlayerProvider>()
+        .downloadedSongs
+        .length;
     final totalStr = StorageAnalyzer.formatBytes(b?.total ?? 0);
     final clearableStr = StorageAnalyzer.formatBytes(b?.clearable ?? 0);
     final dlStr = StorageAnalyzer.formatBytes(b?.downloadedSongs ?? 0);
@@ -340,8 +346,12 @@ class _StorageManagementCardState extends State<StorageManagementCard>
           icon: Icons.sd_storage_rounded,
           color: _colCover,
           title: 'Storage Health',
-          value: StorageLocationService().isUsingFallbackLocation ? 'Fallback' : 'Optimal',
-          subtitle: StorageLocationService().isUsingFallbackLocation ? 'App Storage' : 'Direct Write',
+          value: StorageLocationService().isUsingFallbackLocation
+              ? 'Fallback'
+              : 'Optimal',
+          subtitle: StorageLocationService().isUsingFallbackLocation
+              ? 'App Storage'
+              : 'Direct Write',
         ),
       ],
     );
@@ -386,7 +396,10 @@ class _StorageManagementCardState extends State<StorageManagementCard>
               ),
               if (badge != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1.5,
+                  ),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(4),
@@ -507,7 +520,9 @@ class _StorageManagementCardState extends State<StorageManagementCard>
             spacing: 12,
             runSpacing: 6,
             children: segments.map((s) {
-              final pct = total > 0 ? (s.value / total * 100).toStringAsFixed(1) : '0';
+              final pct = total > 0
+                  ? (s.value / total * 100).toStringAsFixed(1)
+                  : '0';
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -549,10 +564,15 @@ class _StorageManagementCardState extends State<StorageManagementCard>
     VoidCallback? onActionTap,
     String? actionLabel,
   }) {
-    final isClearing = clearable && categoryKey != null && (_clearingCategory == categoryKey || _clearingCategory == 'all');
+    final isClearing =
+        clearable &&
+        categoryKey != null &&
+        (_clearingCategory == categoryKey || _clearingCategory == 'all');
     final total = _breakdown?.total ?? 1;
     final fraction = total > 0 ? (size / total).clamp(0.0, 1.0) : 0.0;
-    final pctString = total > 0 ? '${(fraction * 100).toStringAsFixed(1)}%' : '0%';
+    final pctString = total > 0
+        ? '${(fraction * 100).toStringAsFixed(1)}%'
+        : '0%';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -595,7 +615,9 @@ class _StorageManagementCardState extends State<StorageManagementCard>
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
                 child: Text(
-                  isClearing ? 'Clearing...' : StorageAnalyzer.formatBytes(size),
+                  isClearing
+                      ? 'Clearing...'
+                      : StorageAnalyzer.formatBytes(size),
                   key: ValueKey('$categoryKey-$size-$isClearing'),
                   style: TextStyle(
                     color: isClearing ? color : AppColors.textPrimary,
@@ -609,7 +631,8 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                 SizedBox(
                   height: 28,
                   child: TextButton(
-                    onPressed: (isClearing || _clearingCategory != null || size == 0)
+                    onPressed:
+                        (isClearing || _clearingCategory != null || size == 0)
                         ? null
                         : () => _clearCategory(categoryKey!),
                     style: TextButton.styleFrom(
@@ -619,7 +642,9 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                         side: BorderSide(
-                          color: size > 0 ? color.withValues(alpha: 0.4) : AppColors.divider,
+                          color: size > 0
+                              ? color.withValues(alpha: 0.4)
+                              : AppColors.divider,
                         ),
                       ),
                     ),
@@ -680,7 +705,9 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                 return LinearProgressIndicator(
                   value: fraction * _ringAnimation.value,
                   minHeight: 4,
-                  backgroundColor: AppColors.surfaceVariant.withValues(alpha: 0.3),
+                  backgroundColor: AppColors.surfaceVariant.withValues(
+                    alpha: 0.3,
+                  ),
                   valueColor: AlwaysStoppedAnimation(color),
                 );
               },
@@ -713,12 +740,20 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                   builder: (ctx) => AlertDialog(
                     backgroundColor: AppColors.surface,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     title: const Row(
                       children: [
-                        Icon(Icons.cleaning_services_rounded, color: Colors.redAccent, size: 20),
+                        Icon(
+                          Icons.cleaning_services_rounded,
+                          color: Colors.redAccent,
+                          size: 20,
+                        ),
                         SizedBox(width: 8),
-                        Text('Clear All Caches?', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        Text(
+                          'Clear All Caches?',
+                          style: TextStyle(color: Colors.white, fontSize: 16),
+                        ),
                       ],
                     ),
                     content: Column(
@@ -727,29 +762,70 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                       children: [
                         Text(
                           'This will free ${StorageAnalyzer.formatBytes(clearable)} across temporary cache locations:',
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                          ),
                         ),
                         const SizedBox(height: 10),
-                        Text('• Stream Cache: $streamStr', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                        Text('• Image & Thumbnail Cache: $imageStr', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                        Text('• Temporary Cover Cache: $coverStr', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
-                        Text('• Playback History & Cache Index', style: const TextStyle(color: AppColors.textTertiary, fontSize: 12)),
+                        Text(
+                          '• Stream Cache: $streamStr',
+                          style: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          '• Image & Thumbnail Cache: $imageStr',
+                          style: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          '• Temporary Cover Cache: $coverStr',
+                          style: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        Text(
+                          '• Playback History & Cache Index',
+                          style: const TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 12,
+                          ),
+                        ),
                         const SizedBox(height: 14),
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00E676).withValues(alpha: 0.1),
+                            color: const Color(
+                              0xFF00E676,
+                            ).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.3)),
+                            border: Border.all(
+                              color: const Color(
+                                0xFF00E676,
+                              ).withValues(alpha: 0.3),
+                            ),
                           ),
                           child: const Row(
                             children: [
-                              Icon(Icons.shield_outlined, color: Color(0xFF00E676), size: 16),
+                              Icon(
+                                Icons.shield_outlined,
+                                color: Color(0xFF00E676),
+                                size: 16,
+                              ),
                               SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   '✓ Downloaded songs and offline audio files are 100% safe and will NOT be touched.',
-                                  style: TextStyle(color: Color(0xFF00E676), fontSize: 11, fontWeight: FontWeight.w500),
+                                  style: TextStyle(
+                                    color: Color(0xFF00E676),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
@@ -760,14 +836,23 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
                       ),
                       TextButton(
                         onPressed: () {
                           Navigator.pop(ctx);
                           _clearCategory('all');
                         },
-                        child: const Text('Clear All Caches', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                        child: const Text(
+                          'Clear All Caches',
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -778,7 +863,9 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.redAccent),
+                  strokeWidth: 2,
+                  color: Colors.redAccent,
+                ),
               )
             : const Icon(Icons.delete_sweep_rounded, size: 18),
         label: Text(
@@ -787,13 +874,17 @@ class _StorageManagementCardState extends State<StorageManagementCard>
               : 'Clear All Caches (${StorageAnalyzer.formatBytes(clearable)})',
         ),
         style: OutlinedButton.styleFrom(
-          foregroundColor: clearable > 0 ? Colors.redAccent : AppColors.textTertiary,
+          foregroundColor: clearable > 0
+              ? Colors.redAccent
+              : AppColors.textTertiary,
           side: BorderSide(
             color: clearable > 0
                 ? Colors.redAccent.withValues(alpha: 0.4)
                 : AppColors.divider,
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
       ),
@@ -876,9 +967,13 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                       child: Text(
                         mb >= 1024 ? '${mb ~/ 1024} GB' : '$mb MB',
                         style: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.textSecondary,
+                          color: isSelected
+                              ? Colors.white
+                              : AppColors.textSecondary,
                           fontSize: 11,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w500,
                         ),
                       ),
                     ),
@@ -921,7 +1016,10 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                   SizedBox(height: 2),
                   Text(
                     'Deep-scans for unindexed audio, fixes container mismatches, cleans temp files & syncs library',
-                    style: TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                    style: TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 10,
+                    ),
                   ),
                 ],
               ),
@@ -1045,7 +1143,8 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                         _buildDiagnosticChip(
                           icon: Icons.copy_rounded,
                           label: 'Duplicates Found',
-                          value: '${_lastRepairResult!.duplicatesFound.length} sets',
+                          value:
+                              '${_lastRepairResult!.duplicatesFound.length} sets',
                           color: Colors.amberAccent,
                         ),
                     ],
@@ -1056,18 +1155,26 @@ class _StorageManagementCardState extends State<StorageManagementCard>
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          _showDuplicateCleanerModal(context, _lastRepairResult!.duplicatesFound);
+                          _showDuplicateCleanerModal(
+                            context,
+                            _lastRepairResult!.duplicatesFound,
+                          );
                         },
                         icon: const Icon(Icons.copy_rounded, size: 14),
                         label: Text(
                           'Review & Clean ${_lastRepairResult!.duplicatesFound.length} Duplicate Set(s)',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.amber.shade900,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),
@@ -1081,12 +1188,16 @@ class _StorageManagementCardState extends State<StorageManagementCard>
     );
   }
 
-  void _showDuplicateCleanerModal(BuildContext context, List<DuplicateAudioGroup> duplicates) {
+  void _showDuplicateCleanerModal(
+    BuildContext context,
+    List<DuplicateAudioGroup> duplicates,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _DuplicateCleanerModal(duplicates: duplicates, onCleaned: _analyze),
+      builder: (_) =>
+          _DuplicateCleanerModal(duplicates: duplicates, onCleaned: _analyze),
     );
   }
 
@@ -1110,11 +1221,18 @@ class _StorageManagementCardState extends State<StorageManagementCard>
           const SizedBox(width: 4),
           Text(
             '$label: ',
-            style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 10,
+            ),
           ),
           Text(
             value,
-            style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
@@ -1145,9 +1263,11 @@ class _StorageManagementCardState extends State<StorageManagementCard>
         _scanning = false;
         _lastRepairResult = result;
         if (result != null && result.totalFixed > 0) {
-          _scanResult = 'Fixed ${result.totalFixed} storage issue(s). Offline library fully optimized.';
+          _scanResult =
+              'Fixed ${result.totalFixed} storage issue(s). Offline library fully optimized.';
         } else {
-          _scanResult = '✓ Storage integrity verified. All audio files, containers, and indexes are 100% healthy.';
+          _scanResult =
+              '✓ Storage integrity verified. All audio files, containers, and indexes are 100% healthy.';
         }
       });
       _analyze(); // refresh sizes after repairs
@@ -1160,7 +1280,8 @@ class _StorageManagementCardState extends State<StorageManagementCard>
     final storage = StorageLocationService();
     if (!storage.isUsingFallbackLocation) return const SizedBox.shrink();
 
-    final reason = storage.fallbackReason ?? 'Using fallback app storage location.';
+    final reason =
+        storage.fallbackReason ?? 'Using fallback app storage location.';
 
     return Padding(
       padding: const EdgeInsets.only(top: 16),
@@ -1255,7 +1376,8 @@ class _DonutPainter extends CustomPainter {
     // Segments
     double startAngle = -math.pi / 2; // 12 o'clock
     for (final seg in segments) {
-      final sweepAngle = (total > 0 ? seg.value / total : 0.0) * available * progress;
+      final sweepAngle =
+          (total > 0 ? seg.value / total : 0.0) * available * progress;
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeWidth
@@ -1359,7 +1481,11 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
                         color: Colors.amber.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.copy_rounded, color: Colors.amberAccent, size: 20),
+                      child: const Icon(
+                        Icons.copy_rounded,
+                        color: Colors.amberAccent,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1385,7 +1511,10 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.textSecondary,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -1409,7 +1538,9 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
                   decoration: BoxDecoration(
                     color: AppColors.surfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.glassBorder.withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: AppColors.glassBorder.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1430,7 +1561,10 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.amber.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
@@ -1451,28 +1585,47 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
                         final fileIdx = entry.key;
                         final file = entry.value;
                         final isKept = fileIdx == 0;
-                        final isSelectedForDelete = _pathsToDelete.contains(file.path);
+                        final isSelectedForDelete = _pathsToDelete.contains(
+                          file.path,
+                        );
 
-                        final sizeMb = (file.existsSync() ? file.lengthSync() / (1024 * 1024) : 0.0).toStringAsFixed(1);
+                        final sizeMb =
+                            (file.existsSync()
+                                    ? file.lengthSync() / (1024 * 1024)
+                                    : 0.0)
+                                .toStringAsFixed(1);
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: isKept
-                                ? const Color(0xFF00E676).withValues(alpha: 0.08)
+                                ? const Color(
+                                    0xFF00E676,
+                                  ).withValues(alpha: 0.08)
                                 : AppColors.surface.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: isKept
-                                  ? const Color(0xFF00E676).withValues(alpha: 0.3)
-                                  : AppColors.glassBorder.withValues(alpha: 0.2),
+                                  ? const Color(
+                                      0xFF00E676,
+                                    ).withValues(alpha: 0.3)
+                                  : AppColors.glassBorder.withValues(
+                                      alpha: 0.2,
+                                    ),
                             ),
                           ),
                           child: Row(
                             children: [
                               if (isKept)
-                                const Icon(Icons.check_circle_rounded, color: Color(0xFF00E676), size: 16)
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: Color(0xFF00E676),
+                                  size: 16,
+                                )
                               else
                                 Checkbox(
                                   value: isSelectedForDelete,
@@ -1493,9 +1646,13 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      isKept ? '✓ Preferred Original ($sizeMb MB)' : 'Duplicate Copy ($sizeMb MB)',
+                                      isKept
+                                          ? '✓ Preferred Original ($sizeMb MB)'
+                                          : 'Duplicate Copy ($sizeMb MB)',
                                       style: TextStyle(
-                                        color: isKept ? const Color(0xFF00E676) : Colors.white,
+                                        color: isKept
+                                            ? const Color(0xFF00E676)
+                                            : Colors.white,
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -1533,7 +1690,10 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
                     ? null
                     : () async {
                         setState(() => _isCleaning = true);
-                        final freed = await DownloadService().deleteSelectedDuplicateFiles(_pathsToDelete.toList());
+                        final freed = await DownloadService()
+                            .deleteSelectedDuplicateFiles(
+                              _pathsToDelete.toList(),
+                            );
                         final freedStr = StorageAnalyzer.formatBytes(freed);
                         if (!context.mounted) return;
                         widget.onCleaned();
@@ -1548,7 +1708,10 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Icon(Icons.delete_sweep_rounded, size: 18),
                 label: Text(
@@ -1561,7 +1724,9 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
                   backgroundColor: Colors.redAccent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
               ),
             ),
@@ -1571,4 +1736,3 @@ class _DuplicateCleanerModalState extends State<_DuplicateCleanerModal> {
     );
   }
 }
-

@@ -60,15 +60,17 @@ class YouTubeLinkParser {
     }
 
     final host = uri.host.toLowerCase();
-    final segments =
-        uri.pathSegments.where((s) => s.isNotEmpty).toList(growable: false);
+    final segments = uri.pathSegments
+        .where((s) => s.isNotEmpty)
+        .toList(growable: false);
 
     // Short form: youtu.be/<id>
     if (host == 'youtu.be' || host.endsWith('.youtu.be')) {
       return segments.isEmpty ? null : _validId(segments.first);
     }
 
-    final isYouTube = host == 'youtube.com' ||
+    final isYouTube =
+        host == 'youtube.com' ||
         host.endsWith('.youtube.com') ||
         host == 'youtube-nocookie.com' ||
         host.endsWith('.youtube-nocookie.com');

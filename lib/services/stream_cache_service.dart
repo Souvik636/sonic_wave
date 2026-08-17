@@ -103,8 +103,10 @@ class StreamCacheService {
   /// the setting would look broken.
   Future<File> fileFor(String songId, String quality) async {
     final dir = await _cacheDir();
-    return File('${dir.path}${Platform.pathSeparator}'
-        '${_safeKey(songId)}@$quality.audio');
+    return File(
+      '${dir.path}${Platform.pathSeparator}'
+      '${_safeKey(songId)}@$quality.audio',
+    );
   }
 
   /// Note that roughly [bytes] were just written, and sweep if enough has
@@ -359,7 +361,9 @@ class StreamCacheService {
       // Start a timer to monitor staging directory for file growth.
       // With --no-part, yt-dlp writes directly to the output file, so we can
       // detect playability progressively even during download.
-      monitorTimer = Timer.periodic(const Duration(milliseconds: 400), (_) async {
+      monitorTimer = Timer.periodic(const Duration(milliseconds: 400), (
+        _,
+      ) async {
         if (playableFired) return;
         try {
           final entities = await stagingDirObj.list().toList();
@@ -371,7 +375,9 @@ class StreamCacheService {
               final len = await entity.length();
               if (len >= _playableThreshold) {
                 playableFired = true;
-                debugPrint('[StreamCache] File playable at ${len ~/ 1024}KB: ${entity.path}');
+                debugPrint(
+                  '[StreamCache] File playable at ${len ~/ 1024}KB: ${entity.path}',
+                );
                 onPlayable?.call(entity.path);
                 break;
               }
@@ -386,7 +392,9 @@ class StreamCacheService {
       monitorTimer = null;
 
       if (result.status != OperationStatus.success) {
-        throw Exception(result.errorMessage ?? 'yt-dlp stream cache download failed');
+        throw Exception(
+          result.errorMessage ?? 'yt-dlp stream cache download failed',
+        );
       }
 
       // 5. Find the produced file and move to cache
@@ -418,7 +426,9 @@ class StreamCacheService {
       final fileSize = await cacheFile.length();
       noteWrite(fileSize);
 
-      debugPrint('[StreamCache] Cached $videoId: ${fileSize ~/ 1024}KB → ${cacheFile.path}');
+      debugPrint(
+        '[StreamCache] Cached $videoId: ${fileSize ~/ 1024}KB → ${cacheFile.path}',
+      );
 
       // Fire playable if we didn't during download (small files)
       if (!playableFired) {

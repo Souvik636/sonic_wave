@@ -62,7 +62,8 @@ class _RootCandidate {
 /// After a fallback, [isUsingFallbackLocation] is true and [fallbackReason]
 /// explains why, so the UI can surface it.
 class StorageLocationService {
-  static final StorageLocationService _instance = StorageLocationService._internal();
+  static final StorageLocationService _instance =
+      StorageLocationService._internal();
   factory StorageLocationService() => _instance;
   StorageLocationService._internal();
 
@@ -97,7 +98,11 @@ class StorageLocationService {
 
   /// Sub-folders of a volume worth checking for a legacy library, alongside the
   /// volume root itself.
-  static const List<String> _legacySearchSubdirs = ['Music', 'Download', 'Downloads'];
+  static const List<String> _legacySearchSubdirs = [
+    'Music',
+    'Download',
+    'Downloads',
+  ];
 
   StorageType _storageType = StorageType.appInternal;
   String? _customPath;
@@ -142,12 +147,16 @@ class StorageLocationService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final typeIndex = prefs.getInt(_storageTypeKey);
-      if (typeIndex != null && typeIndex >= 0 && typeIndex < StorageType.values.length) {
+      if (typeIndex != null &&
+          typeIndex >= 0 &&
+          typeIndex < StorageType.values.length) {
         _storageType = StorageType.values[typeIndex];
       }
       _customPath = prefs.getString(_customPathKey);
     } catch (e) {
-      debugPrint('StorageLocationService: prefs load failed, using defaults: $e');
+      debugPrint(
+        'StorageLocationService: prefs load failed, using defaults: $e',
+      );
     }
 
     // 2. Resolve a guaranteed-writable root. Belt-and-suspenders: even if
@@ -156,7 +165,9 @@ class StorageLocationService {
     try {
       await getAppRootDir();
     } catch (e) {
-      debugPrint('StorageLocationService: root resolution failed, forcing app-internal: $e');
+      debugPrint(
+        'StorageLocationService: root resolution failed, forcing app-internal: $e',
+      );
       try {
         final internal = await _appInternalDir();
         await _ensureWritable(internal);
@@ -205,12 +216,15 @@ class StorageLocationService {
   bool isFileInAppFolderSync(String filePath) {
     if (_resolvedRootPath == null) return false;
     final normalizedFilePath = filePath.replaceAll('\\', '/').toLowerCase();
-    var normalizedRootPath = _resolvedRootPath!.replaceAll('\\', '/').toLowerCase();
+    var normalizedRootPath = _resolvedRootPath!
+        .replaceAll('\\', '/')
+        .toLowerCase();
     if (!normalizedRootPath.endsWith('/')) {
       normalizedRootPath += '/';
     }
     return normalizedFilePath.startsWith(normalizedRootPath) ||
-        normalizedFilePath == _resolvedRootPath!.replaceAll('\\', '/').toLowerCase();
+        normalizedFilePath ==
+            _resolvedRootPath!.replaceAll('\\', '/').toLowerCase();
   }
 
   /// Resolve the root directory for a given [type] WITHOUT mutating the live
@@ -232,15 +246,19 @@ class StorageLocationService {
 
       case StorageType.deviceInternal:
         if (Platform.isAndroid && await _hasManageStoragePermission()) {
-          candidates.add(_RootCandidate(Directory('/storage/emulated/0/$appFolderName')));
+          candidates.add(
+            _RootCandidate(Directory('/storage/emulated/0/$appFolderName')),
+          );
         }
         final ext = await _appExternalDir();
         if (ext != null) {
-          candidates.add(_RootCandidate(
-            ext,
-            isFallback: true,
-            reason: 'Using the app storage folder (deviceInternal probe).',
-          ));
+          candidates.add(
+            _RootCandidate(
+              ext,
+              isFallback: true,
+              reason: 'Using the app storage folder (deviceInternal probe).',
+            ),
+          );
         }
         break;
 
@@ -251,20 +269,25 @@ class StorageLocationService {
         }
         final extSd = await _appExternalDir();
         if (extSd != null) {
-          candidates.add(_RootCandidate(
-            extSd,
-            isFallback: true,
-            reason: 'SD card unavailable (probe).',
-          ));
+          candidates.add(
+            _RootCandidate(
+              extSd,
+              isFallback: true,
+              reason: 'SD card unavailable (probe).',
+            ),
+          );
         }
         break;
     }
 
-    candidates.add(_RootCandidate(
-      await _appInternalDir(),
-      isFallback: type != StorageType.appInternal,
-      reason: 'Chosen storage unavailable — falling back to app-internal (probe).',
-    ));
+    candidates.add(
+      _RootCandidate(
+        await _appInternalDir(),
+        isFallback: type != StorageType.appInternal,
+        reason:
+            'Chosen storage unavailable — falling back to app-internal (probe).',
+      ),
+    );
 
     // Return the first candidate that is writable, or the last resort.
     for (final c in candidates) {
@@ -287,7 +310,9 @@ class StorageLocationService {
     if (cached != null) {
       try {
         if (await cached.exists()) return cached;
-      } catch (_) {/* fall through to re-resolve */}
+      } catch (_) {
+        /* fall through to re-resolve */
+      }
     }
     return _resolveRootDir();
   }
@@ -307,40 +332,51 @@ class StorageLocationService {
         // Android 11+. Only attempt it when granted, otherwise we'd hit the
         // errno 13 (Permission denied) that this whole fallback chain fixes.
         if (Platform.isAndroid && await _hasManageStoragePermission()) {
-          candidates.add(_RootCandidate(Directory('/storage/emulated/0/$appFolderName')));
+          candidates.add(
+            _RootCandidate(Directory('/storage/emulated/0/$appFolderName')),
+          );
         }
         final ext = await _appExternalDir();
         if (ext != null) {
-          candidates.add(_RootCandidate(
-            ext,
-            isFallback: true,
-            reason:
-                'Using the app storage folder. Grant "All files access" to save into the public $appFolderName folder.',
-          ));
+          candidates.add(
+            _RootCandidate(
+              ext,
+              isFallback: true,
+              reason:
+                  'Using the app storage folder. Grant "All files access" to save into the public $appFolderName folder.',
+            ),
+          );
         }
         break;
 
       case StorageType.sdCard:
         if (_customPath != null && _customPath!.isNotEmpty) {
-          candidates.add(_RootCandidate(Directory('$_customPath/$appFolderName')));
+          candidates.add(
+            _RootCandidate(Directory('$_customPath/$appFolderName')),
+          );
         }
         final extSd = await _appExternalDir();
         if (extSd != null) {
-          candidates.add(_RootCandidate(
-            extSd,
-            isFallback: true,
-            reason: 'SD card is unavailable — using the app storage folder instead.',
-          ));
+          candidates.add(
+            _RootCandidate(
+              extSd,
+              isFallback: true,
+              reason:
+                  'SD card is unavailable — using the app storage folder instead.',
+            ),
+          );
         }
         break;
     }
 
     // Guaranteed-writable last resort for every non-internal type.
-    candidates.add(_RootCandidate(
-      await _appInternalDir(),
-      isFallback: _storageType != StorageType.appInternal,
-      reason: 'Chosen storage is unavailable — using internal app storage.',
-    ));
+    candidates.add(
+      _RootCandidate(
+        await _appInternalDir(),
+        isFallback: _storageType != StorageType.appInternal,
+        reason: 'Chosen storage is unavailable — using internal app storage.',
+      ),
+    );
 
     for (final c in candidates) {
       if (await _ensureWritable(c.dir)) {
@@ -349,7 +385,9 @@ class StorageLocationService {
         _usingFallback = c.isFallback;
         _fallbackReason = c.isFallback ? c.reason : null;
         if (c.isFallback) {
-          debugPrint('StorageLocationService: using fallback ${c.dir.path} — ${c.reason}');
+          debugPrint(
+            'StorageLocationService: using fallback ${c.dir.path} — ${c.reason}',
+          );
         }
         return c.dir;
       }
@@ -363,7 +401,9 @@ class StorageLocationService {
     _resolvedRootPath = tmp.path;
     _usingFallback = true;
     _fallbackReason = 'All storage locations failed — using temporary storage.';
-    debugPrint('StorageLocationService: all locations failed, using temp ${tmp.path}');
+    debugPrint(
+      'StorageLocationService: all locations failed, using temp ${tmp.path}',
+    );
     return tmp;
   }
 
@@ -409,12 +449,16 @@ class StorageLocationService {
       if (!await dir.exists()) {
         await dir.create(recursive: true);
       }
-      final probe = File('${dir.path}${Platform.pathSeparator}$_writeProbeName');
+      final probe = File(
+        '${dir.path}${Platform.pathSeparator}$_writeProbeName',
+      );
       await probe.writeAsString('ok', flush: true);
       try {
         await probe.delete();
       } catch (e) {
-        debugPrint('StorageLocationService: probe cleanup failed (${dir.path}): $e');
+        debugPrint(
+          'StorageLocationService: probe cleanup failed (${dir.path}): $e',
+        );
       }
       return true;
     } catch (e) {
@@ -430,14 +474,16 @@ class StorageLocationService {
   /// falls back to the root if the subfolder can't be created.
   Future<Directory> getDownloadDir() async {
     final root = await getAppRootDir();
-    final dir =
-        Directory('${root.path}${Platform.pathSeparator}$downloadFolderName');
+    final dir = Directory(
+      '${root.path}${Platform.pathSeparator}$downloadFolderName',
+    );
     try {
       if (!await dir.exists()) await dir.create(recursive: true);
       return dir;
     } catch (e) {
       debugPrint(
-          'StorageLocationService: download dir create failed, using root: $e');
+        'StorageLocationService: download dir create failed, using root: $e',
+      );
       return root;
     }
   }
@@ -448,18 +494,20 @@ class StorageLocationService {
   /// as an album. Falls back to the root if the folder can't be created.
   Future<Directory> getMetaDir() async {
     final root = await getAppRootDir();
-    final dir =
-        Directory('${root.path}${Platform.pathSeparator}$metaFolderName');
+    final dir = Directory(
+      '${root.path}${Platform.pathSeparator}$metaFolderName',
+    );
     try {
       if (!await dir.exists()) await dir.create(recursive: true);
-      final nomedia =
-          File('${dir.path}${Platform.pathSeparator}.nomedia');
+      final nomedia = File('${dir.path}${Platform.pathSeparator}.nomedia');
       if (!await nomedia.exists()) {
         await nomedia.writeAsString('', flush: true);
       }
       return dir;
     } catch (e) {
-      debugPrint('StorageLocationService: meta dir setup failed, using root: $e');
+      debugPrint(
+        'StorageLocationService: meta dir setup failed, using root: $e',
+      );
       return root;
     }
   }
@@ -472,13 +520,16 @@ class StorageLocationService {
   /// back to the meta dir itself if the subfolder can't be created.
   Future<Directory> getCoverDir() async {
     final meta = await getMetaDir();
-    final dir =
-        Directory('${meta.path}${Platform.pathSeparator}$coverFolderName');
+    final dir = Directory(
+      '${meta.path}${Platform.pathSeparator}$coverFolderName',
+    );
     try {
       if (!await dir.exists()) await dir.create(recursive: true);
       return dir;
     } catch (e) {
-      debugPrint('StorageLocationService: cover dir create failed, using meta dir: $e');
+      debugPrint(
+        'StorageLocationService: cover dir create failed, using meta dir: $e',
+      );
       return meta;
     }
   }
@@ -502,8 +553,10 @@ class StorageLocationService {
 
   /// Names MS-DOS reserved as devices. Windows still refuses to create a file
   /// with one of these stems, whatever the extension.
-  static final RegExp _reservedStems =
-      RegExp(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$', caseSensitive: false);
+  static final RegExp _reservedStems = RegExp(
+    r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$',
+    caseSensitive: false,
+  );
 
   /// Turn a song title into a safe file name stem (no directory, no extension).
   ///
@@ -579,7 +632,9 @@ class StorageLocationService {
         bases.add('/storage/emulated/0');
         break;
       case StorageType.sdCard:
-        if (_customPath != null && _customPath!.isNotEmpty) bases.add(_customPath!);
+        if (_customPath != null && _customPath!.isNotEmpty) {
+          bases.add(_customPath!);
+        }
         break;
       case StorageType.appInternal:
         break;
@@ -611,14 +666,18 @@ class StorageLocationService {
             found.add(entity);
           }
         } catch (e) {
-          debugPrint('StorageLocationService: legacy probe failed ($searchPath): $e');
+          debugPrint(
+            'StorageLocationService: legacy probe failed ($searchPath): $e',
+          );
         }
       }
     }
 
     if (found.isNotEmpty) {
-      debugPrint('StorageLocationService: found ${found.length} legacy library '
-          'root(s): ${found.map((d) => d.path).join(', ')}');
+      debugPrint(
+        'StorageLocationService: found ${found.length} legacy library '
+        'root(s): ${found.map((d) => d.path).join(', ')}',
+      );
     }
     return found;
   }
@@ -638,7 +697,9 @@ class StorageLocationService {
       }
       return dir;
     } catch (e) {
-      debugPrint('StorageLocationService: album dir create failed ($safeName), using root: $e');
+      debugPrint(
+        'StorageLocationService: album dir create failed ($safeName), using root: $e',
+      );
       return root;
     }
   }
@@ -671,12 +732,14 @@ class StorageLocationService {
     // 1. App internal (always available)
     try {
       final appDir = await getApplicationDocumentsDirectory();
-      volumes.add(StorageVolume(
-        path: '${appDir.path}/downloads',
-        label: 'App Internal Storage',
-        type: StorageType.appInternal,
-        isAvailable: true,
-      ));
+      volumes.add(
+        StorageVolume(
+          path: '${appDir.path}/downloads',
+          label: 'App Internal Storage',
+          type: StorageType.appInternal,
+          isAvailable: true,
+        ),
+      );
     } catch (_) {}
 
     // 2. Device internal shared storage
@@ -687,12 +750,14 @@ class StorageLocationService {
       try {
         internalAvailable = await internalDir.exists();
       } catch (_) {}
-      volumes.add(StorageVolume(
-        path: '$internalPath/$appFolderName',
-        label: 'Device Storage',
-        type: StorageType.deviceInternal,
-        isAvailable: internalAvailable,
-      ));
+      volumes.add(
+        StorageVolume(
+          path: '$internalPath/$appFolderName',
+          label: 'Device Storage',
+          type: StorageType.deviceInternal,
+          isAvailable: internalAvailable,
+        ),
+      );
 
       // 3. Probe for external SD cards
       final storageDir = Directory('/storage');
@@ -707,12 +772,14 @@ class StorageLocationService {
                 try {
                   available = await entity.exists();
                 } catch (_) {}
-                volumes.add(StorageVolume(
-                  path: '${entity.path}/$appFolderName',
-                  label: 'SD Card ($name)',
-                  type: StorageType.sdCard,
-                  isAvailable: available,
-                ));
+                volumes.add(
+                  StorageVolume(
+                    path: '${entity.path}/$appFolderName',
+                    label: 'SD Card ($name)',
+                    type: StorageType.sdCard,
+                    isAvailable: available,
+                  ),
+                );
               }
             }
           }
@@ -762,8 +829,20 @@ class StorageLocationService {
 
   /// Audio extensions a folder-album may contain.
   static const Set<String> audioExtensions = {
-    'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus', 'wma',
-    'aiff', 'aif', 'alac', 'mka', 'amr', 'm4b'
+    'mp3',
+    'm4a',
+    'wav',
+    'flac',
+    'aac',
+    'ogg',
+    'opus',
+    'wma',
+    'aiff',
+    'aif',
+    'alac',
+    'mka',
+    'amr',
+    'm4b',
   };
 
   /// Whether a directory found while scanning should become a folder-album.
@@ -775,7 +854,10 @@ class StorageLocationService {
   /// must still qualify. (The old name-only test compared against `'Downloads'`
   /// while the constant is `'Download'`, so it never actually matched and the
   /// live folder was duplicated.)
-  static bool isFolderAlbumCandidate(String folderPath, {String? activeDownloadPath}) {
+  static bool isFolderAlbumCandidate(
+    String folderPath, {
+    String? activeDownloadPath,
+  }) {
     final name = folderPath.split(RegExp(r'[/\\]')).last;
     if (name.isEmpty || name.startsWith('.')) return false;
     if (activeDownloadPath != null) {
@@ -812,11 +894,13 @@ class StorageLocationService {
     void addAlbum(String name, String path, List<String> files) {
       if (files.isEmpty) return;
       if (!seenPaths.add(path.replaceAll('\\', '/').toLowerCase())) return;
-      albums.add(FolderAlbumInfo(
-        folderName: name,
-        folderPath: path,
-        audioFilePaths: files,
-      ));
+      albums.add(
+        FolderAlbumInfo(
+          folderName: name,
+          folderPath: path,
+          audioFilePaths: files,
+        ),
+      );
     }
 
     try {
@@ -846,8 +930,10 @@ class StorageLocationService {
         try {
           await for (final entity in scanRoot.list(followLinks: false)) {
             if (entity is! Directory) continue;
-            if (!isFolderAlbumCandidate(entity.path,
-                activeDownloadPath: activeDownloadPath)) {
+            if (!isFolderAlbumCandidate(
+              entity.path,
+              activeDownloadPath: activeDownloadPath,
+            )) {
               continue;
             }
             final folderName = entity.path.split(RegExp(r'[/\\]')).last;
@@ -879,8 +965,11 @@ class StorageLocationService {
   ///    exists AND its byte size matches the source file byte size 100%.
   /// 4. If any error occurs or size verification fails, the target file is safely
   ///    cleaned up (rolled back) and original source file is preserved intact.
-  Future<String?> moveFile(String sourcePath, Directory targetDir,
-      {String? fileName}) async {
+  Future<String?> moveFile(
+    String sourcePath,
+    Directory targetDir, {
+    String? fileName,
+  }) async {
     try {
       final sourceFile = File(sourcePath);
       if (!await sourceFile.exists()) return null;
@@ -906,7 +995,9 @@ class StorageLocationService {
           return moved.path;
         }
       } catch (renameErr) {
-        debugPrint('StorageLocationService: Same-volume rename failed ($renameErr), attempting verified cross-volume move...');
+        debugPrint(
+          'StorageLocationService: Same-volume rename failed ($renameErr), attempting verified cross-volume move...',
+        );
       }
 
       // Step 2: Cross-volume secure copy-verify-delete move.
@@ -927,12 +1018,16 @@ class StorageLocationService {
           try {
             await sourceFile.delete();
           } catch (delErr) {
-            debugPrint('StorageLocationService: Cross-volume source delete warning: $delErr');
+            debugPrint(
+              'StorageLocationService: Cross-volume source delete warning: $delErr',
+            );
           }
           return targetFile.path;
         } else {
           // Size mismatch! Clean up partial target file to prevent corruption.
-          debugPrint('StorageLocationService: Size mismatch (source: $sourceSize, target: $targetSize). Aborting move.');
+          debugPrint(
+            'StorageLocationService: Size mismatch (source: $sourceSize, target: $targetSize). Aborting move.',
+          );
           if (await targetFile.exists()) {
             await targetFile.delete();
           }

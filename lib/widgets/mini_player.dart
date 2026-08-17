@@ -40,13 +40,10 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+        );
     _slideController.forward();
 
     _deckSwapController = AnimationController(
@@ -70,7 +67,10 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
 
   void _openFullPlayer() {
     AppHaptics.light();
-    final style = Provider.of<SettingsProvider>(context, listen: false).playerStyle;
+    final style = Provider.of<SettingsProvider>(
+      context,
+      listen: false,
+    ).playerStyle;
     final Widget screen = style == 'aurora'
         ? const AuroraPlayerScreen()
         : const PlayerScreen();
@@ -78,10 +78,7 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => screen,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
+          return FadeTransition(opacity: animation, child: child);
         },
         transitionDuration: const Duration(milliseconds: 350),
       ),
@@ -125,7 +122,9 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
         }
 
         final isDualMode = song != null && sharedDownload != null;
-        final activeIndex = isDualMode ? _activeDeckIndex : (song != null ? 0 : 1);
+        final activeIndex = isDualMode
+            ? _activeDeckIndex
+            : (song != null ? 0 : 1);
 
         return SlideTransition(
           position: _slideAnimation,
@@ -186,13 +185,16 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                               onTap: _swapDeck,
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: AppColors.surface.withValues(alpha: 0.60),
+                                  color: AppColors.surface.withValues(
+                                    alpha: 0.60,
+                                  ),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
-                                    color: (activeIndex == 0
-                                            ? AppColors.primary
-                                            : primaryColor)
-                                        .withValues(alpha: 0.25),
+                                    color:
+                                        (activeIndex == 0
+                                                ? AppColors.primary
+                                                : primaryColor)
+                                            .withValues(alpha: 0.25),
                                     width: 0.8,
                                   ),
                                 ),
@@ -201,7 +203,10 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                           ),
                           // Front Active Card with smooth swipe translation
                           Transform.translate(
-                            offset: Offset(0, _verticalDragOffset.clamp(-30.0, 30.0)),
+                            offset: Offset(
+                              0,
+                              _verticalDragOffset.clamp(-30.0, 30.0),
+                            ),
                             child: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 300),
                               switchInCurve: Curves.easeOutCubic,
@@ -215,8 +220,10 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                                   child: FadeTransition(
                                     opacity: animation,
                                     child: ScaleTransition(
-                                      scale: Tween<double>(begin: 0.95, end: 1.0)
-                                          .animate(animation),
+                                      scale: Tween<double>(
+                                        begin: 0.95,
+                                        end: 1.0,
+                                      ).animate(animation),
                                       child: child,
                                     ),
                                   ),
@@ -234,7 +241,9 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                                       ),
                                     )
                                   : KeyedSubtree(
-                                      key: const ValueKey('deck_shared_download'),
+                                      key: const ValueKey(
+                                        'deck_shared_download',
+                                      ),
                                       child: SharedDownloadCardSurface(
                                         status: sharedDownload,
                                         isDeckMode: true,
@@ -247,17 +256,17 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                         ],
                       )
                     : (song != null
-                        ? _buildNowPlayingContent(
-                            context,
-                            song,
-                            playerProvider,
-                            primaryColor,
-                            isDualMode: false,
-                          )
-                        : SharedDownloadCardSurface(
-                            status: sharedDownload!,
-                            isDeckMode: false,
-                          )),
+                          ? _buildNowPlayingContent(
+                              context,
+                              song,
+                              playerProvider,
+                              primaryColor,
+                              isDualMode: false,
+                            )
+                          : SharedDownloadCardSurface(
+                              status: sharedDownload!,
+                              isDeckMode: false,
+                            )),
               ),
             ),
           ),
@@ -273,7 +282,8 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
     Color primaryColor, {
     required bool isDualMode,
   }) {
-    final isLoading = playerProvider.isBuffering || playerProvider.loadingSong != null;
+    final isLoading =
+        playerProvider.isBuffering || playerProvider.loadingSong != null;
     final isPlaying = playerProvider.isPlaying;
     final isFav = playerProvider.isFavorite(song.videoId);
 
@@ -329,7 +339,10 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                         final pos = snapshot.data ?? playerProvider.position;
                         final total = playerProvider.duration;
                         final progress = total.inMilliseconds > 0
-                            ? (pos.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
+                            ? (pos.inMilliseconds / total.inMilliseconds).clamp(
+                                0.0,
+                                1.0,
+                              )
                             : 0.0;
 
                         return AnimatedContainer(
@@ -367,7 +380,10 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                                 AppHaptics.selection();
                               },
                               child: Container(
-                                margin: const EdgeInsets.only(top: 6, bottom: 2),
+                                margin: const EdgeInsets.only(
+                                  top: 6,
+                                  bottom: 2,
+                                ),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                   vertical: 2,
@@ -405,7 +421,9 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                               width: 34,
                               height: 4,
                               decoration: BoxDecoration(
-                                color: AppColors.textTertiary.withValues(alpha: 0.45),
+                                color: AppColors.textTertiary.withValues(
+                                  alpha: 0.45,
+                                ),
                                 borderRadius: BorderRadius.circular(2),
                               ),
                             ),
@@ -413,458 +431,516 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                   ],
                 ),
 
-                            // Main Header Row (Compact & Expanded Header)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(10, 4, 8, 8),
-                              child: Row(
+                // Main Header Row (Compact & Expanded Header)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 4, 8, 8),
+                  child: Row(
+                    children: [
+                      // Album Art with glowing pulse ring
+                      Hero(
+                        tag: 'player_album_art',
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          width: _isExpanded ? 54 : 46,
+                          height: _isExpanded ? 54 : 46,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: primaryColor.withValues(
+                                  alpha: isPlaying ? 0.35 : 0.15,
+                                ),
+                                blurRadius: isPlaying ? 12 : 6,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: SongAlbumArt(
+                              song: song,
+                              borderRadius: 14,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+
+                      // Song Info & Animated Visualizer
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    song.title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textPrimary,
+                                          letterSpacing: 0.1,
+                                        ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isLoading) ...[
+                                  const SizedBox(width: 6),
+                                  SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.8,
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                ] else if (isPlaying) ...[
+                                  const SizedBox(width: 6),
+                                  _AnimatedEqualizerBars(
+                                    isPlaying: isPlaying,
+                                    color: primaryColor,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isLoading && playerProvider.loadingSong != null
+                                  ? 'Fetching audio stream...'
+                                  : song.artist,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: isLoading
+                                        ? primaryColor
+                                        : AppColors.textTertiary,
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(width: 4),
+
+                      // Header Action Buttons (NO DUPLICATES!)
+                      // When collapsed: Play/Pause, Skip Next, Expand Arrow, Close
+                      // When expanded: Full Screen Button, Collapse Arrow, Close
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        transitionBuilder: (child, anim) => FadeTransition(
+                          opacity: anim,
+                          child: ScaleTransition(scale: anim, child: child),
+                        ),
+                        child: _isExpanded
+                            ? Row(
+                                key: const ValueKey('expanded_header_actions'),
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // Album Art with glowing pulse ring
-                                  Hero(
-                                    tag: 'player_album_art',
-                                    child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 250),
-                                      width: _isExpanded ? 54 : 46,
-                                      height: _isExpanded ? 54 : 46,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(14),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: primaryColor.withValues(alpha: isPlaying ? 0.35 : 0.15),
-                                            blurRadius: isPlaying ? 12 : 6,
-                                            offset: const Offset(0, 3),
-                                          ),
-                                        ],
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(14),
-                                        child: SongAlbumArt(
-                                          song: song,
-                                          borderRadius: 14,
-                                          fit: BoxFit.cover,
-                                        ),
-                                      ),
+                                  // Full screen player shortcut button
+                                  IconButton(
+                                    onPressed: _openFullPlayer,
+                                    icon: const Icon(
+                                      Icons.fullscreen_rounded,
+                                      color: AppColors.textSecondary,
+                                      size: 24,
                                     ),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
+                                    ),
+                                    tooltip: 'Open Full Player',
                                   ),
-                                  const SizedBox(width: 12),
+                                  const SizedBox(width: 2),
 
-                                  // Song Info & Animated Visualizer
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                song.title,
-                                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                      fontSize: 13.5,
-                                                      fontWeight: FontWeight.w700,
-                                                      color: AppColors.textPrimary,
-                                                      letterSpacing: 0.1,
-                                                    ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            if (isLoading) ...[
-                                              const SizedBox(width: 6),
-                                              SizedBox(
-                                                width: 14,
-                                                height: 14,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 1.8,
-                                                  color: primaryColor,
-                                                ),
-                                              ),
-                                            ] else if (isPlaying) ...[
-                                              const SizedBox(width: 6),
-                                              _AnimatedEqualizerBars(
-                                                isPlaying: isPlaying,
-                                                color: primaryColor,
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          isLoading && playerProvider.loadingSong != null
-                                              ? 'Fetching audio stream...'
-                                              : song.artist,
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w500,
-                                                color: isLoading ? primaryColor : AppColors.textTertiary,
-                                              ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
+                                  // Collapse Arrow Button
+                                  IconButton(
+                                    onPressed: () {
+                                      AppHaptics.selection();
+                                      setState(() => _isExpanded = false);
+                                    },
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_down_rounded,
+                                      color: AppColors.textSecondary,
+                                      size: 24,
                                     ),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
+                                    ),
+                                    tooltip: 'Collapse',
+                                  ),
+                                  const SizedBox(width: 2),
+
+                                  // Stop / Close Button
+                                  _buildCloseButton(playerProvider),
+                                ],
+                              )
+                            : Row(
+                                key: const ValueKey('collapsed_header_actions'),
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Play / Pause button
+                                  _PlayPauseButton(
+                                    playerProvider: playerProvider,
                                   ),
 
-                                  const SizedBox(width: 4),
+                                  const SizedBox(width: 2),
 
-                                  // Header Action Buttons (NO DUPLICATES!)
-                                  // When collapsed: Play/Pause, Skip Next, Expand Arrow, Close
-                                  // When expanded: Full Screen Button, Collapse Arrow, Close
-                                  AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 200),
-                                    transitionBuilder: (child, anim) => FadeTransition(
-                                      opacity: anim,
-                                      child: ScaleTransition(scale: anim, child: child),
+                                  // Skip Next button
+                                  IconButton(
+                                    onPressed: () {
+                                      AppHaptics.medium();
+                                      playerProvider.skipNext();
+                                    },
+                                    icon: const Icon(
+                                      Icons.skip_next_rounded,
+                                      color: AppColors.textSecondary,
+                                      size: 24,
                                     ),
-                                    child: _isExpanded
-                                        ? Row(
-                                            key: const ValueKey('expanded_header_actions'),
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              // Full screen player shortcut button
-                                              IconButton(
-                                                onPressed: _openFullPlayer,
-                                                icon: const Icon(
-                                                  Icons.fullscreen_rounded,
-                                                  color: AppColors.textSecondary,
-                                                  size: 24,
-                                                ),
-                                                visualDensity: VisualDensity.compact,
-                                                padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                                tooltip: 'Open Full Player',
-                                              ),
-                                              const SizedBox(width: 2),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 34,
+                                      minHeight: 34,
+                                    ),
+                                    tooltip: 'Next',
+                                  ),
 
-                                              // Collapse Arrow Button
-                                              IconButton(
-                                                onPressed: () {
-                                                  AppHaptics.selection();
-                                                  setState(() => _isExpanded = false);
-                                                },
-                                                icon: const Icon(
-                                                  Icons.keyboard_arrow_down_rounded,
-                                                  color: AppColors.textSecondary,
-                                                  size: 24,
-                                                ),
-                                                visualDensity: VisualDensity.compact,
-                                                padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                                tooltip: 'Collapse',
-                                              ),
-                                              const SizedBox(width: 2),
+                                  const SizedBox(width: 2),
 
-                                              // Stop / Close Button
-                                              _buildCloseButton(playerProvider),
-                                            ],
-                                          )
-                                        : Row(
-                                            key: const ValueKey('collapsed_header_actions'),
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              // Play / Pause button
-                                              _PlayPauseButton(playerProvider: playerProvider),
+                                  // Expand Arrow Button
+                                  IconButton(
+                                    onPressed: () {
+                                      AppHaptics.selection();
+                                      setState(() => _isExpanded = true);
+                                    },
+                                    icon: const Icon(
+                                      Icons.keyboard_arrow_up_rounded,
+                                      color: AppColors.textSecondary,
+                                      size: 24,
+                                    ),
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
+                                    ),
+                                    tooltip: 'Expand Controls',
+                                  ),
 
-                                              const SizedBox(width: 2),
+                                  const SizedBox(width: 2),
 
-                                              // Skip Next button
-                                              IconButton(
-                                                onPressed: () {
-                                                  AppHaptics.medium();
-                                                  playerProvider.skipNext();
-                                                },
-                                                icon: const Icon(
-                                                  Icons.skip_next_rounded,
-                                                  color: AppColors.textSecondary,
-                                                  size: 24,
-                                                ),
-                                                visualDensity: VisualDensity.compact,
-                                                padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                                                tooltip: 'Next',
-                                              ),
+                                  // Stop / Close Button
+                                  _buildCloseButton(playerProvider),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
 
-                                              const SizedBox(width: 2),
+                // Expanded Controls Section
+                if (_isExpanded) ...[
+                  const Divider(height: 1, color: AppColors.glassBorder),
 
-                                              // Expand Arrow Button
-                                              IconButton(
-                                                onPressed: () {
-                                                  AppHaptics.selection();
-                                                  setState(() => _isExpanded = true);
-                                                },
-                                                icon: const Icon(
-                                                  Icons.keyboard_arrow_up_rounded,
-                                                  color: AppColors.textSecondary,
-                                                  size: 24,
-                                                ),
-                                                visualDensity: VisualDensity.compact,
-                                                padding: EdgeInsets.zero,
-                                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                                tooltip: 'Expand Controls',
-                                              ),
+                  // Interactive Seek Slider with timestamps
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    child: StreamBuilder<Duration>(
+                      stream: playerProvider.positionStream,
+                      builder: (context, snapshot) {
+                        final pos = snapshot.data ?? playerProvider.position;
+                        final dur = playerProvider.duration;
+                        final maxMs = dur.inMilliseconds > 0
+                            ? dur.inMilliseconds.toDouble()
+                            : 1.0;
+                        final currentMs = pos.inMilliseconds.toDouble().clamp(
+                          0.0,
+                          maxMs,
+                        );
 
-                                              const SizedBox(width: 2),
-
-                                              // Stop / Close Button
-                                              _buildCloseButton(playerProvider),
-                                            ],
-                                          ),
+                        return Column(
+                          children: [
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                trackHeight: 4,
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 7,
+                                ),
+                                overlayShape: const RoundSliderOverlayShape(
+                                  overlayRadius: 14,
+                                ),
+                                activeTrackColor: primaryColor,
+                                inactiveTrackColor: AppColors.surfaceVariant,
+                                thumbColor: Colors.white,
+                              ),
+                              child: Slider(
+                                value: currentMs,
+                                max: maxMs,
+                                onChanged: (val) {
+                                  playerProvider.seek(
+                                    Duration(milliseconds: val.toInt()),
+                                  );
+                                },
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _formatDuration(pos),
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatDuration(dur),
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textSecondary,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
 
-                            // Expanded Controls Section
-                            if (_isExpanded) ...[
-                              const Divider(height: 1, color: AppColors.glassBorder),
+                  // Full Control Row (Shuffle, Skip Prev, Hero Play/Pause, Skip Next, Repeat)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        // Shuffle
+                        PremiumTap(
+                          onTap: () {
+                            AppHaptics.light();
+                            playerProvider.toggleShuffle();
+                          },
+                          child: Icon(
+                            Icons.shuffle_rounded,
+                            color: playerProvider.isShuffled
+                                ? primaryColor
+                                : AppColors.textTertiary,
+                            size: 22,
+                          ),
+                        ),
 
-                              // Interactive Seek Slider with timestamps
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                child: StreamBuilder<Duration>(
-                                  stream: playerProvider.positionStream,
-                                  builder: (context, snapshot) {
-                                    final pos = snapshot.data ?? playerProvider.position;
-                                    final dur = playerProvider.duration;
-                                    final maxMs = dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1.0;
-                                    final currentMs = pos.inMilliseconds.toDouble().clamp(0.0, maxMs);
+                        // Skip Previous
+                        PremiumTap(
+                          onTap: () {
+                            AppHaptics.medium();
+                            playerProvider.skipPrevious();
+                          },
+                          child: const Icon(
+                            Icons.skip_previous_rounded,
+                            color: AppColors.textPrimary,
+                            size: 28,
+                          ),
+                        ),
 
-                                    return Column(
-                                      children: [
-                                        SliderTheme(
-                                          data: SliderTheme.of(context).copyWith(
-                                            trackHeight: 4,
-                                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                                            activeTrackColor: primaryColor,
-                                            inactiveTrackColor: AppColors.surfaceVariant,
-                                            thumbColor: Colors.white,
-                                          ),
-                                          child: Slider(
-                                            value: currentMs,
-                                            max: maxMs,
-                                            onChanged: (val) {
-                                              playerProvider.seek(Duration(milliseconds: val.toInt()));
-                                            },
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Text(
-                                                _formatDuration(pos),
-                                                style: TextStyle(
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: AppColors.textSecondary,
-                                                ),
-                                              ),
-                                              Text(
-                                                _formatDuration(dur),
-                                                style: TextStyle(
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: AppColors.textSecondary,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
+                        // Hero Floating Play/Pause Button
+                        PremiumTap(
+                          onTap: () {
+                            AppHaptics.light();
+                            playerProvider.togglePlayPause();
+                          },
+                          pressedScale: 0.90,
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [
+                                  primaryColor,
+                                  primaryColor.withValues(alpha: 0.75),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-
-                              // Full Control Row (Shuffle, Skip Prev, Hero Play/Pause, Skip Next, Repeat)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    // Shuffle
-                                    PremiumTap(
-                                      onTap: () {
-                                        AppHaptics.light();
-                                        playerProvider.toggleShuffle();
-                                      },
-                                      child: Icon(
-                                        Icons.shuffle_rounded,
-                                        color: playerProvider.isShuffled ? primaryColor : AppColors.textTertiary,
-                                        size: 22,
-                                      ),
-                                    ),
-
-                                    // Skip Previous
-                                    PremiumTap(
-                                      onTap: () {
-                                        AppHaptics.medium();
-                                        playerProvider.skipPrevious();
-                                      },
-                                      child: const Icon(
-                                        Icons.skip_previous_rounded,
-                                        color: AppColors.textPrimary,
-                                        size: 28,
-                                      ),
-                                    ),
-
-                                    // Hero Floating Play/Pause Button
-                                    PremiumTap(
-                                      onTap: () {
-                                        AppHaptics.light();
-                                        playerProvider.togglePlayPause();
-                                      },
-                                      pressedScale: 0.90,
-                                      child: Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              primaryColor,
-                                              primaryColor.withValues(alpha: 0.75),
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: primaryColor.withValues(alpha: 0.45),
-                                              blurRadius: 14,
-                                              spreadRadius: 1,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                        ),
-                                        child: AnimatedSwitcher(
-                                          duration: const Duration(milliseconds: 180),
-                                          child: Icon(
-                                            isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                            key: ValueKey(isPlaying),
-                                            color: Colors.white,
-                                            size: 30,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                    // Skip Next
-                                    PremiumTap(
-                                      onTap: () {
-                                        AppHaptics.medium();
-                                        playerProvider.skipNext();
-                                      },
-                                      child: const Icon(
-                                        Icons.skip_next_rounded,
-                                        color: AppColors.textPrimary,
-                                        size: 28,
-                                      ),
-                                    ),
-
-                                    // Repeat Mode
-                                    PremiumTap(
-                                      onTap: () {
-                                        AppHaptics.light();
-                                        playerProvider.cycleRepeatMode();
-                                      },
-                                      child: Icon(
-                                        playerProvider.repeatMode == AudioServiceRepeatMode.one
-                                            ? Icons.repeat_one_rounded
-                                            : Icons.repeat_rounded,
-                                        color: playerProvider.repeatMode != AudioServiceRepeatMode.none
-                                            ? primaryColor
-                                            : AppColors.textTertiary,
-                                        size: 22,
-                                      ),
-                                    ),
-                                  ],
+                              boxShadow: [
+                                BoxShadow(
+                                  color: primaryColor.withValues(alpha: 0.45),
+                                  blurRadius: 14,
+                                  spreadRadius: 1,
+                                  offset: const Offset(0, 3),
                                 ),
+                              ],
+                            ),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              child: Icon(
+                                isPlaying
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                                key: ValueKey(isPlaying),
+                                color: Colors.white,
+                                size: 30,
                               ),
+                            ),
+                          ),
+                        ),
 
-                              // Quick Action Footer Bar (Favorite, Up Next Chip, Full Screen)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.25),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.05),
+                        // Skip Next
+                        PremiumTap(
+                          onTap: () {
+                            AppHaptics.medium();
+                            playerProvider.skipNext();
+                          },
+                          child: const Icon(
+                            Icons.skip_next_rounded,
+                            color: AppColors.textPrimary,
+                            size: 28,
+                          ),
+                        ),
+
+                        // Repeat Mode
+                        PremiumTap(
+                          onTap: () {
+                            AppHaptics.light();
+                            playerProvider.cycleRepeatMode();
+                          },
+                          child: Icon(
+                            playerProvider.repeatMode ==
+                                    AudioServiceRepeatMode.one
+                                ? Icons.repeat_one_rounded
+                                : Icons.repeat_rounded,
+                            color:
+                                playerProvider.repeatMode !=
+                                    AudioServiceRepeatMode.none
+                                ? primaryColor
+                                : AppColors.textTertiary,
+                            size: 22,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Quick Action Footer Bar (Favorite, Up Next Chip, Full Screen)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.05),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          // Like / Favorite Toggle
+                          PremiumTap(
+                            onTap: () {
+                              AppHaptics.light();
+                              playerProvider.toggleFavorite(song);
+                            },
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isFav
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
+                                  color: isFav
+                                      ? Colors.redAccent
+                                      : AppColors.textTertiary,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  isFav ? 'Liked' : 'Like',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isFav
+                                        ? Colors.redAccent
+                                        : AppColors.textTertiary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const Spacer(),
+
+                          // Up Next preview badge or Full View button
+                          if (nextSong != null) ...[
+                            Icon(
+                              Icons.queue_music_rounded,
+                              color: primaryColor,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 130),
+                              child: Text(
+                                'Next: ${nextSong.title}',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textSecondary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ] else ...[
+                            PremiumTap(
+                              onTap: _openFullPlayer,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Open Player',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: primaryColor,
                                     ),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      // Like / Favorite Toggle
-                                      PremiumTap(
-                                        onTap: () {
-                                          AppHaptics.light();
-                                          playerProvider.toggleFavorite(song);
-                                        },
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                              color: isFav ? Colors.redAccent : AppColors.textTertiary,
-                                              size: 18,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              isFav ? 'Liked' : 'Like',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                                color: isFav ? Colors.redAccent : AppColors.textTertiary,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      const Spacer(),
-
-                                      // Up Next preview badge or Full View button
-                                      if (nextSong != null) ...[
-                                        Icon(Icons.queue_music_rounded, color: primaryColor, size: 14),
-                                        const SizedBox(width: 4),
-                                        ConstrainedBox(
-                                          constraints: const BoxConstraints(maxWidth: 130),
-                                          child: Text(
-                                            'Next: ${nextSong.title}',
-                                            style: TextStyle(
-                                              fontSize: 10.5,
-                                              fontWeight: FontWeight.w500,
-                                              color: AppColors.textSecondary,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ] else ...[
-                                        PremiumTap(
-                                          onTap: _openFullPlayer,
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                'Open Player',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: primaryColor,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 2),
-                                              Icon(Icons.open_in_full_rounded, color: primaryColor, size: 13),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                  ],
-                                ),
+                                  const SizedBox(width: 2),
+                                  Icon(
+                                    Icons.open_in_full_rounded,
+                                    color: primaryColor,
+                                    size: 13,
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -872,8 +948,13 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                ),
-              );
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildCloseButton(PlayerProvider playerProvider) {
@@ -911,7 +992,8 @@ class _PlayPauseButton extends StatefulWidget {
   State<_PlayPauseButton> createState() => _PlayPauseButtonState();
 }
 
-class _PlayPauseButtonState extends State<_PlayPauseButton> with SingleTickerProviderStateMixin {
+class _PlayPauseButtonState extends State<_PlayPauseButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animController;
 
   @override
@@ -946,7 +1028,9 @@ class _PlayPauseButtonState extends State<_PlayPauseButton> with SingleTickerPro
       stream: widget.playerProvider.processingStateStream,
       builder: (context, stateSnapshot) {
         final state = stateSnapshot.data ?? ProcessingState.idle;
-        if (state == ProcessingState.loading || state == ProcessingState.buffering || widget.playerProvider.loadingSong != null) {
+        if (state == ProcessingState.loading ||
+            state == ProcessingState.buffering ||
+            widget.playerProvider.loadingSong != null) {
           return SizedBox(
             width: 34,
             height: 34,
@@ -983,10 +1067,7 @@ class _PlayPauseButtonState extends State<_PlayPauseButton> with SingleTickerPro
               ),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(
-                minWidth: 34,
-                minHeight: 34,
-              ),
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
             );
           },
         );
@@ -1000,10 +1081,7 @@ class _AnimatedEqualizerBars extends StatefulWidget {
   final bool isPlaying;
   final Color color;
 
-  const _AnimatedEqualizerBars({
-    required this.isPlaying,
-    required this.color,
-  });
+  const _AnimatedEqualizerBars({required this.isPlaying, required this.color});
 
   @override
   State<_AnimatedEqualizerBars> createState() => _AnimatedEqualizerBarsState();

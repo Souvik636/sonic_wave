@@ -50,6 +50,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
     });
   }
+
   late AnimationController _entranceController;
   late AnimationController _ambientController;
   late AnimationController _visualizerController;
@@ -103,15 +104,13 @@ class _PlayerScreenState extends State<PlayerScreen>
       ),
     );
 
-    _controlsSlide = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _entranceController,
-        curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
-      ),
-    );
+    _controlsSlide =
+        Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _entranceController.forward();
 
@@ -158,13 +157,14 @@ class _PlayerScreenState extends State<PlayerScreen>
       builder: (context, playerProvider, _) {
         final song = playerProvider.currentSong;
         if (song == null) {
-          return const Scaffold(
-            body: Center(child: Text('No song playing')),
-          );
+          return const Scaffold(body: Center(child: Text('No song playing')));
         }
 
-        final isLocalOrDownloaded = song.isLocalFile ||
-            playerProvider.downloadedSongs.any((s) => s.videoId == song.videoId);
+        final isLocalOrDownloaded =
+            song.isLocalFile ||
+            playerProvider.downloadedSongs.any(
+              (s) => s.videoId == song.videoId,
+            );
 
         return Scaffold(
           body: Container(
@@ -176,7 +176,10 @@ class _PlayerScreenState extends State<PlayerScreen>
             child: Stack(
               children: [
                 // Blurred background with dynamic ambient mode light leaks
-                _buildBackground(song, Provider.of<SettingsProvider>(context).enableAmbientMode),
+                _buildBackground(
+                  song,
+                  Provider.of<SettingsProvider>(context).enableAmbientMode,
+                ),
 
                 // Horizontal PageView for Player (Page 0) and Song Metadata/Trimming Studio (Page 1)
                 PageView(
@@ -206,9 +209,14 @@ class _PlayerScreenState extends State<PlayerScreen>
                       onVerticalDragUpdate: (details) {
                         if (_isDraggingVolume) {
                           _triggerVolumeBar();
-                          final settings = Provider.of<SettingsProvider>(context, listen: false);
-                          final double deltaVolume = -details.primaryDelta! / 250.0;
-                          final double newVolume = (settings.volume + deltaVolume).clamp(0.0, 1.0);
+                          final settings = Provider.of<SettingsProvider>(
+                            context,
+                            listen: false,
+                          );
+                          final double deltaVolume =
+                              -details.primaryDelta! / 250.0;
+                          final double newVolume =
+                              (settings.volume + deltaVolume).clamp(0.0, 1.0);
                           settings.setVolume(newVolume);
                         }
                       },
@@ -286,10 +294,10 @@ class _PlayerScreenState extends State<PlayerScreen>
               Text(
                 'NOW PLAYING',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.textTertiary,
-                      letterSpacing: 2,
-                      fontSize: 10,
-                    ),
+                  color: AppColors.textTertiary,
+                  letterSpacing: 2,
+                  fontSize: 10,
+                ),
               ),
               const SizedBox(height: 2),
               AnimatedEqualizer(
@@ -306,8 +314,11 @@ class _PlayerScreenState extends State<PlayerScreen>
             children: [
               IconButton(
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                    color: Colors.white, size: 32),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white,
+                  size: 32,
+                ),
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -316,8 +327,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                   IconButton(
                     onPressed: () {
                       AppHaptics.selection();
-                      Provider.of<SettingsProvider>(context, listen: false)
-                          .setPlayerStyle('aurora');
+                      Provider.of<SettingsProvider>(
+                        context,
+                        listen: false,
+                      ).setPlayerStyle('aurora');
                       Navigator.pushReplacement(
                         context,
                         PageRouteBuilder(
@@ -329,13 +342,19 @@ class _PlayerScreenState extends State<PlayerScreen>
                       );
                     },
                     tooltip: 'Switch to Aurora Player',
-                    icon: const Icon(Icons.flare_rounded,
-                        color: Colors.white54, size: 22),
+                    icon: const Icon(
+                      Icons.flare_rounded,
+                      color: Colors.white54,
+                      size: 22,
+                    ),
                   ),
                   IconButton(
                     onPressed: () => showSongOptionsSheet(context, song),
-                    icon: const Icon(Icons.more_vert_rounded,
-                        color: Colors.white, size: 24),
+                    icon: const Icon(
+                      Icons.more_vert_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
                   ),
                 ],
               ),
@@ -357,13 +376,16 @@ class _PlayerScreenState extends State<PlayerScreen>
         children: [
           // Left Spacer of the same width as the right volume control to center the art perfectly
           const SizedBox(width: 44),
-          
+
           Expanded(
             child: Center(
               child: GestureDetector(
                 onHorizontalDragEnd: (details) {
                   if (details.primaryVelocity == null) return;
-                  final provider = Provider.of<PlayerProvider>(context, listen: false);
+                  final provider = Provider.of<PlayerProvider>(
+                    context,
+                    listen: false,
+                  );
                   if (details.primaryVelocity! < 0) {
                     // Swiped right-to-left -> Next song
                     AppHaptics.medium();
@@ -380,8 +402,13 @@ class _PlayerScreenState extends State<PlayerScreen>
                     alignment: Alignment.center,
                     children: [
                       // Radial Circular Visualizer
-                      if (Provider.of<SettingsProvider>(context).showVisualizer &&
-                          Provider.of<SettingsProvider>(context).visualizerTheme == 'circle')
+                      if (Provider.of<SettingsProvider>(
+                            context,
+                          ).showVisualizer &&
+                          Provider.of<SettingsProvider>(
+                                context,
+                              ).visualizerTheme ==
+                              'circle')
                         AnimatedBuilder(
                           animation: _visualizerController,
                           builder: (context, child) {
@@ -392,37 +419,93 @@ class _PlayerScreenState extends State<PlayerScreen>
                               child: RepaintBoundary(
                                 child: CustomPaint(
                                   painter: CircularVisualizerPainter(
-                                    timeMs: playerProvider.position.inMilliseconds.toDouble(),
+                                    timeMs: playerProvider
+                                        .position
+                                        .inMilliseconds
+                                        .toDouble(),
                                     seed: _songSeed(song),
                                     colors: auraColors,
                                     radius: artSize / 2,
                                     isPlaying: playerProvider.isPlaying,
                                     quality: visualizerQuality(context),
                                     bassMultiplier: (() {
-                                      final settings = Provider.of<SettingsProvider>(context, listen: false);
-                                      if (settings.useCustomEqualizer && settings.customEqualizerGains.isNotEmpty) {
-                                        return (1.0 + (settings.customEqualizerGains[0] / 12.0)).clamp(0.1, 2.5);
+                                      final settings =
+                                          Provider.of<SettingsProvider>(
+                                            context,
+                                            listen: false,
+                                          );
+                                      if (settings.useCustomEqualizer &&
+                                          settings
+                                              .customEqualizerGains
+                                              .isNotEmpty) {
+                                        return (1.0 +
+                                                (settings
+                                                        .customEqualizerGains[0] /
+                                                    12.0))
+                                            .clamp(0.1, 2.5);
                                       }
-                                      if (settings.soundEnhancer == SoundEnhancer.bassBoost) return 1.6;
-                                      if (settings.soundEnhancer == SoundEnhancer.ambient3d) return 1.3;
+                                      if (settings.soundEnhancer ==
+                                          SoundEnhancer.bassBoost) {
+                                        return 1.6;
+                                      }
+                                      if (settings.soundEnhancer ==
+                                          SoundEnhancer.ambient3d) {
+                                        return 1.3;
+                                      }
                                       return 1.0;
                                     })(),
                                     vocalMultiplier: (() {
-                                      final settings = Provider.of<SettingsProvider>(context, listen: false);
-                                      if (settings.useCustomEqualizer && settings.customEqualizerGains.length >= 3) {
-                                        return (1.0 + (settings.customEqualizerGains[2] / 12.0)).clamp(0.1, 2.5);
+                                      final settings =
+                                          Provider.of<SettingsProvider>(
+                                            context,
+                                            listen: false,
+                                          );
+                                      if (settings.useCustomEqualizer &&
+                                          settings
+                                                  .customEqualizerGains
+                                                  .length >=
+                                              3) {
+                                        return (1.0 +
+                                                (settings
+                                                        .customEqualizerGains[2] /
+                                                    12.0))
+                                            .clamp(0.1, 2.5);
                                       }
-                                      if (settings.soundEnhancer == SoundEnhancer.vocal) return 1.5;
-                                      if (settings.soundEnhancer == SoundEnhancer.ambient3d) return 0.8;
+                                      if (settings.soundEnhancer ==
+                                          SoundEnhancer.vocal) {
+                                        return 1.5;
+                                      }
+                                      if (settings.soundEnhancer ==
+                                          SoundEnhancer.ambient3d) {
+                                        return 0.8;
+                                      }
                                       return 1.0;
                                     })(),
                                     trebleMultiplier: (() {
-                                      final settings = Provider.of<SettingsProvider>(context, listen: false);
-                                      if (settings.useCustomEqualizer && settings.customEqualizerGains.length >= 5) {
-                                        return (1.0 + (settings.customEqualizerGains[4] / 12.0)).clamp(0.1, 2.5);
+                                      final settings =
+                                          Provider.of<SettingsProvider>(
+                                            context,
+                                            listen: false,
+                                          );
+                                      if (settings.useCustomEqualizer &&
+                                          settings
+                                                  .customEqualizerGains
+                                                  .length >=
+                                              5) {
+                                        return (1.0 +
+                                                (settings
+                                                        .customEqualizerGains[4] /
+                                                    12.0))
+                                            .clamp(0.1, 2.5);
                                       }
-                                      if (settings.soundEnhancer == SoundEnhancer.trebleBoost) return 1.6;
-                                      if (settings.soundEnhancer == SoundEnhancer.ambient3d) return 1.3;
+                                      if (settings.soundEnhancer ==
+                                          SoundEnhancer.trebleBoost) {
+                                        return 1.6;
+                                      }
+                                      if (settings.soundEnhancer ==
+                                          SoundEnhancer.ambient3d) {
+                                        return 1.3;
+                                      }
                                       return 1.0;
                                     })(),
                                   ),
@@ -431,7 +514,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                             );
                           },
                         ),
-                      
+
                       Stack(
                         clipBehavior: Clip.none,
                         alignment: Alignment.center,
@@ -445,7 +528,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                                    color: Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.3),
                                     blurRadius: 40,
                                     spreadRadius: 5,
                                   ),
@@ -465,25 +549,32 @@ class _PlayerScreenState extends State<PlayerScreen>
                                     builder: (context, child) {
                                       return RepaintBoundary(
                                         child: Transform.rotate(
-                                          angle: _rotationController.value * 2 * 3.14159,
+                                          angle:
+                                              _rotationController.value *
+                                              2 *
+                                              3.14159,
                                           child: child,
                                         ),
                                       );
                                     },
                                     child: ClipOval(
                                       child: AnimatedSwitcher(
-                                        duration: const Duration(milliseconds: 450),
+                                        duration: const Duration(
+                                          milliseconds: 450,
+                                        ),
                                         switchInCurve: Curves.easeOut,
                                         switchOutCurve: Curves.easeIn,
                                         transitionBuilder: (child, anim) =>
                                             FadeTransition(
-                                          opacity: anim,
-                                          child: ScaleTransition(
-                                            scale: Tween<double>(begin: 1.06, end: 1.0)
-                                                .animate(anim),
-                                            child: child,
-                                          ),
-                                        ),
+                                              opacity: anim,
+                                              child: ScaleTransition(
+                                                scale: Tween<double>(
+                                                  begin: 1.06,
+                                                  end: 1.0,
+                                                ).animate(anim),
+                                                child: child,
+                                              ),
+                                            ),
                                         child: SongAlbumArt(
                                           key: ValueKey(song.videoId),
                                           song: song,
@@ -518,7 +609,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                                       ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.5),
+                                          color: Colors.black.withValues(
+                                            alpha: 0.5,
+                                          ),
                                           blurRadius: 10,
                                         ),
                                       ],
@@ -536,7 +629,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                             child: IgnorePointer(
                               child: AnimatedRotation(
                                 turns: playerProvider.isPlaying ? 0.05 : -0.06,
-                                alignment: const Alignment(0.0, -0.9), // Anchor near top Center of box
+                                alignment: const Alignment(
+                                  0.0,
+                                  -0.9,
+                                ), // Anchor near top Center of box
                                 duration: const Duration(milliseconds: 700),
                                 curve: Curves.easeInOutCubic,
                                 child: SizedBox(
@@ -544,7 +640,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   height: 160,
                                   child: CustomPaint(
                                     painter: TonearmPainter(
-                                      angle: playerProvider.isPlaying ? 0.05 : -0.06,
+                                      angle: playerProvider.isPlaying
+                                          ? 0.05
+                                          : -0.06,
                                     ),
                                   ),
                                 ),
@@ -553,13 +651,13 @@ class _PlayerScreenState extends State<PlayerScreen>
                           ),
                         ],
                       ),
-              ],
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-    ),
-          
+
           // Sleek Vertical Volume Control on the right
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
@@ -594,9 +692,9 @@ class _PlayerScreenState extends State<PlayerScreen>
               Text(
                 song.title,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -605,9 +703,9 @@ class _PlayerScreenState extends State<PlayerScreen>
               Text(
                 song.artist,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 15,
-                    ),
+                  color: AppColors.textSecondary,
+                  fontSize: 15,
+                ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -640,22 +738,25 @@ class _PlayerScreenState extends State<PlayerScreen>
                   SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 4,
-                      thumbShape:
-                          const RoundSliderThumbShape(enabledThumbRadius: 7),
-                      overlayShape:
-                          const RoundSliderOverlayShape(overlayRadius: 16),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 7,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 16,
+                      ),
                       activeTrackColor: Theme.of(context).colorScheme.primary,
-                      inactiveTrackColor:
-                          Colors.white.withValues(alpha: 0.15),
+                      inactiveTrackColor: Colors.white.withValues(alpha: 0.15),
                       thumbColor: Colors.white,
-                      overlayColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                      overlayColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.2),
                     ),
                     child: Slider(
                       value: progress.clamp(0.0, 1.0),
                       onChanged: (value) {
                         final newPosition = Duration(
-                          milliseconds:
-                              (value * duration.inMilliseconds).toInt(),
+                          milliseconds: (value * duration.inMilliseconds)
+                              .toInt(),
                         );
                         playerProvider.seek(newPosition);
                       },
@@ -668,19 +769,19 @@ class _PlayerScreenState extends State<PlayerScreen>
                       children: [
                         Text(
                           _formatDuration(position),
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 12,
-                                  ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.textTertiary,
+                                fontSize: 12,
+                              ),
                         ),
                         Text(
                           _formatDuration(duration),
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 12,
-                                  ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: AppColors.textTertiary,
+                                fontSize: 12,
+                              ),
                         ),
                       ],
                     ),
@@ -780,7 +881,9 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Widget _buildExtraControls(PlayerProvider playerProvider) {
     final song = playerProvider.currentSong;
-    final isFav = song != null ? playerProvider.isFavorite(song.videoId) : false;
+    final isFav = song != null
+        ? playerProvider.isFavorite(song.videoId)
+        : false;
 
     return FadeTransition(
       opacity: _controlsOpacity,
@@ -797,7 +900,9 @@ class _PlayerScreenState extends State<PlayerScreen>
               },
               icon: Icon(
                 isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                color: isFav ? Theme.of(context).colorScheme.primary : AppColors.textTertiary,
+                color: isFav
+                    ? Theme.of(context).colorScheme.primary
+                    : AppColors.textTertiary,
                 size: 22,
               ),
             ),
@@ -806,7 +911,11 @@ class _PlayerScreenState extends State<PlayerScreen>
               icon: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.speed_rounded, color: AppColors.textTertiary, size: 20),
+                  const Icon(
+                    Icons.speed_rounded,
+                    color: AppColors.textTertiary,
+                    size: 20,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     '${playerProvider.playbackSpeed.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '').replaceAll(RegExp(r'0$'), '')}x',
@@ -821,17 +930,25 @@ class _PlayerScreenState extends State<PlayerScreen>
             ),
             IconButton(
               onPressed: () => showQueueSheet(context, playerProvider),
-              icon: const Icon(Icons.queue_music_rounded,
-                  color: AppColors.textTertiary, size: 22),
+              icon: const Icon(
+                Icons.queue_music_rounded,
+                color: AppColors.textTertiary,
+                size: 22,
+              ),
             ),
             Builder(
               builder: (context) {
                 final currentSong = playerProvider.currentSong;
                 if (currentSong == null) return const SizedBox.shrink();
-                
-                final isDownloaded = playerProvider.downloadedSongs.any((s) => s.videoId == currentSong.videoId);
-                final progress = playerProvider.downloadProgress[currentSong.videoId];
-                final status = playerProvider.getDownloadStatus(currentSong.videoId);
+
+                final isDownloaded = playerProvider.downloadedSongs.any(
+                  (s) => s.videoId == currentSong.videoId,
+                );
+                final progress =
+                    playerProvider.downloadProgress[currentSong.videoId];
+                final status = playerProvider.getDownloadStatus(
+                  currentSong.videoId,
+                );
                 final isDownloading = progress != null || status != null;
 
                 if (isDownloading) {
@@ -857,9 +974,14 @@ class _PlayerScreenState extends State<PlayerScreen>
                           height: 14,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            value: (status == DownloadStatus.paused || status == DownloadStatus.queued) ? 0.0 : null,
+                            value:
+                                (status == DownloadStatus.paused ||
+                                    status == DownloadStatus.queued)
+                                ? 0.0
+                                : null,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                                Theme.of(context).colorScheme.primary),
+                              Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -879,18 +1001,26 @@ class _PlayerScreenState extends State<PlayerScreen>
                 if (isDownloaded) {
                   return IconButton(
                     onPressed: null,
-                    icon: Icon(Icons.download_done_rounded,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 22),
+                    icon: Icon(
+                      Icons.download_done_rounded,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 22,
+                    ),
                   );
                 }
 
                 return IconButton(
-                  onPressed: () => playerProvider.downloadSong(currentSong, context: context),
-                  icon: const Icon(Icons.download_rounded,
-                      color: AppColors.textTertiary, size: 22),
+                  onPressed: () => playerProvider.downloadSong(
+                    currentSong,
+                    context: context,
+                  ),
+                  icon: const Icon(
+                    Icons.download_rounded,
+                    color: AppColors.textTertiary,
+                    size: 22,
+                  ),
                 );
-              }
+              },
             ),
           ],
         ),
@@ -926,9 +1056,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                 Text(
                   'Playback Speed',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 ...speeds.map((speed) {
@@ -938,12 +1068,19 @@ class _PlayerScreenState extends State<PlayerScreen>
                     title: Text(
                       '${speed}x',
                       style: GoogleFonts.inter(
-                        color: isSelected ? Theme.of(context).colorScheme.primary : Colors.white,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.white,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                       ),
                     ),
                     trailing: isSelected
-                        ? Icon(Icons.check_rounded, color: Theme.of(context).colorScheme.primary)
+                        ? Icon(
+                            Icons.check_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                          )
                         : null,
                     onTap: () {
                       playerProvider.setPlaybackSpeed(speed);
@@ -994,15 +1131,17 @@ class _PlayerScreenState extends State<PlayerScreen>
                     );
                   },
                 )
-              : (song.thumbnailUrl.isNotEmpty && File(song.thumbnailUrl).existsSync())
-                  ? Image.file(
-                      File(song.thumbnailUrl),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-                    )
-                  : const SizedBox.shrink(),
+              : (song.thumbnailUrl.isNotEmpty &&
+                    File(song.thumbnailUrl).existsSync())
+              ? Image.file(
+                  File(song.thumbnailUrl),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const SizedBox.shrink(),
+                )
+              : const SizedBox.shrink(),
         ),
-        
+
         // Dynamic "Aura Flow" ambient mode light leaks
         if (enableAmbientMode)
           Positioned.fill(
@@ -1056,14 +1195,12 @@ class _PlayerScreenState extends State<PlayerScreen>
               },
             ),
           ),
-          
+
         // Massive blur layer to blend everything organically
         Positioned.fill(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 65, sigmaY: 65),
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.65),
-            ),
+            child: Container(color: Colors.black.withValues(alpha: 0.65)),
           ),
         ),
       ],
@@ -1084,8 +1221,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                   volume == 0
                       ? Icons.volume_off_rounded
                       : volume < 0.4
-                          ? Icons.volume_down_rounded
-                          : Icons.volume_up_rounded,
+                      ? Icons.volume_down_rounded
+                      : Icons.volume_up_rounded,
                   color: Colors.white70,
                   size: 18,
                 ),
@@ -1105,12 +1242,18 @@ class _PlayerScreenState extends State<PlayerScreen>
                   child: SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 3.5,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 10,
+                      ),
                       activeTrackColor: Theme.of(context).colorScheme.primary,
                       inactiveTrackColor: Colors.white.withValues(alpha: 0.15),
                       thumbColor: Colors.white,
-                      overlayColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                      overlayColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.2),
                     ),
                     child: Slider(
                       value: volume,
@@ -1139,7 +1282,6 @@ class _PlayerScreenState extends State<PlayerScreen>
       },
     );
   }
-
 
   /// Stable per-song seed for the visualizers — deterministic (no Random), so
   /// the same song always animates identically and every visualizer shares it.
@@ -1232,8 +1374,8 @@ class _PlayerScreenState extends State<PlayerScreen>
                   vocalMult = vocalMult.clamp(0.1, 2.5);
                   trebleMult = trebleMult.clamp(0.1, 2.5);
 
-                  final double timeMs =
-                      playerProvider.position.inMilliseconds.toDouble();
+                  final double timeMs = playerProvider.position.inMilliseconds
+                      .toDouble();
                   final int seed = _songSeed(song);
                   final int quality = visualizerQuality(context);
 
@@ -1278,7 +1420,6 @@ class _PlayerScreenState extends State<PlayerScreen>
       ),
     );
   }
-
 }
 
 class _PlayPauseMainButton extends StatefulWidget {
@@ -1351,7 +1492,9 @@ class _PlayPauseMainButtonState extends State<_PlayPauseMainButton>
                 gradient: Provider.of<SettingsProvider>(context).accentGradient,
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.5),
                     blurRadius: 20,
                     spreadRadius: 2,
                   ),
@@ -1361,9 +1504,9 @@ class _PlayPauseMainButtonState extends State<_PlayPauseMainButton>
                 child: StreamBuilder<ProcessingState>(
                   stream: widget.playerProvider.processingStateStream,
                   builder: (context, stateSnapshot) {
-                    final state =
-                        stateSnapshot.data ?? ProcessingState.idle;
-                    final bool loading = state == ProcessingState.loading ||
+                    final state = stateSnapshot.data ?? ProcessingState.idle;
+                    final bool loading =
+                        state == ProcessingState.loading ||
                         state == ProcessingState.buffering;
                     return AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
@@ -1492,8 +1635,10 @@ class VisualSyncModel {
 
     // Bass: heavy — combines the slow swell, the beat body and the punchy kick.
     final double swell = 0.5 + 0.5 * math.sin(_t * 0.8 + _s1);
-    bass = ((0.28 * swell + 0.30 * sub + 0.42 * beat) * bassMultiplier)
-        .clamp(0.0, 1.6);
+    bass = ((0.28 * swell + 0.30 * sub + 0.42 * beat) * bassMultiplier).clamp(
+      0.0,
+      1.6,
+    );
 
     // Vocal / mid: smooth undulation on a half-beat cadence.
     final double v1 = 0.5 + 0.5 * math.sin(_beatPhase * math.pi + _s2);
@@ -1505,12 +1650,15 @@ class VisualSyncModel {
     treble = ((0.4 + 0.6 * tr) * trebleMultiplier).clamp(0.0, 1.5);
 
     // Air: very-high sparkle at 8× the beat — the top-end shimmer above treble.
-    final double airOsc = 0.5 + 0.5 * math.sin(_beatPhase * 8 * math.pi + _s2 * 3);
+    final double airOsc =
+        0.5 + 0.5 * math.sin(_beatPhase * 8 * math.pi + _s2 * 3);
     air = ((0.3 + 0.7 * airOsc) * trebleMultiplier).clamp(0.0, 1.3);
 
     // Overall energy — a believable RMS used for global brightness / breathing.
-    energy = (0.48 * bass + 0.30 * vocal + 0.14 * treble + 0.08 * air)
-        .clamp(0.0, 1.3);
+    energy = (0.48 * bass + 0.30 * vocal + 0.14 * treble + 0.08 * air).clamp(
+      0.0,
+      1.3,
+    );
 
     // Musical structure: a 4-beat bar. [beatCount] is the running beat index,
     // [barPhase] sweeps 0→1 across each bar and [barPulse] fires on the downbeat
@@ -1553,14 +1701,22 @@ class VisualSyncModel {
     final double subPhase = bp * 0.5;
     final double subFrac = subPhase - subPhase.floorToDouble();
     final double sb = 0.35 + 0.65 * math.exp(-2.0 * subFrac);
-    final double bassE = ((0.28 * swell + 0.30 * sb + 0.42 * bt) * bassMultiplier)
-        .clamp(0.0, 1.6);
+    final double bassE =
+        ((0.28 * swell + 0.30 * sb + 0.42 * bt) * bassMultiplier).clamp(
+          0.0,
+          1.6,
+        );
     final double v1 = 0.5 + 0.5 * math.sin(bp * math.pi + _s2);
     final double v2 = 0.5 + 0.5 * math.sin(t * 2.3 + _s3);
-    final double vocalE =
-        ((0.55 * v1 + 0.45 * v2) * vocalMultiplier).clamp(0.0, 1.5);
+    final double vocalE = ((0.55 * v1 + 0.45 * v2) * vocalMultiplier).clamp(
+      0.0,
+      1.5,
+    );
     final double tr = 0.5 + 0.5 * math.sin(bp * 4 * math.pi + _s1 * 2);
-    final double trebleE = ((0.4 + 0.6 * tr) * trebleMultiplier).clamp(0.0, 1.5);
+    final double trebleE = ((0.4 + 0.6 * tr) * trebleMultiplier).clamp(
+      0.0,
+      1.5,
+    );
     if (n < 0.25) {
       final double local = 0.5 + 0.5 * math.sin(n * 12 + _s1 + t * 2.0);
       return (0.15 + 0.85 * bassE) * (0.6 + 0.4 * local);
@@ -1631,11 +1787,11 @@ class VisualSyncModel {
   /// Secondary highlight colour derived from [peakHue] — the bright "peak" end
   /// of a two-tone gradient, shimmering a touch with the air band for depth.
   Color get peakColor => HSVColor.fromAHSV(
-        1.0,
-        (peakHue * 360) % 360,
-        0.60,
-        (0.80 + 0.20 * air).clamp(0.0, 1.0),
-      ).toColor();
+    1.0,
+    (peakHue * 360) % 360,
+    0.60,
+    (0.80 + 0.20 * air).clamp(0.0, 1.0),
+  ).toColor();
 
   /// Colours cycled by [hue], reused by every painter for a consistent palette.
   List<Color> shiftColors(List<Color> colors) {
@@ -1710,8 +1866,9 @@ class BarsVisualizerPainter extends CustomPainter {
 
     // Bass-reactive palette — colour brightens & shifts on every kick.
     final shiftedColors = model.dynamicColors(colors);
-    final Color accent =
-        shiftedColors.isNotEmpty ? shiftedColors.first : Colors.white;
+    final Color accent = shiftedColors.isNotEmpty
+        ? shiftedColors.first
+        : Colors.white;
     final double midY = size.height / 2;
 
     final Paint glowPaint = Paint()..style = PaintingStyle.fill;
@@ -1719,15 +1876,20 @@ class BarsVisualizerPainter extends CustomPainter {
 
     if (shiftedColors.isNotEmpty) {
       // Fold the secondary peak colour into the gradient for two-tone depth.
-      final gradientColors = [...shiftedColors, model.peakColor, shiftedColors.first];
+      final gradientColors = [
+        ...shiftedColors,
+        model.peakColor,
+        shiftedColors.first,
+      ];
       final shaderRect = Rect.fromLTWH(0, 0, size.width, size.height);
       glowPaint.shader = LinearGradient(
         colors: gradientColors
             .map((c) => c.withValues(alpha: 0.20 + 0.28 * model.bassGlow))
             .toList(),
       ).createShader(shaderRect);
-      corePaint.shader =
-          LinearGradient(colors: gradientColors).createShader(shaderRect);
+      corePaint.shader = LinearGradient(
+        colors: gradientColors,
+      ).createShader(shaderRect);
     } else {
       glowPaint.color = Colors.white.withValues(alpha: 0.20);
       corePaint.color = Colors.white;
@@ -1736,7 +1898,10 @@ class BarsVisualizerPainter extends CustomPainter {
     // A soft baseline that swells with the bass and flashes on the downbeat —
     // anchors the spectrum and adds the 4-beat structural pulse.
     if (isPlaying) {
-      final double baseGlow = (model.bassGlow + 0.4 * model.barPulse).clamp(0.0, 1.0);
+      final double baseGlow = (model.bassGlow + 0.4 * model.barPulse).clamp(
+        0.0,
+        1.0,
+      );
       final Paint basePaint = Paint()
         ..color = accent.withValues(alpha: 0.10 + 0.35 * baseGlow)
         ..strokeWidth = 1.0 + 2.5 * baseGlow
@@ -1750,8 +1915,9 @@ class BarsVisualizerPainter extends CustomPainter {
     for (int i = 0; i < barCount; i++) {
       final double n = barCount == 1 ? 0.0 : i / (barCount - 1);
       // Smoothed band energy (attack/decay) → bars glide instead of snapping.
-      final double factor =
-          isPlaying ? (0.06 + 0.9 * model.sampleSmooth(n)).clamp(0.06, 1.0) : 0.06;
+      final double factor = isPlaying
+          ? (0.06 + 0.9 * model.sampleSmooth(n)).clamp(0.06, 1.0)
+          : 0.06;
 
       // Centre-anchored, mirrored spectrum → the premium symmetric equalizer.
       final double half = (midY * factor);
@@ -1771,9 +1937,10 @@ class BarsVisualizerPainter extends CustomPainter {
       // toward the peak colour on the bass for a lit, premium accent.
       if (quality > 0 && isPlaying) {
         final Color capColor = Color.lerp(
-            model.peakColor,
-            Colors.white,
-            (0.3 + 0.4 * model.bassGlow + 0.2 * model.air).clamp(0.0, 1.0))!;
+          model.peakColor,
+          Colors.white,
+          (0.3 + 0.4 * model.bassGlow + 0.2 * model.air).clamp(0.0, 1.0),
+        )!;
         capPaint.color = capColor.withValues(alpha: 0.85);
         final double capR =
             (width / 2) * (0.85 + 0.4 * model.beat + 0.25 * model.air);
@@ -1785,14 +1952,16 @@ class BarsVisualizerPainter extends CustomPainter {
       // then drifts down slowly (the classic equalizer "peak meter"). It floats
       // above the live bar, so there is always visible motion even between hits.
       if (quality > 0 && isPlaying) {
-        final double peak =
-            (0.06 + 0.9 * model.samplePeak(n)).clamp(0.06, 1.0);
+        final double peak = (0.06 + 0.9 * model.samplePeak(n)).clamp(0.06, 1.0);
         final double peakHalf = midY * peak;
         const double capH = 2.5;
         final Paint peakPaint = Paint()
           ..style = PaintingStyle.fill
-          ..color = Color.lerp(model.peakColor, Colors.white, 0.55)!
-              .withValues(alpha: 0.9);
+          ..color = Color.lerp(
+            model.peakColor,
+            Colors.white,
+            0.55,
+          )!.withValues(alpha: 0.9);
         canvas.drawRRect(
           RRect.fromRectAndRadius(
             Rect.fromLTWH(x, midY - peakHalf - capH, width, capH),
@@ -1862,8 +2031,9 @@ class CircularVisualizerPainter extends CustomPainter {
 
     // Bass-reactive palette — hue nudges and brightens on every kick.
     final shiftedColors = model.dynamicColors(colors);
-    final Color accent =
-        shiftedColors.isNotEmpty ? shiftedColors.first : Colors.white;
+    final Color accent = shiftedColors.isNotEmpty
+        ? shiftedColors.first
+        : Colors.white;
 
     final Paint glowPaint = Paint()
       ..strokeWidth = 9.0
@@ -1877,17 +2047,20 @@ class CircularVisualizerPainter extends CustomPainter {
       final gradientColors = [
         ...shiftedColors,
         model.peakColor,
-        shiftedColors.first
+        shiftedColors.first,
       ];
-      final shaderRect =
-          Rect.fromCircle(center: Offset(center, center), radius: radius * 1.6);
+      final shaderRect = Rect.fromCircle(
+        center: Offset(center, center),
+        radius: radius * 1.6,
+      );
       glowPaint.shader = SweepGradient(
         colors: gradientColors
             .map((c) => c.withValues(alpha: 0.22 + 0.20 * model.bassGlow))
             .toList(),
       ).createShader(shaderRect);
-      corePaint.shader =
-          SweepGradient(colors: gradientColors).createShader(shaderRect);
+      corePaint.shader = SweepGradient(
+        colors: gradientColors,
+      ).createShader(shaderRect);
     } else {
       glowPaint.color = Colors.white.withValues(alpha: 0.20);
       corePaint.color = Colors.white;
@@ -1925,8 +2098,7 @@ class CircularVisualizerPainter extends CustomPainter {
     // 1b. Beat shockwaves — 2 rings that expand outward and fade on each beat.
     if (isPlaying && quality > 0) {
       for (int r = 0; r < 2; r++) {
-        final double phase =
-            ((model._beatPhase + r * 0.5) % 1.0);
+        final double phase = ((model._beatPhase + r * 0.5) % 1.0);
         final double ringR = currentRadius + phase * (radius * 0.9);
         final double ringA = (1.0 - phase) * 0.5 * (0.5 + 0.5 * model.bassGlow);
         if (ringA <= 0.02) continue;
@@ -1942,7 +2114,8 @@ class CircularVisualizerPainter extends CustomPainter {
 
       // 1c. Structural downbeat ring — a bigger, slower halo that expands once
       //     per 4-beat bar (barPulse), giving the visual a sense of song form.
-      final double barR = currentRadius + (1.0 - model.barPulse) * (radius * 1.3);
+      final double barR =
+          currentRadius + (1.0 - model.barPulse) * (radius * 1.3);
       final double barA = model.barPulse * 0.45;
       if (barA > 0.02) {
         canvas.drawCircle(
@@ -1964,21 +2137,23 @@ class CircularVisualizerPainter extends CustomPainter {
         final double pAngle =
             (p * 2 * math.pi) / particleCount + model.rotation * 0.4;
         final double progress = ((flow + p / particleCount) % 1.0);
-        final double pRadius = currentRadius +
+        final double pRadius =
+            currentRadius +
             12 +
             (progress *
                 (70 + 40 * model.bass + 18 * model.vocal + 24 * model.kick));
-        final double pSize =
-            (4.2 - progress * 2.0) * (1.0 + 0.6 * model.kick);
-        final double pOpacity = (0.55 + 0.4 * model.bassGlow) * (1.0 - progress);
+        final double pSize = (4.2 - progress * 2.0) * (1.0 + 0.6 * model.kick);
+        final double pOpacity =
+            (0.55 + 0.4 * model.bassGlow) * (1.0 - progress);
         final double px = pRadius * math.cos(pAngle);
         final double py = pRadius * math.sin(pAngle);
         final Paint pPaint = Paint()
           ..style = PaintingStyle.fill
-          ..color = (shiftedColors.isNotEmpty
-                  ? shiftedColors[p % shiftedColors.length]
-                  : Colors.white)
-              .withValues(alpha: pOpacity.clamp(0.0, 1.0));
+          ..color =
+              (shiftedColors.isNotEmpty
+                      ? shiftedColors[p % shiftedColors.length]
+                      : Colors.white)
+                  .withValues(alpha: pOpacity.clamp(0.0, 1.0));
         canvas.drawCircle(Offset(px, py), pSize, pPaint);
       }
     }
@@ -1993,7 +2168,9 @@ class CircularVisualizerPainter extends CustomPainter {
       // audio ring (bass at the sides, treble at top/bottom) instead of a
       // scattered pattern — every bar is still a pure function of the band model.
       final double nSym = 1.0 - (2.0 * (i / lineCount) - 1.0).abs();
-      final double factor = isPlaying ? (0.05 + 0.85 * model.sample(nSym)) : 0.05;
+      final double factor = isPlaying
+          ? (0.05 + 0.85 * model.sample(nSym))
+          : 0.05;
 
       final double startR = currentRadius + 6;
       final double endR = currentRadius + 6 + (radius * factor);
@@ -2006,8 +2183,7 @@ class CircularVisualizerPainter extends CustomPainter {
       final double endY = endR * sinA;
 
       if (quality > 0) {
-        canvas.drawLine(
-            Offset(startX, startY), Offset(endX, endY), glowPaint);
+        canvas.drawLine(Offset(startX, startY), Offset(endX, endY), glowPaint);
       }
       canvas.drawLine(Offset(startX, startY), Offset(endX, endY), corePaint);
 
@@ -2028,7 +2204,8 @@ class CircularVisualizerPainter extends CustomPainter {
       final int sparkleCount = quality == 2 ? 26 : 14;
       final double twinkle = model.timeMs / 1000.0 * 3.0;
       for (int s = 0; s < sparkleCount; s++) {
-        final double a = (s * 2 * math.pi) / sparkleCount - model.rotation * 0.8;
+        final double a =
+            (s * 2 * math.pi) / sparkleCount - model.rotation * 0.8;
         final double flick =
             0.5 + 0.5 * math.sin(twinkle + s * 1.7 + _sparkleSeed(s));
         final double sA = (model.air * flick - 0.35).clamp(0.0, 1.0);
@@ -2101,12 +2278,15 @@ class FluidWaveformPainter extends CustomPainter {
 
     // Bass-reactive palette — colours brighten & shift on every kick.
     final shiftedColors = model.dynamicColors(colors);
-    final Color color1 =
-        shiftedColors.isNotEmpty ? shiftedColors[0] : Colors.blue;
-    final Color color2 =
-        shiftedColors.length > 1 ? shiftedColors[1] : Colors.purple;
-    final Color color3 =
-        shiftedColors.length > 2 ? shiftedColors[2] : Colors.pink;
+    final Color color1 = shiftedColors.isNotEmpty
+        ? shiftedColors[0]
+        : Colors.blue;
+    final Color color2 = shiftedColors.length > 1
+        ? shiftedColors[1]
+        : Colors.purple;
+    final Color color3 = shiftedColors.length > 2
+        ? shiftedColors[2]
+        : Colors.pink;
 
     final double t = model.timeMs / 1000.0;
     // Wave travel is tied to real time, and heights come from the band model —
@@ -2122,7 +2302,10 @@ class FluidWaveformPainter extends CustomPainter {
     // song-structured body. Its colour leans toward the secondary peak hue.
     if (isPlaying && quality > 0) {
       final double bloomA =
-          (0.10 + 0.28 * model.bassGlow + 0.14 * model.barPulse).clamp(0.0, 0.6);
+          (0.10 + 0.28 * model.bassGlow + 0.14 * model.barPulse).clamp(
+            0.0,
+            0.6,
+          );
       final Color bloomColor = Color.lerp(color1, model.peakColor, 0.35)!;
       final Paint bloom = Paint()
         ..style = PaintingStyle.fill
@@ -2142,7 +2325,10 @@ class FluidWaveformPainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [c.withValues(alpha: a0), c.withValues(alpha: a1)],
+        colors: [
+          c.withValues(alpha: a0),
+          c.withValues(alpha: a1),
+        ],
       ).createShader(shaderRect);
 
     // Builds one wave layer. [offset] shifts its centre line; [amp] is its peak
@@ -2150,8 +2336,14 @@ class FluidWaveformPainter extends CustomPainter {
     // [mirror] flips it above the centre line and closes to the top edge, so a
     // faint reflected copy can be drawn for a symmetric, premium waveform.
     Path buildWave(
-        double offset, double amp, double k1, double k2, double phase,
-        {required bool closed, bool mirror = false}) {
+      double offset,
+      double amp,
+      double k1,
+      double k2,
+      double phase, {
+      required bool closed,
+      bool mirror = false,
+    }) {
       final double dir = mirror ? -1.0 : 1.0;
       // Per-layer phase seed so the three layers use distinct — but fully
       // deterministic — noise fields (no Random).
@@ -2190,69 +2382,91 @@ class FluidWaveformPainter extends CustomPainter {
 
     // Amplitudes get an extra push from the live bass glow so peaks punch harder.
     final double bassAmp =
-        (isPlaying ? 34.0 : 3.0) * bassMultiplier * (1.0 + 0.5 * model.bassGlow);
+        (isPlaying ? 34.0 : 3.0) *
+        bassMultiplier *
+        (1.0 + 0.5 * model.bassGlow);
     final double vocalAmp =
-        (isPlaying ? 22.0 : 2.0) * vocalMultiplier * (1.0 + 0.3 * model.bassGlow);
-    final double trebleAmp = (isPlaying ? 13.0 : 1.0) *
+        (isPlaying ? 22.0 : 2.0) *
+        vocalMultiplier *
+        (1.0 + 0.3 * model.bassGlow);
+    final double trebleAmp =
+        (isPlaying ? 13.0 : 1.0) *
         trebleMultiplier *
         (1.0 + 0.2 * model.treble);
 
     // Faint mirrored reflection above the centre line (symmetry = premium feel).
     if (isPlaying && quality > 0) {
       canvas.drawPath(
-          buildWave(0, bassAmp, 0.007, 0.013, phase1, closed: true, mirror: true),
-          fill(color1, 0.0, 0.20));
+        buildWave(0, bassAmp, 0.007, 0.013, phase1, closed: true, mirror: true),
+        fill(color1, 0.0, 0.20),
+      );
       canvas.drawPath(
-          buildWave(4, vocalAmp, 0.018, 0.035, phase2,
-              closed: true, mirror: true),
-          fill(color2, 0.0, 0.14));
+        buildWave(
+          4,
+          vocalAmp,
+          0.018,
+          0.035,
+          phase2,
+          closed: true,
+          mirror: true,
+        ),
+        fill(color2, 0.0, 0.14),
+      );
     }
 
     // Fills
     canvas.drawPath(
-        buildWave(0, bassAmp, 0.007, 0.013, phase1, closed: true),
-        fill(color1, 0.45, 0.02));
+      buildWave(0, bassAmp, 0.007, 0.013, phase1, closed: true),
+      fill(color1, 0.45, 0.02),
+    );
     canvas.drawPath(
-        buildWave(4, vocalAmp, 0.018, 0.035, phase2, closed: true),
-        fill(color2, 0.35, 0.01));
+      buildWave(4, vocalAmp, 0.018, 0.035, phase2, closed: true),
+      fill(color2, 0.35, 0.01),
+    );
     canvas.drawPath(
-        buildWave(-6, trebleAmp, 0.07, 0.13, phase3, closed: true),
-        fill(color3, 0.25, 0.0));
+      buildWave(-6, trebleAmp, 0.07, 0.13, phase3, closed: true),
+      fill(color3, 0.25, 0.0),
+    );
 
     // Crisp border strokes on top — the bass line glows harder on the kick.
     canvas.drawPath(
-        buildWave(0, bassAmp, 0.007, 0.013, phase1, closed: false),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0 + 1.5 * model.bassGlow
-          ..color = color1.withValues(alpha: 0.8)
-          ..maskFilter = quality > 0
-              ? MaskFilter.blur(BlurStyle.normal, 1.0 + 3.0 * model.bassGlow)
-              : null);
+      buildWave(0, bassAmp, 0.007, 0.013, phase1, closed: false),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0 + 1.5 * model.bassGlow
+        ..color = color1.withValues(alpha: 0.8)
+        ..maskFilter = quality > 0
+            ? MaskFilter.blur(BlurStyle.normal, 1.0 + 3.0 * model.bassGlow)
+            : null,
+    );
     canvas.drawPath(
-        buildWave(4, vocalAmp, 0.018, 0.035, phase2, closed: false),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..color = color2.withValues(alpha: 0.7));
+      buildWave(4, vocalAmp, 0.018, 0.035, phase2, closed: false),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = color2.withValues(alpha: 0.7),
+    );
     canvas.drawPath(
-        buildWave(-6, trebleAmp, 0.07, 0.13, phase3, closed: false),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.0
-          ..color = color3.withValues(alpha: 0.5));
+      buildWave(-6, trebleAmp, 0.07, 0.13, phase3, closed: false),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..color = color3.withValues(alpha: 0.5),
+    );
 
     // Air shimmer highlight — a thin, fast top line in the secondary peak colour
     // whose brightness flickers with the air band, adding crisp gradient depth.
     if (isPlaying && quality > 0) {
       final double airTrebleAmp = trebleAmp * 1.15;
       canvas.drawPath(
-          buildWave(-6, airTrebleAmp, 0.11, 0.22, phase3 * 1.6, closed: false),
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.0
-            ..color = model.peakColor
-                .withValues(alpha: (0.25 + 0.55 * model.air).clamp(0.0, 0.9)));
+        buildWave(-6, airTrebleAmp, 0.11, 0.22, phase3 * 1.6, closed: false),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0
+          ..color = model.peakColor.withValues(
+            alpha: (0.25 + 0.55 * model.air).clamp(0.0, 0.9),
+          ),
+      );
     }
   }
 
@@ -2321,7 +2535,8 @@ class TonearmPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFFDCDCDC) // Metallic silver
+      ..color =
+          const Color(0xFFDCDCDC) // Metallic silver
       ..strokeWidth = 3.5
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
@@ -2334,10 +2549,29 @@ class TonearmPainter extends CustomPainter {
     final pivot = Offset(size.width / 2, 16);
 
     // Anchor base rings (3D look)
-    canvas.drawCircle(pivot, 14, Paint()..color = Colors.black26..style = PaintingStyle.fill);
+    canvas.drawCircle(
+      pivot,
+      14,
+      Paint()
+        ..color = Colors.black26
+        ..style = PaintingStyle.fill,
+    );
     canvas.drawCircle(pivot, 12, darkPaint);
-    canvas.drawCircle(pivot, 12, Paint()..color = const Color(0xFF444454)..style = PaintingStyle.stroke..strokeWidth = 2);
-    canvas.drawCircle(pivot, 6, Paint()..color = const Color(0xFF888898)..style = PaintingStyle.fill);
+    canvas.drawCircle(
+      pivot,
+      12,
+      Paint()
+        ..color = const Color(0xFF444454)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+    canvas.drawCircle(
+      pivot,
+      6,
+      Paint()
+        ..color = const Color(0xFF888898)
+        ..style = PaintingStyle.fill,
+    );
 
     // Curved metallic rod starting from pivot
     final path = Path()
@@ -2355,11 +2589,11 @@ class TonearmPainter extends CustomPainter {
     final cartridgePaint = Paint()
       ..color = const Color(0xFF161622)
       ..style = PaintingStyle.fill;
-    
+
     canvas.save();
     canvas.translate(pivot.dx + 6, pivot.dy + size.height * 0.88);
     canvas.rotate(0.25); // Cartridge offset angle
-    
+
     // Draw cartridge shadow & block
     canvas.drawRRect(
       RRect.fromRectAndRadius(
@@ -2373,18 +2607,24 @@ class TonearmPainter extends CustomPainter {
         const Rect.fromLTWH(-6, 0, 12, 22),
         const Radius.circular(3),
       ),
-      Paint()..color = const Color(0xFF555565)..style = PaintingStyle.stroke..strokeWidth = 1.0,
+      Paint()
+        ..color = const Color(0xFF555565)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
     );
-    
+
     // Stylus needle tip highlight (vibrant red dot)
     canvas.drawCircle(
       const Offset(0, 18),
       2.2,
-      Paint()..color = const Color(0xFFFF3B30)..style = PaintingStyle.fill,
+      Paint()
+        ..color = const Color(0xFFFF3B30)
+        ..style = PaintingStyle.fill,
     );
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant TonearmPainter oldDelegate) => oldDelegate.angle != angle;
+  bool shouldRepaint(covariant TonearmPainter oldDelegate) =>
+      oldDelegate.angle != angle;
 }

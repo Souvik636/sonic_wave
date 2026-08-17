@@ -53,7 +53,15 @@ class YtDlpDownloader {
 
   /// Extensions yt-dlp may leave behind as the audio artifact.
   static const List<String> _audioExts = [
-    'm4a', 'mp3', 'opus', 'webm', 'ogg', 'aac', 'flac', 'wav', 'mp4'
+    'm4a',
+    'mp3',
+    'opus',
+    'webm',
+    'ogg',
+    'aac',
+    'flac',
+    'wav',
+    'mp4',
   ];
 
   static const List<String> _imageExts = ['jpg', 'jpeg', 'png', 'webp'];
@@ -89,7 +97,9 @@ class YtDlpDownloader {
 
     if (!await YtDlpRuntime.ensureInitialized()) {
       DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
-        'videoId': videoId, 'ok': false, 'reason': 'runtime_unavailable',
+        'videoId': videoId,
+        'ok': false,
+        'reason': 'runtime_unavailable',
       });
       throw Exception('yt-dlp runtime unavailable');
     }
@@ -121,8 +131,10 @@ class YtDlpDownloader {
       final sorter = YouTubeService.ytDlpAudioSorter(quality);
 
       DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
-        'videoId': videoId, 'phase': 'start',
-        'quality': quality.name, 'format': formatChain,
+        'videoId': videoId,
+        'phase': 'start',
+        'quality': quality.name,
+        'format': formatChain,
       });
 
       final request = DownloadRequest(
@@ -166,17 +178,23 @@ class YtDlpDownloader {
       const downloadDeadline = Duration(minutes: 8);
       final result = await YoutubeDLFlutter.instance
           .download(request)
-          .timeout(downloadDeadline, onTimeout: () {
-        throw TimeoutException(
-            'yt-dlp download exceeded ${downloadDeadline.inMinutes} min',
-            downloadDeadline);
-      });
+          .timeout(
+            downloadDeadline,
+            onTimeout: () {
+              throw TimeoutException(
+                'yt-dlp download exceeded ${downloadDeadline.inMinutes} min',
+                downloadDeadline,
+              );
+            },
+          );
       onProgress?.call(0.95);
 
       if (result.status != OperationStatus.success) {
         sw.stop();
         DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
-          'videoId': videoId, 'ok': false, 'elapsed_ms': sw.elapsedMilliseconds,
+          'videoId': videoId,
+          'ok': false,
+          'elapsed_ms': sw.elapsedMilliseconds,
           'reason': 'bad_status',
           'error': result.errorMessage ?? 'yt-dlp download failed',
         });
@@ -188,7 +206,9 @@ class YtDlpDownloader {
       if (audioPath == null) {
         sw.stop();
         DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
-          'videoId': videoId, 'ok': false, 'elapsed_ms': sw.elapsedMilliseconds,
+          'videoId': videoId,
+          'ok': false,
+          'elapsed_ms': sw.elapsedMilliseconds,
           'reason': 'no_audio_file',
         });
         throw Exception('yt-dlp reported success but wrote no audio file');
@@ -197,10 +217,14 @@ class YtDlpDownloader {
       YtDlpRuntime.markHealthy();
       final embedded = await ID3TagWriter.hasEmbeddedCover(File(audioPath));
       sw.stop();
-      debugPrint('[yt-dlp] Downloaded $videoId -> $audioPath '
-          '(embeddedArt=$embedded, sidecar=${artifacts.thumbnail != null})');
+      debugPrint(
+        '[yt-dlp] Downloaded $videoId -> $audioPath '
+        '(embeddedArt=$embedded, sidecar=${artifacts.thumbnail != null})',
+      );
       DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
-        'videoId': videoId, 'ok': true, 'elapsed_ms': sw.elapsedMilliseconds,
+        'videoId': videoId,
+        'ok': true,
+        'elapsed_ms': sw.elapsedMilliseconds,
         'embedded_art': embedded,
         'has_sidecar': artifacts.thumbnail != null,
         'ext': audioPath.split('.').last,
@@ -214,7 +238,9 @@ class YtDlpDownloader {
     } catch (e) {
       sw.stop();
       DiagnosticLogService().log(DiagnosticLogService.downloadYtdlp, {
-        'videoId': videoId, 'ok': false, 'elapsed_ms': sw.elapsedMilliseconds,
+        'videoId': videoId,
+        'ok': false,
+        'elapsed_ms': sw.elapsedMilliseconds,
         'error': e.toString(),
       });
       rethrow;
@@ -274,8 +300,7 @@ class YtDlpDownloader {
     return _Artifacts(audio, thumb);
   }
 
-  static String _basename(String path) =>
-      path.split(RegExp(r'[/\\]')).last;
+  static String _basename(String path) => path.split(RegExp(r'[/\\]')).last;
 }
 
 class _Artifacts {
