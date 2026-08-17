@@ -1154,6 +1154,15 @@ class PlayerProvider extends ChangeNotifier {
             pitchMultiplier = 0.97;
           }
           break;
+        case SoundEnhancer.electronic:
+        case SoundEnhancer.rockMetal:
+        case SoundEnhancer.hipHop:
+        case SoundEnhancer.pop:
+        case SoundEnhancer.acoustic:
+        case SoundEnhancer.jazzBlues:
+        case SoundEnhancer.nightMode:
+          // Genre EQ curves are handled natively by Android Equalizer
+          break;
       }
 
       _audioHandler.setSpeedAndPitch(speedMultiplier * _playbackSpeed, pitchMultiplier);

@@ -26,6 +26,12 @@ class ReleaseAsset {
     required this.downloadUrl,
   });
 
+  String get formattedSize {
+    if (size <= 0) return 'APK Binary';
+    if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)} KB';
+    return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
   /// Regex pattern to strictly match Android 64-Bit (arm64-v8a) APK release assets.
   static final RegExp arm64Pattern = RegExp(
     r'^(?=.*(apk|android|sonicwave))(?=.*(arm64|arm64-v8a|v8a|release|app)).*\.apk$',

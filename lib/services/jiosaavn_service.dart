@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/song.dart';
+import 'encoding_sanitizer.dart';
 
 class JioSaavnService {
   static final JioSaavnService _instance = JioSaavnService._internal();
@@ -148,13 +149,16 @@ class JioSaavnService {
         if (data is! Map) continue;
 
         final id = entry.key;
-        final name = (data['song'] ?? data['title'] ?? '').toString().trim();
-        if (id.isEmpty || name.isEmpty) continue;
+        final rawName = (data['song'] ?? data['title'] ?? '').toString().trim();
+        if (id.isEmpty || rawName.isEmpty) continue;
 
-        final artistName = (data['primary_artists'] ?? data['singers'] ?? 'JioSaavn Artist').toString();
+        final rawArtist = (data['primary_artists'] ?? data['singers'] ?? 'JioSaavn Artist').toString();
+        final rawImage = (data['image'] ?? '').toString();
 
-        final imageUrl = (data['image'] ?? '').toString().replaceAll('150x150', '500x500');
-        final lowResImage = (data['image'] ?? '').toString();
+        final name = EncodingSanitizer.sanitize(rawName);
+        final artistName = EncodingSanitizer.sanitize(rawArtist);
+        final imageUrl = EncodingSanitizer.sanitizeThumbnailUrl(rawImage);
+        final lowResImage = EncodingSanitizer.sanitizeThumbnailUrl(rawImage);
 
         final durationSecs = data['duration'] is num
             ? (data['duration'] as num).toInt()
@@ -163,8 +167,8 @@ class JioSaavnService {
         songs.add(Song(
           id: 'jiosaavn_$id',
           videoId: 'jiosaavn_$id',
-          title: name,
-          artist: artistName,
+          title: name.isNotEmpty ? name : 'Unknown Track',
+          artist: artistName.isNotEmpty ? artistName : 'JioSaavn Artist',
           thumbnailUrl: lowResImage,
           highResThumbnailUrl: imageUrl,
           duration: Duration(seconds: durationSecs),

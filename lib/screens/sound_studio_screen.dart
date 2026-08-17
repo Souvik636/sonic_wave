@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
@@ -7,8 +9,9 @@ import '../theme/app_colors.dart';
 import '../widgets/app_toast.dart';
 
 /// Ultra-Premium Sound Studio Pro Screen
-/// Interactive 5-Band Equalizer, Preset Selector, Speed & Pitch Shifter,
-/// Karaoke Mode Attenuator, and Animated Frequency Visualizer Meter.
+/// Interactive 5-Band Equalizer, 12-Genre Preset Library, Bezier EQ Curve
+/// Visualizer, A/B Bypass, Custom Preset Save, Speed & Pitch Shifter,
+/// Karaoke Mode Attenuator, and Crossfade controls.
 class SoundStudioScreen extends StatefulWidget {
   const SoundStudioScreen({super.key});
 
@@ -16,15 +19,32 @@ class SoundStudioScreen extends StatefulWidget {
   State<SoundStudioScreen> createState() => _SoundStudioScreenState();
 }
 
-class _SoundStudioScreenState extends State<SoundStudioScreen> {
-  final List<String> _eqLabels = ['60Hz', '230Hz', '910Hz', '3.6kHz', '14kHz'];
+class _SoundStudioScreenState extends State<SoundStudioScreen>
+    with SingleTickerProviderStateMixin {
+  final List<String> _eqLabels    = ['60Hz', '230Hz', '910Hz', '3.6kHz', '14kHz'];
   final List<String> _eqSubLabels = ['Sub Bass', 'Bass', 'Midrange', 'Upper Mid', 'Treble'];
+
+  // Tracks the previous-preset gains for A/B bypass restore
+  List<double> _bypassRestoreGains = [0.0, 0.0, 0.0, 0.0, 0.0];
+  bool _bypassActive = false;
+
+  // Haptic boundary tracking per slider to fire only once per crossing
+  final List<double?> _lastHapticValue = [null, null, null, null, null];
+
+  // Text controller for save-preset dialog
+  final TextEditingController _presetNameCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _presetNameCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final settings = Provider.of<SettingsProvider>(context);
+    final settings      = Provider.of<SettingsProvider>(context);
     final playerProvider = Provider.of<PlayerProvider>(context);
-    final primary = Theme.of(context).colorScheme.primary;
+    final primary       = Theme.of(context).colorScheme.primary;
 
     final gains = settings.useCustomEqualizer
         ? settings.customEqualizerGains
@@ -42,7 +62,7 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
         title: Column(
           children: [
             Text(
-              'SOUND ENHANCER',
+              'SOUND STUDIO PRO',
               style: GoogleFonts.outfit(
                 color: primary,
                 fontSize: 11,
@@ -63,10 +83,23 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
         ),
         centerTitle: true,
         actions: [
+          // A/B Bypass button
+          Tooltip(
+            message: _bypassActive ? 'Restore EQ' : 'A/B Bypass',
+            child: IconButton(
+              icon: Icon(
+                _bypassActive ? Icons.compare_arrows_rounded : Icons.swap_horiz_rounded,
+                color: _bypassActive ? Colors.orangeAccent : AppColors.textSecondary,
+              ),
+              onPressed: () => _toggleBypass(settings, gains),
+            ),
+          ),
+          // Reset all button
           IconButton(
             icon: const Icon(Icons.restart_alt_rounded, color: AppColors.textSecondary),
             tooltip: 'Reset EQ',
             onPressed: () {
+              _bypassActive = false;
               settings.setUseCustomEqualizer(false);
               settings.setSoundEnhancer(SoundEnhancer.none);
               playerProvider.setPlaybackSpeed(1.0);
@@ -87,8 +120,8 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
 
               const SizedBox(height: 20),
 
-              // Animated Frequency Meter & Equalizer Header
-              _buildFrequencyMeter(context, gains, primary),
+              // Bezier EQ Curve Visualizer
+              _buildBezierEqCurve(context, gains, primary),
 
               const SizedBox(height: 20),
 
@@ -98,17 +131,61 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
               const SizedBox(height: 24),
 
               // Preset Selector Section
-              Text(
-                'STUDIO PRESETS',
-                style: GoogleFonts.outfit(
-                  color: AppColors.textTertiary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'STUDIO PRESETS',
+                    style: GoogleFonts.outfit(
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  if (settings.useCustomEqualizer)
+                    GestureDetector(
+                      onTap: () => _showSavePresetDialog(context, settings, gains),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: primary.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.save_rounded, color: primary, size: 14),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Save Preset',
+                              style: GoogleFonts.inter(color: primary, fontSize: 11.5, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 10),
               _buildPresetChips(context, settings, playerProvider, primary),
+
+              // User custom presets row (shown only if any saved)
+              if (settings.customPresets.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'MY PRESETS',
+                  style: GoogleFonts.outfit(
+                    color: AppColors.textTertiary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildUserPresetChips(context, settings, primary),
+              ],
 
               const SizedBox(height: 24),
 
@@ -148,6 +225,85 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────
+  // A/B bypass
+  // ─────────────────────────────────────────────────────────
+  void _toggleBypass(SettingsProvider settings, List<double> currentGains) {
+    HapticFeedback.lightImpact();
+    if (!_bypassActive) {
+      // Store current gains so we can restore them
+      _bypassRestoreGains = List.from(currentGains);
+      _bypassActive = true;
+      // Apply flat instantly without persisting
+      settings.setCustomEqualizerGains([0.0, 0.0, 0.0, 0.0, 0.0]);
+      settings.setUseCustomEqualizer(true);
+    } else {
+      _bypassActive = false;
+      settings.setCustomEqualizerGains(_bypassRestoreGains);
+      settings.setUseCustomEqualizer(true);
+    }
+    setState(() {});
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Save preset dialog
+  // ─────────────────────────────────────────────────────────
+  void _showSavePresetDialog(BuildContext ctx, SettingsProvider settings, List<double> gains) {
+    _presetNameCtrl.clear();
+    final primary = Theme.of(ctx).colorScheme.primary;
+    showDialog<void>(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Save Preset', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: _presetNameCtrl,
+          autofocus: true,
+          style: GoogleFonts.inter(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: 'e.g. My Night Mix',
+            hintStyle: GoogleFonts.inter(color: AppColors.textTertiary),
+            filled: true,
+            fillColor: AppColors.surfaceVariant.withValues(alpha: 0.6),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: primary.withValues(alpha: 0.4)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: primary, width: 1.5),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              final name = _presetNameCtrl.text.trim();
+              if (name.isNotEmpty) {
+                settings.saveCustomPreset(name, gains);
+                Navigator.pop(dialogCtx);
+                AppToast.show(ctx, '"$name" preset saved!', type: ToastType.info, icon: Icons.save_rounded);
+              }
+            },
+            child: Text('Save', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Master toggle card
+  // ─────────────────────────────────────────────────────────
   Widget _buildMasterToggleCard(BuildContext context, SettingsProvider settings, Color primary) {
     final isCustom = settings.useCustomEqualizer;
 
@@ -223,9 +379,12 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
     );
   }
 
-  Widget _buildFrequencyMeter(BuildContext context, List<double> gains, Color primary) {
+  // ─────────────────────────────────────────────────────────
+  // Bezier EQ Curve Visualizer (replaces static bars)
+  // ─────────────────────────────────────────────────────────
+  Widget _buildBezierEqCurve(BuildContext context, List<double> gains, Color primary) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
       decoration: BoxDecoration(
         color: AppColors.surfaceVariant.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(20),
@@ -238,50 +397,55 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'LIVE FREQUENCY SPECTRUM',
-                style: GoogleFonts.outfit(color: AppColors.textTertiary, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 1),
+                'EQ RESPONSE CURVE',
+                style: GoogleFonts.outfit(
+                  color: AppColors.textTertiary,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
               ),
-              Icon(Icons.graphic_eq_rounded, color: primary, size: 18),
+              Row(
+                children: [
+                  if (_bypassActive)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text('BYPASS', style: GoogleFonts.outfit(color: Colors.orangeAccent, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                    ),
+                  const SizedBox(width: 6),
+                  Icon(Icons.show_chart_rounded, color: primary, size: 18),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           SizedBox(
-            height: 50,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(gains.length, (idx) {
-                final gain = gains[idx].clamp(-12.0, 12.0);
-                final normalized = ((gain + 12.0) / 24.0).clamp(0.08, 1.0);
-
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
-                  width: 38,
-                  height: 50 * normalized,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        primary.withValues(alpha: 0.4),
-                        primary,
-                      ],
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(color: primary.withValues(alpha: 0.3), blurRadius: 6),
-                    ],
-                  ),
-                );
-              }),
+            height: 72,
+            child: CustomPaint(
+              painter: _EqCurvePainter(gains: gains, color: primary),
+              size: Size.infinite,
             ),
+          ),
+          const SizedBox(height: 8),
+          // Frequency labels
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: _eqLabels.map((l) => Text(l,
+              style: GoogleFonts.inter(color: AppColors.textTertiary, fontSize: 9),
+            )).toList(),
           ),
         ],
       ),
     );
   }
 
+  // ─────────────────────────────────────────────────────────
+  // 5-Band Sliders with haptic ticks
+  // ─────────────────────────────────────────────────────────
   Widget _buildEqualizerSliders(
     BuildContext context,
     SettingsProvider settings,
@@ -310,6 +474,7 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
                   final zeroGains = [0.0, 0.0, 0.0, 0.0, 0.0];
                   settings.setCustomEqualizerGains(zeroGains);
                   settings.setUseCustomEqualizer(true);
+                  _lastHapticValue.fillRange(0, 5, null);
                 },
                 child: Text(
                   'Reset Bands',
@@ -356,10 +521,23 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
                             min: -12.0,
                             max: 12.0,
                             onChanged: (val) {
+                              // Haptic tick at 0dB crossing and at ±12dB walls
+                              final prev = _lastHapticValue[index];
+                              if (prev != null) {
+                                final crossedZero  = (prev < 0 && val >= 0) || (prev > 0 && val <= 0);
+                                final hitPosWall   = val >= 11.9 && (prev < 11.9);
+                                final hitNegWall   = val <= -11.9 && (prev > -11.9);
+                                if (crossedZero || hitPosWall || hitNegWall) {
+                                  HapticFeedback.selectionClick();
+                                }
+                              }
+                              _lastHapticValue[index] = val;
+
                               final newGains = List<double>.from(gains);
                               newGains[index] = double.parse(val.toStringAsFixed(1));
                               settings.setCustomEqualizerGains(newGains);
                               settings.setUseCustomEqualizer(true);
+                              _bypassActive = false;
                             },
                           ),
                         ),
@@ -384,35 +562,48 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────
+  // Genre Preset Chips (12 presets)
+  // ─────────────────────────────────────────────────────────
+  static const List<Map<String, dynamic>> _allPresets = [
+    {'name': 'Flat',        'mode': SoundEnhancer.none,        'icon': Icons.equalizer_rounded,          'color': Color(0xFF9E9E9E)},
+    {'name': 'Bass Boost',  'mode': SoundEnhancer.bassBoost,   'icon': Icons.speaker_group_rounded,      'color': Color(0xFF1565C0)},
+    {'name': 'Treble',      'mode': SoundEnhancer.trebleBoost, 'icon': Icons.graphic_eq_rounded,         'color': Color(0xFF00ACC1)},
+    {'name': 'Vocal',       'mode': SoundEnhancer.vocal,       'icon': Icons.mic_rounded,                'color': Color(0xFFAD1457)},
+    {'name': '3D Spatial',  'mode': SoundEnhancer.ambient3d,   'icon': Icons.surround_sound_rounded,     'color': Color(0xFF6A1B9A)},
+    {'name': 'Electronic',  'mode': SoundEnhancer.electronic,  'icon': Icons.bolt_rounded,               'color': Color(0xFF0097A7)},
+    {'name': 'Rock / Metal','mode': SoundEnhancer.rockMetal,   'icon': Icons.music_note_rounded,         'color': Color(0xFFBF360C)},
+    {'name': 'Hip-Hop',     'mode': SoundEnhancer.hipHop,      'icon': Icons.radio_rounded,              'color': Color(0xFFF57F17)},
+    {'name': 'Pop',         'mode': SoundEnhancer.pop,         'icon': Icons.star_rounded,               'color': Color(0xFF880E4F)},
+    {'name': 'Acoustic',    'mode': SoundEnhancer.acoustic,    'icon': Icons.piano_rounded,              'color': Color(0xFF33691E)},
+    {'name': 'Jazz / Blues','mode': SoundEnhancer.jazzBlues,   'icon': Icons.queue_music_rounded,        'color': Color(0xFF4E342E)},
+    {'name': 'Night Mode',  'mode': SoundEnhancer.nightMode,   'icon': Icons.nightlight_round,           'color': Color(0xFF37474F)},
+  ];
+
   Widget _buildPresetChips(
     BuildContext context,
     SettingsProvider settings,
     PlayerProvider playerProvider,
     Color primary,
   ) {
-    final presets = [
-      {'name': 'Flat', 'mode': SoundEnhancer.none, 'icon': Icons.equalizer_rounded},
-      {'name': 'Bass Boost', 'mode': SoundEnhancer.bassBoost, 'icon': Icons.speaker_group_rounded},
-      {'name': 'Treble Boost', 'mode': SoundEnhancer.trebleBoost, 'icon': Icons.graphic_eq_rounded},
-      {'name': 'Vocal Clarity', 'mode': SoundEnhancer.vocal, 'icon': Icons.mic_rounded},
-      {'name': '3D Spatial', 'mode': SoundEnhancer.ambient3d, 'icon': Icons.surround_sound_rounded},
-    ];
-
     return SizedBox(
       height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: presets.length,
+        itemCount: _allPresets.length,
         itemBuilder: (context, idx) {
-          final p = presets[idx];
+          final p    = _allPresets[idx];
           final mode = p['mode'] as SoundEnhancer;
+          final tint = p['color'] as Color;
           final isSelected = !settings.useCustomEqualizer && settings.soundEnhancer == mode;
 
           return GestureDetector(
             onTap: () {
+              HapticFeedback.selectionClick();
               settings.setUseCustomEqualizer(false);
               settings.setSoundEnhancer(mode);
+              _bypassActive = false;
               AppToast.show(context, 'Applied ${p['name']} Preset', type: ToastType.info, icon: p['icon'] as IconData);
             },
             child: AnimatedContainer(
@@ -420,10 +611,10 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
               margin: const EdgeInsets.only(right: 10),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: isSelected ? primary : AppColors.surfaceVariant.withValues(alpha: 0.5),
+                color: isSelected ? tint : AppColors.surfaceVariant.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: isSelected ? primary : AppColors.glassBorder, width: 1),
-                boxShadow: isSelected ? [BoxShadow(color: primary.withValues(alpha: 0.3), blurRadius: 8)] : [],
+                border: Border.all(color: isSelected ? tint : AppColors.glassBorder, width: 1),
+                boxShadow: isSelected ? [BoxShadow(color: tint.withValues(alpha: 0.4), blurRadius: 10, spreadRadius: 0)] : [],
               ),
               child: Row(
                 children: [
@@ -446,6 +637,87 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────
+  // User Saved Preset Chips
+  // ─────────────────────────────────────────────────────────
+  Widget _buildUserPresetChips(BuildContext context, SettingsProvider settings, Color primary) {
+    final entries = settings.customPresets.entries.toList();
+    return SizedBox(
+      height: 44,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: entries.length,
+        itemBuilder: (context, idx) {
+          final entry = entries[idx];
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              settings.setCustomEqualizerGains(entry.value);
+              settings.setUseCustomEqualizer(true);
+              _bypassActive = false;
+              AppToast.show(context, 'Applied "${entry.key}"', type: ToastType.info, icon: Icons.tune_rounded);
+            },
+            onLongPress: () {
+              HapticFeedback.mediumImpact();
+              _showDeletePresetDialog(context, settings, entry.key);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primary.withValues(alpha: 0.3), primary.withValues(alpha: 0.1)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: primary.withValues(alpha: 0.5), width: 1),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.tune_rounded, color: primary, size: 15),
+                  const SizedBox(width: 7),
+                  Text(
+                    entry.key,
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showDeletePresetDialog(BuildContext ctx, SettingsProvider settings, String name) {
+    showDialog<void>(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Preset', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text('Delete "$name"?', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              settings.deleteCustomPreset(name);
+              Navigator.pop(dialogCtx);
+            },
+            child: Text('Delete', style: GoogleFonts.inter(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // Speed + Pitch + Karaoke card
+  // ─────────────────────────────────────────────────────────
   Widget _buildSpeedAndPitchCard(
     BuildContext context,
     SettingsProvider settings,
@@ -540,6 +812,9 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────
+  // Audio FX — Crossfade
+  // ─────────────────────────────────────────────────────────
   Widget _buildAudioFxCard(
     BuildContext context,
     SettingsProvider settings,
@@ -592,18 +867,123 @@ class _SoundStudioScreenState extends State<SoundStudioScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────
+  // Preset → gains lookup (mirrors audio_handler preset map)
+  // ─────────────────────────────────────────────────────────
   List<double> _getPresetGains(SoundEnhancer enhancer) {
     switch (enhancer) {
-      case SoundEnhancer.none:
-        return [0.0, 0.0, 0.0, 0.0, 0.0];
-      case SoundEnhancer.bassBoost:
-        return [9.0, 5.0, -1.5, 0.0, 1.0];
-      case SoundEnhancer.trebleBoost:
-        return [-2.0, -1.0, 1.0, 6.0, 10.0];
-      case SoundEnhancer.vocal:
-        return [-4.0, 2.0, 7.0, 5.0, 2.0];
-      case SoundEnhancer.ambient3d:
-        return [7.0, 3.0, -5.0, 3.0, 8.0];
+      case SoundEnhancer.none:        return [ 0.0,  0.0,  0.0,  0.0,  0.0];
+      case SoundEnhancer.bassBoost:   return [ 9.0,  5.0, -1.5,  0.0,  1.0];
+      case SoundEnhancer.trebleBoost: return [-2.0, -1.0,  1.0,  6.0, 10.0];
+      case SoundEnhancer.vocal:       return [-4.0,  2.0,  7.0,  5.0,  2.0];
+      case SoundEnhancer.ambient3d:   return [ 7.0,  3.0, -5.0,  3.0,  8.0];
+      case SoundEnhancer.electronic:  return [ 5.0, -2.0, -3.0,  4.0,  6.0];
+      case SoundEnhancer.rockMetal:   return [ 4.0,  3.0,  4.0,  3.0, -1.0];
+      case SoundEnhancer.hipHop:      return [ 8.0,  6.0, -2.0, -1.0,  2.0];
+      case SoundEnhancer.pop:         return [-1.0,  2.0,  1.0,  4.0,  5.0];
+      case SoundEnhancer.acoustic:    return [ 0.0,  3.0,  2.0,  3.0,  1.0];
+      case SoundEnhancer.jazzBlues:   return [ 3.0,  4.0,  0.0,  2.0,  3.0];
+      case SoundEnhancer.nightMode:   return [-3.0,  1.0,  3.0,  1.0, -4.0];
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Bezier EQ Curve Painter
+// ─────────────────────────────────────────────────────────────
+
+/// Draws a smooth Catmull-Rom spline through the 5 EQ band gain points
+/// plus phantom edge anchors so the curve always returns to 0dB at the edges.
+class _EqCurvePainter extends CustomPainter {
+  final List<double> gains;
+  final Color color;
+
+  const _EqCurvePainter({required this.gains, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (gains.length < 5) return;
+
+    const double maxDb = 12.0;
+    final double midY  = size.height / 2;
+
+    // Map gain → Y: +12dB = top, -12dB = bottom, 0 = center
+    double gainToY(double gain) => midY - (gain / maxDb) * midY * 0.9;
+
+    // Build control points: phantom anchors at x=-size.width*0.1 and x=size.width*1.1
+    final List<Offset> pts = [
+      Offset(-size.width * 0.1, midY), // left phantom at 0dB
+      ...List.generate(5, (i) {
+        final x = size.width * (i / 4.0);
+        return Offset(x, gainToY(gains[i]));
+      }),
+      Offset(size.width * 1.1, midY),  // right phantom at 0dB
+    ];
+
+    // Build Catmull-Rom path between real points (index 1-5 in pts)
+    final path = Path();
+    path.moveTo(pts[1].dx, pts[1].dy);
+
+    for (int i = 1; i < pts.length - 2; i++) {
+      final p0 = pts[i - 1];
+      final p1 = pts[i];
+      final p2 = pts[i + 1];
+      final p3 = pts[math.min(i + 2, pts.length - 1)];
+
+      // Catmull-Rom → cubic Bezier conversion (alpha = 0.5 for centripetal)
+      final cp1x = p1.dx + (p2.dx - p0.dx) / 6.0;
+      final cp1y = p1.dy + (p2.dy - p0.dy) / 6.0;
+      final cp2x = p2.dx - (p3.dx - p1.dx) / 6.0;
+      final cp2y = p2.dy - (p3.dy - p1.dy) / 6.0;
+      path.cubicTo(cp1x, cp1y, cp2x, cp2y, p2.dx, p2.dy);
+    }
+
+    // Stroke the curve
+    final strokePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    // Filled gradient area under the curve
+    final fillPath = Path.from(path)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [color.withValues(alpha: 0.25), color.withValues(alpha: 0.0)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    // Draw 0dB reference line first (behind curve)
+    final refPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.12)
+      ..strokeWidth = 1;
+    canvas.drawLine(Offset(0, midY), Offset(size.width, midY), refPaint);
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(path, strokePaint);
+
+    // Draw dots on each band point
+    final dotPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final dotBorderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    for (int i = 1; i <= 5; i++) {
+      canvas.drawCircle(pts[i], 4.5, dotPaint);
+      canvas.drawCircle(pts[i], 4.5, dotBorderPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _EqCurvePainter old) =>
+      old.gains != gains || old.color != color;
 }

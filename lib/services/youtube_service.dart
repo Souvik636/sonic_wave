@@ -8,6 +8,7 @@ import '../models/song.dart';
 import '../providers/settings_provider.dart' show AudioQuality;
 import 'ytdlp_runtime.dart';
 import 'diagnostic_log_service.dart';
+import 'encoding_sanitizer.dart';
 
 class YouTubeService {
   static YoutubeExplode _yt = YoutubeExplode();
@@ -1545,14 +1546,25 @@ class YouTubeService {
   }
 
   Song _videoToSong(Video video) {
+    final cleanTitle = EncodingSanitizer.sanitize(video.title);
+    final cleanAuthor = EncodingSanitizer.sanitize(video.author);
+    final medThumb = EncodingSanitizer.sanitizeThumbnailUrl(
+      video.thumbnails.mediumResUrl,
+      videoId: video.id.value,
+    );
+    final highThumb = EncodingSanitizer.sanitizeThumbnailUrl(
+      video.thumbnails.standardResUrl.isNotEmpty
+          ? video.thumbnails.standardResUrl
+          : (video.thumbnails.maxResUrl.isNotEmpty ? video.thumbnails.maxResUrl : video.thumbnails.mediumResUrl),
+      videoId: video.id.value,
+    );
+
     return Song(
       id: video.id.value,
-      title: video.title,
-      artist: video.author,
-      thumbnailUrl: video.thumbnails.mediumResUrl,
-      highResThumbnailUrl: video.thumbnails.standardResUrl.isNotEmpty
-          ? video.thumbnails.standardResUrl
-          : video.thumbnails.mediumResUrl,
+      title: cleanTitle.isNotEmpty ? cleanTitle : 'YouTube Video',
+      artist: cleanAuthor.isNotEmpty ? cleanAuthor : 'YouTube',
+      thumbnailUrl: medThumb,
+      highResThumbnailUrl: highThumb.isNotEmpty ? highThumb : medThumb,
       duration: video.duration ?? Duration.zero,
       videoId: video.id.value,
     );

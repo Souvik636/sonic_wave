@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:math' as math;
 import '../models/song.dart';
+import '../services/encoding_sanitizer.dart';
 
 class SongAlbumArt extends StatelessWidget {
   final Song song;
@@ -37,13 +39,20 @@ class SongAlbumArt extends StatelessWidget {
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    // Resolve empty or placeholder thumbnails:
-    // - LOCAL files: use the deterministic abstract art (the file's embedded
-    //   cover, when present, is already in thumbnailUrl via LocalMetadataService;
-    //   a random internet photo would be wrong/misleading for a user's own file).
-    // - streamed songs: fall back to the stable Unsplash covers as before.
-    final bool noThumb = song.thumbnailUrl.trim().isEmpty ||
-        song.thumbnailUrl.trim().startsWith('placeholder_');
+    // 1. Sanitize the thumbnail URL with protocol & quality upgrades
+    final rawUrl = song.thumbnailUrl.trim().isNotEmpty
+        ? song.thumbnailUrl.trim()
+        : song.highResThumbnailUrl.trim();
+
+    final sanitizedUrl = EncodingSanitizer.sanitizeThumbnailUrl(
+      rawUrl,
+      videoId: song.videoId,
+    );
+
+    // 2. Check for empty or placeholder thumbnails
+    final bool noThumb = sanitizedUrl.isEmpty ||
+        sanitizedUrl.startsWith('placeholder_');
+
     if (noThumb && (song.isLocalFile || song.filePath != null)) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(borderRadius),
@@ -51,16 +60,60 @@ class SongAlbumArt extends StatelessWidget {
       );
     }
 
+    // 3. Base64 Data URI or raw Base64 payload (embedded in tags / APIs)
+    if (_isBase64Image(sanitizedUrl)) {
+      final bytes = _decodeBase64Bytes(sanitizedUrl);
+      if (bytes != null && bytes.isNotEmpty) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: Image.memory(
+            bytes,
+            fit: fit,
+            width: width,
+            height: height,
+            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+              if (wasSynchronouslyLoaded) return child;
+              return AnimatedOpacity(
+                opacity: frame == null ? 0 : 1,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                child: child,
+              );
+            },
+            errorBuilder: (context, error, stackTrace) =>
+                _buildAbstractPlaceholder(song.videoId, primaryColor),
+          ),
+        );
+      }
+    }
+
     final String url;
     if (noThumb) {
       final int hash = song.videoId.hashCode.abs();
       url = _defaultThumbnails[hash % _defaultThumbnails.length];
     } else {
-      url = song.thumbnailUrl;
+      url = sanitizedUrl;
     }
 
     final isHttp = url.startsWith('http://') || url.startsWith('https://');
-    final isLocalFile = url.isNotEmpty && !isHttp && (url.startsWith('/') || url.contains(':\\') || url.contains(':/'));
+    
+    // Resolve local file path (handles file:// URIs and standard paths)
+    String? localFilePath;
+    if (!isHttp && url.isNotEmpty) {
+      if (url.startsWith('file://')) {
+        try {
+          localFilePath = Uri.parse(url).toFilePath();
+        } catch (_) {
+          localFilePath = url.replaceFirst('file://', '');
+        }
+      } else if (url.startsWith('/') || url.contains(r':\') || url.contains(':/')) {
+        localFilePath = url;
+      }
+    }
+
+    final bool isLocalValid = localFilePath != null &&
+        File(localFilePath).existsSync() &&
+        File(localFilePath).lengthSync() > 32;
 
     Widget child;
 
@@ -70,27 +123,44 @@ class SongAlbumArt extends StatelessWidget {
         fit: fit,
         width: width,
         height: height,
-        // Gentle cross-fade from placeholder to the resolved cover instead of
-        // a hard pop-in.
-        fadeInDuration: const Duration(milliseconds: 400),
+        fadeInDuration: const Duration(milliseconds: 350),
         fadeInCurve: Curves.easeOut,
         fadeOutDuration: const Duration(milliseconds: 200),
-        placeholder: (context, url) => Container(
+        placeholder: (context, _) => Container(
+          width: width,
+          height: height,
           color: Colors.white.withValues(alpha: 0.05),
           child: const Center(
             child: SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white30)),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation(Colors.white30),
+              ),
             ),
           ),
         ),
-        errorWidget: (context, url, error) => _buildAbstractPlaceholder(song.videoId, primaryColor),
+        errorWidget: (context, url, error) {
+          // Secondary fallback: if primary failed and high-res or YouTube standard exists
+          final fallbackUrl = _getNetworkFallbackUrl(url, song);
+          if (fallbackUrl != null && fallbackUrl != url) {
+            return CachedNetworkImage(
+              imageUrl: fallbackUrl,
+              fit: fit,
+              width: width,
+              height: height,
+              fadeInDuration: const Duration(milliseconds: 250),
+              errorWidget: (context, fallbackErrUrl, fallbackErr) =>
+                  _buildAbstractPlaceholder(song.videoId, primaryColor),
+            );
+          }
+          return _buildAbstractPlaceholder(song.videoId, primaryColor);
+        },
       );
-    } else if (isLocalFile && File(url).existsSync()) {
-      // Fade local images in as they decode.
+    } else if (isLocalValid) {
       child = Image.file(
-        File(url),
+        File(localFilePath),
         fit: fit,
         width: width,
         height: height,
@@ -103,6 +173,8 @@ class SongAlbumArt extends StatelessWidget {
             child: image,
           );
         },
+        errorBuilder: (context, error, stackTrace) =>
+            _buildAbstractPlaceholder(song.videoId, primaryColor),
       );
     } else {
       child = _buildAbstractPlaceholder(song.videoId, primaryColor);
@@ -114,8 +186,44 @@ class SongAlbumArt extends StatelessWidget {
     );
   }
 
+  /// Get fallback network image when primary fails (e.g. YouTube maxresdefault 404)
+  String? _getNetworkFallbackUrl(String failedUrl, Song song) {
+    if (song.videoId.isNotEmpty &&
+        !song.videoId.startsWith('jiosaavn_') &&
+        !song.videoId.startsWith('local_') &&
+        (failedUrl.contains('maxresdefault') || failedUrl.contains('sddefault'))) {
+      return 'https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg';
+    }
+    if (song.highResThumbnailUrl.isNotEmpty &&
+        song.highResThumbnailUrl.startsWith('http') &&
+        song.highResThumbnailUrl != failedUrl) {
+      return EncodingSanitizer.sanitizeThumbnailUrl(song.highResThumbnailUrl);
+    }
+    return null;
+  }
+
+  bool _isBase64Image(String s) {
+    return s.startsWith('data:image/') ||
+        s.startsWith('/9j/') ||
+        s.startsWith('iVBORw0KGgo') ||
+        s.startsWith('R0lGOD') ||
+        s.startsWith('UklGR');
+  }
+
+  Uint8List? _decodeBase64Bytes(String input) {
+    try {
+      String raw = input;
+      if (raw.contains(',')) {
+        raw = raw.split(',').last;
+      }
+      raw = raw.replaceAll(RegExp(r'\s+'), '');
+      return base64Decode(base64.normalize(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
   Widget _buildAbstractPlaceholder(String seed, Color primaryColor) {
-    // Generate a stable hash index (0, 1, or 2) based on the song's video ID/path
     final int hash = seed.hashCode.abs();
     final int index = hash % 3;
 
@@ -142,9 +250,9 @@ class _AbstractArtPainter extends CustomPainter {
     final paint = Paint()..isAntiAlias = true;
 
     if (index == 0) {
-      // DESIGN 1: Neon Synthwave (Magenta, Purple, Indigo, Cyan)
-      final gradient = LinearGradient(
-        colors: const [
+      // DESIGN 1: Neon Synthwave (Magenta, Purple, Cyan)
+      final gradient = const LinearGradient(
+        colors: [
           Color(0xFFD80073),
           Color(0xFF6A00FF),
           Color(0xFF00D2FF),
@@ -155,122 +263,115 @@ class _AbstractArtPainter extends CustomPainter {
       paint.shader = gradient.createShader(rect);
       canvas.drawRect(rect, paint);
 
-      // Glassmorphic central sun
+      // Central glowing sun
       final sunPaint = Paint()
         ..color = Colors.white.withValues(alpha: 0.15)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      canvas.drawCircle(Offset(size.width * 0.5, size.height * 0.5), size.width * 0.28, sunPaint);
-
-      // Neon cyan gridlines
-      final gridPaint = Paint()
-        ..color = const Color(0xFF00FFCC).withValues(alpha: 0.25)
-        ..strokeWidth = 1.2
-        ..style = PaintingStyle.stroke;
-
-      final path = Path();
-      // Horizontal lines converging
-      for (int i = 0; i <= 6; i++) {
-        final double y = size.height * 0.4 + (size.height * 0.6 * math.pow(i / 6, 2));
-        path.moveTo(0, y);
-        path.lineTo(size.width, y);
-      }
-      // Vanishing perspective vertical lines
-      final Offset vanishPoint = Offset(size.width * 0.5, size.height * 0.4);
-      for (int i = -3; i <= 3; i++) {
-        final double xEnd = size.width * 0.5 + (i * size.width * 0.2);
-        path.moveTo(vanishPoint.dx, vanishPoint.dy);
-        path.lineTo(xEnd, size.height);
-      }
-      canvas.drawPath(path, gridPaint);
-
-    } else if (index == 1) {
-      // DESIGN 2: Sunset Lofi (Amber, Crimson, Dark Violet)
-      final gradient = RadialGradient(
-        colors: const [
-          Color(0xFFFF9E00),
-          Color(0xFFFF0055),
-          Color(0xFF3C096C),
-        ],
-        radius: 1.2,
-        center: Alignment.topCenter,
-      );
-      paint.shader = gradient.createShader(rect);
-      canvas.drawRect(rect, paint);
-
-      // Glowing Crescent Moon
-      final moonPaint = Paint()
-        ..color = const Color(0xFFFFE57F).withValues(alpha: 0.85);
-      
-      final moonPath = Path()
-        ..addOval(Rect.fromCircle(center: Offset(size.width * 0.52, size.height * 0.45), radius: size.width * 0.22));
-      final shadowPath = Path()
-        ..addOval(Rect.fromCircle(center: Offset(size.width * 0.44, size.height * 0.40), radius: size.width * 0.22));
-      
-      final crescentPath = Path.combine(PathOperation.difference, moonPath, shadowPath);
-      canvas.drawPath(crescentPath, moonPaint);
-
-      // Retro waves/sun bars
-      final barPaint = Paint()..color = const Color(0xFF1E0B36).withValues(alpha: 0.4);
-      for (int i = 0; i < 4; i++) {
-        final double y = size.height * 0.65 + i * (size.height * 0.08);
-        final double height = size.height * 0.03 + i * (size.height * 0.005);
-        canvas.drawRect(Rect.fromLTWH(0, y, size.width, height), barPaint);
-      }
-
-    } else {
-      // DESIGN 3: Cyberpunk Techno (Indigo, Cyan, Toxic Lime)
-      final gradient = LinearGradient(
-        colors: const [
-          Color(0xFF1D2A44),
-          Color(0xFF00F5FF),
-          Color(0xFF39FF14),
-        ],
-        begin: Alignment.bottomRight,
-        end: Alignment.topLeft,
-      );
-      paint.shader = gradient.createShader(rect);
-      canvas.drawRect(rect, paint);
-
-      // Rotating techno squares
-      final squarePaint = Paint()
-        ..color = const Color(0xFF39FF14).withValues(alpha: 0.15)
         ..style = PaintingStyle.fill;
-      
-      final borderPaint = Paint()
-        ..color = const Color(0xFF00F5FF).withValues(alpha: 0.6)
-        ..strokeWidth = 1.5
-        ..style = PaintingStyle.stroke;
+      canvas.drawCircle(
+        Offset(size.width * 0.5, size.height * 0.5),
+        size.width * 0.28,
+        sunPaint,
+      );
 
-      canvas.save();
-      canvas.translate(size.width * 0.5, size.height * 0.5);
-      
-      // Square 1
-      canvas.rotate(math.pi / 6);
-      canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: size.width * 0.4, height: size.width * 0.4), squarePaint);
-      canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: size.width * 0.4, height: size.width * 0.4), borderPaint);
+      // Music note icon
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(Icons.music_note_rounded.codePoint),
+          style: TextStyle(
+            fontSize: size.width * 0.35,
+            fontFamily: Icons.music_note_rounded.fontFamily,
+            package: Icons.music_note_rounded.fontPackage,
+            color: Colors.white.withValues(alpha: 0.7),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          (size.width - textPainter.width) / 2,
+          (size.height - textPainter.height) / 2,
+        ),
+      );
+    } else if (index == 1) {
+      // DESIGN 2: Deep Cosmic Aurora (Emerald, Sapphire, Deep Navy)
+      final gradient = const LinearGradient(
+        colors: [
+          Color(0xFF00C9FF),
+          Color(0xFF92FE9D),
+          Color(0xFF00223E),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+      paint.shader = gradient.createShader(rect);
+      canvas.drawRect(rect, paint);
 
-      // Square 2
-      canvas.rotate(math.pi / 4);
-      canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: size.width * 0.3, height: size.width * 0.3), borderPaint);
+      final orbPaint = Paint()
+        ..color = primaryColor.withValues(alpha: 0.3)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+      canvas.drawCircle(
+        Offset(size.width * 0.65, size.height * 0.35),
+        size.width * 0.3,
+        orbPaint,
+      );
 
-      canvas.restore();
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(Icons.graphic_eq_rounded.codePoint),
+          style: TextStyle(
+            fontSize: size.width * 0.32,
+            fontFamily: Icons.graphic_eq_rounded.fontFamily,
+            package: Icons.graphic_eq_rounded.fontPackage,
+            color: Colors.white.withValues(alpha: 0.75),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          (size.width - textPainter.width) / 2,
+          (size.height - textPainter.height) / 2,
+        ),
+      );
+    } else {
+      // DESIGN 3: Electric Sunset (Amber, Crimson, Deep Violet)
+      final gradient = LinearGradient(
+        colors: [
+          const Color(0xFFFF512F),
+          const Color(0xFFDD2476),
+          primaryColor.withValues(alpha: 0.8),
+        ],
+        begin: Alignment.bottomLeft,
+        end: Alignment.topRight,
+      );
+      paint.shader = gradient.createShader(rect);
+      canvas.drawRect(rect, paint);
 
-      // Techno connection dots
-      final dotsPaint = Paint()..color = Colors.white.withValues(alpha: 0.25);
-      canvas.drawCircle(Offset(size.width * 0.2, size.height * 0.2), 3, dotsPaint);
-      canvas.drawCircle(Offset(size.width * 0.8, size.height * 0.2), 4, dotsPaint);
-      canvas.drawCircle(Offset(size.width * 0.15, size.height * 0.75), 3, dotsPaint);
-      canvas.drawCircle(Offset(size.width * 0.75, size.height * 0.8), 5, dotsPaint);
-
-      canvas.drawLine(
-        Offset(size.width * 0.2, size.height * 0.2),
-        Offset(size.width * 0.8, size.height * 0.2),
-        Paint()..color = Colors.white.withValues(alpha: 0.08)..strokeWidth = 1.0,
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(Icons.headphones_rounded.codePoint),
+          style: TextStyle(
+            fontSize: size.width * 0.32,
+            fontFamily: Icons.headphones_rounded.fontFamily,
+            package: Icons.headphones_rounded.fontPackage,
+            color: Colors.white.withValues(alpha: 0.75),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          (size.width - textPainter.width) / 2,
+          (size.height - textPainter.height) / 2,
+        ),
       );
     }
   }
 
   @override
-  bool shouldRepaint(covariant _AbstractArtPainter oldDelegate) =>
-      oldDelegate.index != index || oldDelegate.primaryColor != primaryColor;
+  bool shouldRepaint(covariant _AbstractArtPainter old) =>
+      old.index != index || old.primaryColor != primaryColor;
 }

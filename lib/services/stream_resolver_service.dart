@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/song.dart';
@@ -128,7 +129,17 @@ class StreamResolverService {
       return null;
     }
 
-    // 6. YouTube song (default catalog fallback)
+    // 6. YouTube song — cache-first approach with parallel racing
+    //
+    // The old path extracted a bare URL (via Explode or yt-dlp) and handed it
+    // to ExoPlayer with *guessed* HTTP headers. This failed because:
+    //   a) The `extractor` package's Pigeon bridge drops yt-dlp's http_headers
+    //   b) ExoPlayer's headers didn't match the extraction client context
+    //   c) Google CDN rejected with 403 / timeout
+    //
+    // The new path checks the stream cache first (instant replay), then RACES
+    // a yt-dlp cache download against Invidious/Piped proxy resolution.
+    // Whichever produces a playable result first wins.
     debugPrint('[StreamResolver] Resolving YouTube song exclusively: $id');
     return await NetworkResilienceService().runWithAutoHeal<ResolvedStream?>(
       () async {

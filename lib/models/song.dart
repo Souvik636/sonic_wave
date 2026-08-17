@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../services/encoding_sanitizer.dart';
 
 class Song {
   final String id;
@@ -85,14 +86,28 @@ class Song {
   }
 
   factory Song.fromJson(Map<String, dynamic> json) {
+    final videoId = (json['videoId'] ?? json['id'] ?? '').toString();
+    final rawTitle = (json['title'] ?? '').toString();
+    final rawArtist = (json['artist'] ?? '').toString();
+    final rawThumb = (json['thumbnailUrl'] ?? '').toString();
+    final rawHighRes = (json['highResThumbnailUrl'] ?? '').toString();
+
+    final cleanTitle = EncodingSanitizer.sanitize(rawTitle);
+    final cleanArtist = EncodingSanitizer.sanitize(rawArtist);
+    final cleanThumb = EncodingSanitizer.sanitizeThumbnailUrl(rawThumb, videoId: videoId);
+    final cleanHighRes = EncodingSanitizer.sanitizeThumbnailUrl(
+      rawHighRes.isNotEmpty ? rawHighRes : rawThumb,
+      videoId: videoId,
+    );
+
     return Song(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      artist: json['artist'] as String,
-      thumbnailUrl: json['thumbnailUrl'] as String,
-      highResThumbnailUrl: json['highResThumbnailUrl'] as String,
-      duration: Duration(milliseconds: json['duration'] as int),
-      videoId: json['videoId'] as String,
+      id: (json['id'] ?? videoId).toString(),
+      title: cleanTitle.isNotEmpty ? cleanTitle : 'Unknown Track',
+      artist: cleanArtist.isNotEmpty ? cleanArtist : 'Unknown Artist',
+      thumbnailUrl: cleanThumb,
+      highResThumbnailUrl: cleanHighRes.isNotEmpty ? cleanHighRes : cleanThumb,
+      duration: Duration(milliseconds: (json['duration'] as num?)?.toInt() ?? 0),
+      videoId: videoId,
       speed: (json['speed'] as num?)?.toDouble() ?? 1.0,
       pitch: (json['pitch'] as num?)?.toDouble() ?? 0.0,
       fadeIn: (json['fadeIn'] as num?)?.toDouble() ?? 0.0,

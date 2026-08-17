@@ -641,6 +641,20 @@ String _getSoundEnhancerName(SoundEnhancer enhancer) {
       return 'Vocal';
     case SoundEnhancer.ambient3d:
       return '3D Surround';
+    case SoundEnhancer.electronic:
+      return 'Electronic';
+    case SoundEnhancer.rockMetal:
+      return 'Rock/Metal';
+    case SoundEnhancer.hipHop:
+      return 'Hip-Hop';
+    case SoundEnhancer.pop:
+      return 'Pop';
+    case SoundEnhancer.acoustic:
+      return 'Acoustic';
+    case SoundEnhancer.jazzBlues:
+      return 'Jazz/Blues';
+    case SoundEnhancer.nightMode:
+      return 'Night Mode';
   }
 }
 

@@ -38,6 +38,14 @@ enum SoundEnhancer {
   trebleBoost,
   vocal,
   ambient3d,
+  // Extended genre presets (indices 5–11)
+  electronic,
+  rockMetal,
+  hipHop,
+  pop,
+  acoustic,
+  jazzBlues,
+  nightMode,
 }
 
 class SettingsProvider extends ChangeNotifier {
@@ -56,6 +64,7 @@ class SettingsProvider extends ChangeNotifier {
   static const String _playerStyleKey = 'settings_player_style';
   static const String _crossfadeKey = 'settings_crossfade_seconds';
   static const String _randomizeThemeKey = 'settings_randomize_theme';
+  static const String _customPresetsKey = 'settings_custom_eq_presets_v1';
 
   AudioQuality _audioQuality = AudioQuality.high;
   ThemeAccent _themeAccent = ThemeAccent.purple;
@@ -74,6 +83,9 @@ class SettingsProvider extends ChangeNotifier {
   bool _showVisualizer = true;
   String _playerStyle = 'classic'; // 'classic' or 'aurora'
   int _crossfadeSeconds = 0; // 0 = off; global fade-in/out between tracks
+
+  /// Named custom EQ presets saved by the user: { name → [5 gain values] }
+  Map<String, List<double>> _customPresets = {};
 
   /// Device wallpaper seed color (Material You), injected at app start from
   /// DynamicColorPlugin. Null on Android < 12 / unsupported platforms.
@@ -104,6 +116,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get showVisualizer => _showVisualizer;
   String get playerStyle => _playerStyle;
   int get crossfadeSeconds => _crossfadeSeconds;
+  Map<String, List<double>> get customPresets => Map.unmodifiable(_customPresets);
   bool get isInitialized => _isInitialized;
   StorageType get storageType => _storageType;
   StorageLocationService get storageService => _storageService;
@@ -345,6 +358,19 @@ class SettingsProvider extends ChangeNotifier {
 
       _crossfadeSeconds = prefs.getInt(_crossfadeKey) ?? 0;
 
+      // Load custom named EQ presets
+      final customPresetsStr = prefs.getString(_customPresetsKey);
+      if (customPresetsStr != null) {
+        try {
+          final decoded = json.decode(customPresetsStr) as Map<String, dynamic>;
+          _customPresets = decoded.map(
+            (k, v) => MapEntry(k, (v as List<dynamic>).map((e) => (e as num).toDouble()).toList()),
+          );
+        } catch (_) {
+          _customPresets = {};
+        }
+      }
+
       // Initialize storage location service
       await _storageService.initialize();
       _storageType = _storageService.storageType;
@@ -447,6 +473,22 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_customEqGainsKey, json.encode(gains));
+  }
+
+  /// Save current gains under a custom user-chosen preset name
+  Future<void> saveCustomPreset(String name, List<double> gains) async {
+    _customPresets[name] = List.from(gains);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_customPresetsKey, json.encode(_customPresets));
+  }
+
+  /// Delete a saved custom preset by name
+  Future<void> deleteCustomPreset(String name) async {
+    _customPresets.remove(name);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_customPresetsKey, json.encode(_customPresets));
   }
 
   Future<void> setOfflineModeOnly(bool val) async {

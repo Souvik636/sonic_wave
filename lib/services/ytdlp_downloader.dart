@@ -142,27 +142,16 @@ class YtDlpDownloader {
           '--no-check-certificates': '',
           '--socket-timeout': '10',
           '-R': '3',
-          // 'linear=1::2' is yt-dlp 2023.10+ syntax; older bundled binaries
-          // silently reject it and retry immediately, making the three retries
-          // fire in under a second and all hit the same rate-limit window.
-          // Plain integer is accepted by every version.
           '--retry-sleep': '2',
           '--fragment-retries': '3',
           '--no-mtime': '',
           '--concurrent-fragments': '2',
           '--buffer-size': '64k',
-          // 10M was too large for mobile: a 10 MB chunk that drops mid-flight
-          // restarts the whole chunk rather than continuing from the last byte.
-          // 1M keeps partial retries cheap without sacrificing throughput
-          // (--concurrent-fragments=2 still pulls two streams at once).
           '--http-chunk-size': '1M',
           '--write-thumbnail': '',
           '--convert-thumbnails': 'jpg',
           '-S': sorter,
           '--parse-metadata': '%(album,title)s:%(meta_album)s',
-          // Skip HLS/DASH manifest and translated subtitles fetches — the
-          // player-client response already carries direct audio URLs, so these
-          // round-trips cost 1-3s with zero benefit for audio-only downloads.
           '--extractor-args':
               'youtube:player_client=mweb,android_vr,tv,ios;skip=hls,dash,translated_subs,webpage',
         },

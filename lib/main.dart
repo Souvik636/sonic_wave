@@ -15,7 +15,6 @@ import 'services/diagnostic_log_service.dart';
 import 'services/jamendo_service.dart';
 import 'services/ytdlp_runtime.dart';
 import 'theme/app_theme.dart';
-import 'widgets/shared_link_download_card.dart';
 
 SonicWaveAudioHandler? _audioHandler;
 
@@ -109,12 +108,7 @@ class SonicWaveApp extends StatelessWidget {
                 // above every route: a link shared while the user is in the
                 // player or in settings still reports itself, and keeps
                 // reporting while they move between screens.
-                builder: (context, child) => Stack(
-                  children: [
-                    ?child,
-                    const SharedLinkDownloadCard(),
-                  ],
-                ),
+                builder: (context, child) => child ?? const SizedBox.shrink(),
                 home: const SplashScreen(),
               );
             },

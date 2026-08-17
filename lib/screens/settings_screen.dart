@@ -959,6 +959,27 @@ class SettingsScreen extends StatelessWidget {
                     case SoundEnhancer.ambient3d:
                       label = '3D Surround';
                       break;
+                    case SoundEnhancer.electronic:
+                      label = 'Electronic';
+                      break;
+                    case SoundEnhancer.rockMetal:
+                      label = 'Rock/Metal';
+                      break;
+                    case SoundEnhancer.hipHop:
+                      label = 'Hip-Hop';
+                      break;
+                    case SoundEnhancer.pop:
+                      label = 'Pop';
+                      break;
+                    case SoundEnhancer.acoustic:
+                      label = 'Acoustic';
+                      break;
+                    case SoundEnhancer.jazzBlues:
+                      label = 'Jazz/Blues';
+                      break;
+                    case SoundEnhancer.nightMode:
+                      label = 'Night Mode';
+                      break;
                   }
 
                   return ChoiceChip(

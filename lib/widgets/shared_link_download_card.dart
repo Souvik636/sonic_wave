@@ -27,10 +27,6 @@ import 'song_album_art.dart';
 class SharedLinkDownloadCard extends StatefulWidget {
   const SharedLinkDownloadCard({super.key});
 
-  /// Height of the mini player that sits directly above the bottom nav.
-  static const double _miniPlayerHeight = 84;
-  static const double _gap = 12;
-
   @override
   State<SharedLinkDownloadCard> createState() => _SharedLinkDownloadCardState();
 }
@@ -144,14 +140,13 @@ class _SharedLinkDownloadCardState extends State<SharedLinkDownloadCard>
     final systemInset = MediaQuery.viewPaddingOf(context).bottom;
     final bottom = kBottomNavigationBarHeight +
         systemInset +
-        (hasMiniPlayer ? SharedLinkDownloadCard._miniPlayerHeight : 0) +
-        SharedLinkDownloadCard._gap;
+        (hasMiniPlayer ? 8.0 : 0.0);
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
-      left: 14,
-      right: 14,
+      left: 10,
+      right: 10,
       bottom: bottom,
       child: SlideTransition(
         position: _slide,
@@ -166,7 +161,7 @@ class _SharedLinkDownloadCardState extends State<SharedLinkDownloadCard>
                 _autoDismiss?.cancel();
                 context.read<PlayerProvider>().dismissSharedDownload();
               },
-              child: _CardSurface(status: shown),
+              child: SharedDownloadCardSurface(status: shown),
             ),
           ),
         ),
@@ -203,10 +198,19 @@ class _ShakeOnFailure extends StatelessWidget {
   }
 }
 
-class _CardSurface extends StatelessWidget {
+class SharedDownloadCardSurface extends StatelessWidget {
   final SharedDownloadStatus status;
+  final bool isDeckMode;
+  final VoidCallback? onToggleDeck;
+  final int activeIndex;
 
-  const _CardSurface({required this.status});
+  const SharedDownloadCardSurface({
+    super.key,
+    required this.status,
+    this.isDeckMode = false,
+    this.onToggleDeck,
+    this.activeIndex = 1,
+  });
 
   Color _accentOf(BuildContext context) => switch (status.phase) {
         SharedDownloadPhase.done => AppColors.success,
@@ -223,39 +227,125 @@ class _CardSurface extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          // Border and glow crossfade with the phase, so success and failure
-          // register before a single word has been read.
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          child: Container(
             decoration: BoxDecoration(
-              color: const Color(0xFF12122A).withValues(alpha: 0.82),
+              color: AppColors.surface.withValues(alpha: 0.90),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: accent.withValues(alpha: 0.38)),
+              border: Border.all(
+                color: accent.withValues(alpha: 0.35),
+                width: 0.9,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: accent.withValues(alpha: 0.20),
-                  blurRadius: 26,
-                  offset: const Offset(0, 10),
+                  color: accent.withValues(alpha: 0.22),
+                  blurRadius: 28,
+                  offset: const Offset(0, -4),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _Artwork(status: status, accent: accent),
-                  const SizedBox(width: 12),
-                  Expanded(child: _Details(status: status, accent: accent)),
-                  const SizedBox(width: 4),
-                  _Action(status: status, accent: accent),
-                ],
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Top Progress line & Drag / Deck switcher handle
+                Stack(
+                  children: [
+                    if (status.phase == SharedDownloadPhase.downloading)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        height: 3.5,
+                        width: MediaQuery.of(context).size.width *
+                            status.progress.clamp(0.0, 1.0),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              accent.withValues(alpha: 0.6),
+                              accent,
+                            ],
+                          ),
+                          borderRadius: const BorderRadius.only(
+                            topRight: Radius.circular(2),
+                            bottomRight: Radius.circular(2),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.7),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                      ),
+                    Center(
+                      child: isDeckMode
+                          ? GestureDetector(
+                              onTap: onToggleDeck,
+                              child: Container(
+                                margin: const EdgeInsets.only(top: 6, bottom: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: activeIndex == 0 ? 16 : 5,
+                                      height: 3.5,
+                                      decoration: BoxDecoration(
+                                        color: activeIndex == 0
+                                            ? Theme.of(context).colorScheme.primary
+                                            : Colors.white24,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      width: activeIndex == 1 ? 16 : 5,
+                                      height: 3.5,
+                                      decoration: BoxDecoration(
+                                        color: activeIndex == 1
+                                            ? accent
+                                            : Colors.white24,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : Container(
+                              margin: const EdgeInsets.only(top: 6, bottom: 2),
+                              width: 34,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: AppColors.textTertiary
+                                    .withValues(alpha: 0.45),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+
+                // Main Row
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 4, 8, 8),
+                  child: Row(
+                    children: [
+                      _Artwork(status: status, accent: accent),
+                      const SizedBox(width: 12),
+                      Expanded(child: _Details(status: status, accent: accent)),
+                      const SizedBox(width: 4),
+                      _Action(status: status, accent: accent),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
