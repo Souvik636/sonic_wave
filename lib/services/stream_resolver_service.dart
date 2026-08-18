@@ -129,17 +129,7 @@ class StreamResolverService {
       return null;
     }
 
-    // 6. YouTube song — cache-first approach with parallel racing
-    //
-    // The old path extracted a bare URL (via Explode or yt-dlp) and handed it
-    // to ExoPlayer with *guessed* HTTP headers. This failed because:
-    //   a) The `extractor` package's Pigeon bridge drops yt-dlp's http_headers
-    //   b) ExoPlayer's headers didn't match the extraction client context
-    //   c) Google CDN rejected with 403 / timeout
-    //
-    // The new path checks the stream cache first (instant replay), then RACES
-    // a yt-dlp cache download against Invidious/Piped proxy resolution.
-    // Whichever produces a playable result first wins.
+    // 6. YouTube song
     debugPrint('[StreamResolver] Resolving YouTube song exclusively: $id');
 
     // 6a. Check stream cache for an existing file (instant replay)
@@ -151,80 +141,45 @@ class StreamResolverService {
       return ResolvedStream(cachedFile, source: 'youtube_cached');
     }
 
-    // 6b. RACE: yt-dlp cache download vs proxy URL resolution
-    //     Whichever finishes first wins — this cuts latency by running them in parallel.
-    final completer = Completer<ResolvedStream?>();
-    int pending = 0;
-
-    // Track A: yt-dlp cache download (handles its own HTTP headers)
-    pending++;
-    unawaited(() async {
-      try {
-        final path = await cache.downloadToCache(
-          videoId: id,
-          quality: quality,
-          onPlayable: (playablePath) {
-            if (!completer.isCompleted) {
-              debugPrint('[StreamResolver] yt-dlp early playable WON race for $id ($playablePath)');
-              completer.complete(ResolvedStream(playablePath, source: 'youtube_cached'));
-            }
-          },
-        ).timeout(const Duration(seconds: 45));
-        if (path.isNotEmpty && !completer.isCompleted) {
-          debugPrint('[StreamResolver] yt-dlp cache download WON race for $id');
-          completer.complete(ResolvedStream(path, source: 'youtube_cached'));
-        }
-      } catch (e) {
-        if (!completer.isCompleted) {
-          debugPrint('[StreamResolver] yt-dlp cache download failed for $id: $e');
-        }
-      } finally {
-        pending--;
-        if (pending <= 0 && !completer.isCompleted) {
-          completer.complete(null);
-        }
-      }
-    }());
-
-    // Track B: Invidious/Piped proxy URL (proxy handles YouTube auth server-side)
-    pending++;
-    unawaited(() async {
-      try {
-        final proxyUrl = await _youtube.getFallbackStreamUrl(id);
-        if (proxyUrl != null && proxyUrl.startsWith('http') && !completer.isCompleted) {
-          debugPrint('[StreamResolver] Proxy URL WON race for $id');
-          completer.complete(ResolvedStream(proxyUrl, source: 'youtube_proxy', headers: const {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': '*/*',
-          }));
-        }
-      } catch (e) {
-        if (!completer.isCompleted) {
-          debugPrint('[StreamResolver] Proxy fallback failed for $id: $e');
-        }
-      } finally {
-        pending--;
-        if (pending <= 0 && !completer.isCompleted) {
-          completer.complete(null);
-        }
-      }
-    }());
-
-    final raceResult = await completer.future.timeout(
-      const Duration(seconds: 25),
-      onTimeout: () => null,
-    );
-    if (raceResult != null) return raceResult;
-
-    // 6c. Last resort: try the old Explode URL path (may work for some videos)
+    // 6b. Get direct stream URL for instant progressive playback (1-2s response)
     try {
-      final ytUrl =
-          await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
+      final ytUrl = await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
       if (ytUrl.startsWith('http')) {
+        // Trigger background caching in parallel so future plays are local
+        unawaited(() async {
+          try {
+            await cache.downloadToCache(videoId: id, quality: quality);
+          } catch (e) {
+            debugPrint('[StreamResolver] Background cache download note: $e');
+          }
+        }());
+
         return ResolvedStream(ytUrl, source: 'youtube');
       }
     } catch (e) {
-      debugPrint('[StreamResolver] YouTube Explode resolution failed: $e');
+      debugPrint('[StreamResolver] Direct stream URL extraction failed for $id: $e');
+    }
+
+    // 6c. Fallback to proxy stream URL
+    try {
+      final proxyUrl = await _youtube.getFallbackStreamUrl(id);
+      if (proxyUrl != null && proxyUrl.startsWith('http')) {
+        return ResolvedStream(proxyUrl, source: 'youtube_proxy');
+      }
+    } catch (e) {
+      debugPrint('[StreamResolver] Proxy fallback failed for $id: $e');
+    }
+
+    // 6d. Last resort: wait for cache download
+    try {
+      final downloadedPath = await cache
+          .downloadToCache(videoId: id, quality: quality)
+          .timeout(const Duration(seconds: 30));
+      if (downloadedPath.isNotEmpty) {
+        return ResolvedStream(downloadedPath, source: 'youtube_cached');
+      }
+    } catch (e) {
+      debugPrint('[StreamResolver] Final yt-dlp cache download failed for $id: $e');
     }
 
     return null;

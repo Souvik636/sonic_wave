@@ -794,12 +794,7 @@ class PlayerProvider extends ChangeNotifier {
     } catch (e) {
       if (_playGeneration != thisGeneration) return;
       debugPrint('Error skipping to next song: $e');
-      _playbackError = 'Track unavailable. Skipping to next...';
-      if (playlist.length > 1 && currentIndex < playlist.length - 1) {
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          skipNext();
-        });
-      }
+      _playbackError = 'Track unavailable: ${e.toString().replaceAll('Exception:', '').trim()}';
     } finally {
       _finishLoading(thisGeneration);
     }
@@ -885,13 +880,7 @@ class PlayerProvider extends ChangeNotifier {
       if (_playGeneration == thisGeneration) {
         debugPrint('Error playing song: $e');
         final errorMsg = e.toString().replaceAll('Exception:', '').trim();
-        _playbackError = 'Track unavailable. Skipping to next... ($errorMsg)';
-        // Self-healing auto-skip to next track if available
-        if (playlist.length > 1 && currentIndex < playlist.length - 1) {
-          Future.delayed(const Duration(milliseconds: 1200), () {
-            skipNext();
-          });
-        }
+        _playbackError = errorMsg.isNotEmpty ? errorMsg : 'Unable to play this track. Please check connection.';
       }
       // Don't rethrow for superseded requests
     } finally {
