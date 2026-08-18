@@ -129,10 +129,10 @@ class StreamResolverService {
       return null;
     }
 
-    // 6. YouTube song
+    // 6. YouTube song — progressive parallel stream & cache
     debugPrint('[StreamResolver] Resolving YouTube song exclusively: $id');
 
-    // 6a. Check stream cache for an existing file (instant replay)
+    // 6a. Check stream cache for an existing completed file (instant replay, 0ms)
     final cache = StreamCacheService();
     final quality = YouTubeService.streamingQuality;
     final cachedFile = await cache.getCachedFile(id, quality.name);
@@ -141,26 +141,47 @@ class StreamResolverService {
       return ResolvedStream(cachedFile, source: 'youtube_cached');
     }
 
-    // 6b. Get direct stream URL for instant progressive playback (1-2s response)
-    try {
-      final ytUrl = await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
-      if (ytUrl.startsWith('http')) {
-        // Trigger background caching in parallel so future plays are local
-        unawaited(() async {
-          try {
-            await cache.downloadToCache(videoId: id, quality: quality);
-          } catch (e) {
-            debugPrint('[StreamResolver] Background cache download note: $e');
-          }
-        }());
+    // 6b. Progressive cache download via native yt-dlp:
+    //     Fires onPlayable at 256KB (~1s) so ExoPlayer plays the local file instantly without 403 errors,
+    //     while the rest downloads in the background.
+    final completer = Completer<ResolvedStream?>();
 
-        return ResolvedStream(ytUrl, source: 'youtube');
+    unawaited(() async {
+      try {
+        final path = await cache.downloadToCache(
+          videoId: id,
+          quality: quality,
+          onPlayable: (playablePath) {
+            if (!completer.isCompleted) {
+              debugPrint('[StreamResolver] Progressive cache playable at 256KB for $id: $playablePath');
+              completer.complete(ResolvedStream(playablePath, source: 'youtube_cached'));
+            }
+          },
+        ).timeout(const Duration(seconds: 45));
+
+        if (path.isNotEmpty && !completer.isCompleted) {
+          debugPrint('[StreamResolver] Full cache download completed for $id');
+          completer.complete(ResolvedStream(path, source: 'youtube_cached'));
+        }
+      } catch (e) {
+        if (!completer.isCompleted) {
+          debugPrint('[StreamResolver] Cache download error for $id: $e');
+        }
+      } finally {
+        if (!completer.isCompleted) {
+          completer.complete(null);
+        }
       }
-    } catch (e) {
-      debugPrint('[StreamResolver] Direct stream URL extraction failed for $id: $e');
-    }
+    }());
 
-    // 6c. Fallback to proxy stream URL
+    // Wait up to 12s for progressive playable buffer (~256KB usually takes 1-2s)
+    final progressiveResult = await completer.future.timeout(
+      const Duration(seconds: 12),
+      onTimeout: () => null,
+    );
+    if (progressiveResult != null) return progressiveResult;
+
+    // 6c. Fallback: Proxy stream URL (Invidious / Piped proxy server-side)
     try {
       final proxyUrl = await _youtube.getFallbackStreamUrl(id);
       if (proxyUrl != null && proxyUrl.startsWith('http')) {
@@ -170,16 +191,14 @@ class StreamResolverService {
       debugPrint('[StreamResolver] Proxy fallback failed for $id: $e');
     }
 
-    // 6d. Last resort: wait for cache download
+    // 6d. Last resort: Direct stream URL
     try {
-      final downloadedPath = await cache
-          .downloadToCache(videoId: id, quality: quality)
-          .timeout(const Duration(seconds: 30));
-      if (downloadedPath.isNotEmpty) {
-        return ResolvedStream(downloadedPath, source: 'youtube_cached');
+      final ytUrl = await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
+      if (ytUrl.startsWith('http')) {
+        return ResolvedStream(ytUrl, source: 'youtube');
       }
     } catch (e) {
-      debugPrint('[StreamResolver] Final yt-dlp cache download failed for $id: $e');
+      debugPrint('[StreamResolver] Direct stream fallback failed for $id: $e');
     }
 
     return null;
