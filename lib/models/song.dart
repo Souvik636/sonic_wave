@@ -55,8 +55,7 @@ class Song {
 
   /// True if song physically resides in or was recovered from the recovery backup folder.
   bool get isRecovered {
-    if (filePath != null &&
-        (filePath!.contains('.recovery') || filePath!.contains('Recovery'))) {
+    if (filePath != null && (filePath!.contains('.recovery') || filePath!.contains('Recovery'))) {
       return true;
     }
     if (videoId.contains('.recovery') || videoId.contains('Recovery')) {
@@ -95,10 +94,7 @@ class Song {
 
     final cleanTitle = EncodingSanitizer.sanitize(rawTitle);
     final cleanArtist = EncodingSanitizer.sanitize(rawArtist);
-    final cleanThumb = EncodingSanitizer.sanitizeThumbnailUrl(
-      rawThumb,
-      videoId: videoId,
-    );
+    final cleanThumb = EncodingSanitizer.sanitizeThumbnailUrl(rawThumb, videoId: videoId);
     final cleanHighRes = EncodingSanitizer.sanitizeThumbnailUrl(
       rawHighRes.isNotEmpty ? rawHighRes : rawThumb,
       videoId: videoId,
@@ -110,9 +106,7 @@ class Song {
       artist: cleanArtist.isNotEmpty ? cleanArtist : 'Unknown Artist',
       thumbnailUrl: cleanThumb,
       highResThumbnailUrl: cleanHighRes.isNotEmpty ? cleanHighRes : cleanThumb,
-      duration: Duration(
-        milliseconds: (json['duration'] as num?)?.toInt() ?? 0,
-      ),
+      duration: Duration(milliseconds: (json['duration'] as num?)?.toInt() ?? 0),
       videoId: videoId,
       speed: (json['speed'] as num?)?.toDouble() ?? 1.0,
       pitch: (json['pitch'] as num?)?.toDouble() ?? 0.0,
@@ -173,14 +167,10 @@ class Song {
     if (id.startsWith('local_') ||
         filePath != null ||
         videoId.startsWith('/') ||
-        (videoId.length >= 3 &&
-            videoId[1] == ':' &&
-            (videoId[2] == '/' || videoId[2] == '\\')) ||
+        (videoId.length >= 3 && videoId[1] == ':' && (videoId[2] == '/' || videoId[2] == '\\')) ||
         videoId.startsWith('content://') ||
         videoId.startsWith('file://') ||
-        (thumbnailUrl.isNotEmpty &&
-            !thumbnailUrl.startsWith('http://') &&
-            !thumbnailUrl.startsWith('https://'))) {
+        (thumbnailUrl.isNotEmpty && !thumbnailUrl.startsWith('http://') && !thumbnailUrl.startsWith('https://'))) {
       return 'Local';
     }
     return 'YouTube';
@@ -194,9 +184,7 @@ class Song {
     return filePath != null ||
         id.startsWith('local_') ||
         videoId.startsWith('/') ||
-        (videoId.length >= 3 &&
-            videoId[1] == ':' &&
-            (videoId[2] == '/' || videoId[2] == '\\')) ||
+        (videoId.length >= 3 && videoId[1] == ':' && (videoId[2] == '/' || videoId[2] == '\\')) ||
         videoId.startsWith('content://') ||
         videoId.startsWith('file://') ||
         videoId.startsWith('local_');
@@ -205,9 +193,7 @@ class Song {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Song &&
-          runtimeType == other.runtimeType &&
-          videoId == other.videoId;
+      other is Song && runtimeType == other.runtimeType && videoId == other.videoId;
 
   @override
   int get hashCode => videoId.hashCode;

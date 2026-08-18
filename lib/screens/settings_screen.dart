@@ -73,14 +73,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 10),
 
                 // ── Appearance ────────────────────────────────────────
-                _reveal(
-                  0,
-                  _sectionHeader(
-                    context,
-                    Icons.auto_awesome_rounded,
-                    'Appearance',
-                  ),
-                ),
+                _reveal(0, _sectionHeader(context, Icons.auto_awesome_rounded, 'Appearance')),
                 const SizedBox(height: 12),
                 _reveal(1, _buildMaterialYouCard(context)),
                 const SizedBox(height: 12),
@@ -93,24 +86,14 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 // ── Music Visualizer ──────────────────────────────────
-                _reveal(
-                  5,
-                  _sectionHeader(
-                    context,
-                    Icons.graphic_eq_rounded,
-                    'Music Visualizer',
-                  ),
-                ),
+                _reveal(5, _sectionHeader(context, Icons.graphic_eq_rounded, 'Music Visualizer')),
                 const SizedBox(height: 12),
                 _reveal(6, _buildVisualizerCard(context)),
 
                 const SizedBox(height: 24),
 
                 // ── Audio ─────────────────────────────────────────────
-                _reveal(
-                  7,
-                  _sectionHeader(context, Icons.tune_rounded, 'Audio'),
-                ),
+                _reveal(7, _sectionHeader(context, Icons.tune_rounded, 'Audio')),
                 const SizedBox(height: 12),
                 _reveal(8, _buildVolumeCard(context)),
                 const SizedBox(height: 12),
@@ -127,14 +110,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 // ── Storage & Maintenance ─────────────────────────────
-                _reveal(
-                  14,
-                  _sectionHeader(
-                    context,
-                    Icons.storage_rounded,
-                    'Storage & Maintenance',
-                  ),
-                ),
+                _reveal(14, _sectionHeader(context, Icons.storage_rounded, 'Storage & Maintenance')),
                 const SizedBox(height: 12),
                 _reveal(15, _buildStorageLocationCard(context)),
                 const SizedBox(height: 12),
@@ -143,14 +119,7 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 // ── Application Updates ───────────────────────────────
-                _reveal(
-                  17,
-                  _sectionHeader(
-                    context,
-                    Icons.system_update_rounded,
-                    'Application Updates',
-                  ),
-                ),
+                _reveal(17, _sectionHeader(context, Icons.system_update_rounded, 'Application Updates')),
                 const SizedBox(height: 12),
                 _reveal(18, _buildAndroidAutoUpdaterCard(context)),
 
@@ -204,7 +173,10 @@ class SettingsScreen extends StatelessWidget {
               height: 1,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [primary.withValues(alpha: 0.35), Colors.transparent],
+                  colors: [
+                    primary.withValues(alpha: 0.35),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
@@ -230,11 +202,7 @@ class SettingsScreen extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF6C63FF),
-                      Color(0xFF00C9A7),
-                      Color(0xFFFF6584),
-                    ],
+                    colors: [Color(0xFF6C63FF), Color(0xFF00C9A7), Color(0xFFFF6584)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -246,11 +214,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.palette_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
+                child: const Icon(Icons.palette_rounded, color: Colors.white, size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -259,9 +223,7 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Material You',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -287,80 +249,19 @@ class SettingsScreen extends StatelessWidget {
   }
 
   /// Accent palette: name + gradient pair for each swatch orb.
-  static const List<({ThemeAccent accent, String name, Color a, Color b})>
-  _accents = [
-    (
-      accent: ThemeAccent.purple,
-      name: 'Nebula',
-      a: Color(0xFF7C5CFF),
-      b: Color(0xFFB388FF),
-    ),
-    (
-      accent: ThemeAccent.cyan,
-      name: 'Aurora',
-      a: Color(0xFF00E5C3),
-      b: Color(0xFF00B0FF),
-    ),
-    (
-      accent: ThemeAccent.pink,
-      name: 'Blush',
-      a: Color(0xFFFF5C8A),
-      b: Color(0xFFFF9E80),
-    ),
-    (
-      accent: ThemeAccent.orange,
-      name: 'Sunset',
-      a: Color(0xFFFF8A50),
-      b: Color(0xFFFFC400),
-    ),
-    (
-      accent: ThemeAccent.emerald,
-      name: 'Emerald',
-      a: Color(0xFF00E676),
-      b: Color(0xFF69F0AE),
-    ),
-    (
-      accent: ThemeAccent.amber,
-      name: 'Gold',
-      a: Color(0xFFFFC400),
-      b: Color(0xFFFF8A50),
-    ),
-    (
-      accent: ThemeAccent.sapphire,
-      name: 'Ocean',
-      a: Color(0xFF448AFF),
-      b: Color(0xFF18FFFF),
-    ),
-    (
-      accent: ThemeAccent.sakura,
-      name: 'Sakura',
-      a: Color(0xFFFF80AB),
-      b: Color(0xFFEA80FC),
-    ),
-    (
-      accent: ThemeAccent.lava,
-      name: 'Inferno',
-      a: Color(0xFFFF4B2B),
-      b: Color(0xFFFFAB40),
-    ),
-    (
-      accent: ThemeAccent.cyberpunk,
-      name: 'Cyberpunk',
-      a: Color(0xFFD500F9),
-      b: Color(0xFF00E5FF),
-    ),
-    (
-      accent: ThemeAccent.midnight,
-      name: 'Midnight',
-      a: Color(0xFF651FFF),
-      b: Color(0xFF7C4DFF),
-    ),
-    (
-      accent: ThemeAccent.mint,
-      name: 'Arctic Mint',
-      a: Color(0xFF00BFA5),
-      b: Color(0xFF64FFDA),
-    ),
+  static const List<({ThemeAccent accent, String name, Color a, Color b})> _accents = [
+    (accent: ThemeAccent.purple, name: 'Nebula', a: Color(0xFF7C5CFF), b: Color(0xFFB388FF)),
+    (accent: ThemeAccent.cyan, name: 'Aurora', a: Color(0xFF00E5C3), b: Color(0xFF00B0FF)),
+    (accent: ThemeAccent.pink, name: 'Blush', a: Color(0xFFFF5C8A), b: Color(0xFFFF9E80)),
+    (accent: ThemeAccent.orange, name: 'Sunset', a: Color(0xFFFF8A50), b: Color(0xFFFFC400)),
+    (accent: ThemeAccent.emerald, name: 'Emerald', a: Color(0xFF00E676), b: Color(0xFF69F0AE)),
+    (accent: ThemeAccent.amber, name: 'Gold', a: Color(0xFFFFC400), b: Color(0xFFFF8A50)),
+    (accent: ThemeAccent.sapphire, name: 'Ocean', a: Color(0xFF448AFF), b: Color(0xFF18FFFF)),
+    (accent: ThemeAccent.sakura, name: 'Sakura', a: Color(0xFFFF80AB), b: Color(0xFFEA80FC)),
+    (accent: ThemeAccent.lava, name: 'Inferno', a: Color(0xFFFF4B2B), b: Color(0xFFFFAB40)),
+    (accent: ThemeAccent.cyberpunk, name: 'Cyberpunk', a: Color(0xFFD500F9), b: Color(0xFF00E5FF)),
+    (accent: ThemeAccent.midnight, name: 'Midnight', a: Color(0xFF651FFF), b: Color(0xFF7C4DFF)),
+    (accent: ThemeAccent.mint, name: 'Arctic Mint', a: Color(0xFF00BFA5), b: Color(0xFF64FFDA)),
   ];
 
   Widget _buildThemeSelector(BuildContext context) {
@@ -379,9 +280,7 @@ class SettingsScreen extends StatelessWidget {
                       children: [
                         Text(
                           'Theme Accent',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -452,16 +351,13 @@ class SettingsScreen extends StatelessWidget {
                                     border: Border.all(
                                       color: isSelected
                                           ? Colors.white
-                                          : Colors.white.withValues(
-                                              alpha: 0.12,
-                                            ),
+                                          : Colors.white.withValues(alpha: 0.12),
                                       width: isSelected ? 2.5 : 1,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
                                         color: entry.a.withValues(
-                                          alpha: isSelected ? 0.65 : 0.18,
-                                        ),
+                                            alpha: isSelected ? 0.65 : 0.18),
                                         blurRadius: isSelected ? 18 : 8,
                                         spreadRadius: isSelected ? 2 : 0,
                                       ),
@@ -470,15 +366,11 @@ class SettingsScreen extends StatelessWidget {
                                   child: AnimatedSwitcher(
                                     duration: const Duration(milliseconds: 200),
                                     child: isSelected
-                                        ? const Icon(
-                                            Icons.check_rounded,
+                                        ? const Icon(Icons.check_rounded,
                                             key: ValueKey('check'),
-                                            color: Colors.white,
-                                            size: 22,
-                                          )
+                                            color: Colors.white, size: 22)
                                         : const SizedBox.shrink(
-                                            key: ValueKey('empty'),
-                                          ),
+                                            key: ValueKey('empty')),
                                   ),
                                 ),
                               ),
@@ -564,9 +456,7 @@ class SettingsScreen extends StatelessWidget {
             children: [
               Text(
                 'Player Screen Style',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
               ),
               const SizedBox(height: 4),
               Text(
@@ -675,11 +565,8 @@ class SettingsScreen extends StatelessWidget {
                     color: primary,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    color: Colors.white,
-                    size: 12,
-                  ),
+                  child: const Icon(Icons.check_rounded,
+                      color: Colors.white, size: 12),
                 ),
               ),
             Padding(
@@ -688,11 +575,9 @@ class SettingsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Icon(
-                    icon,
-                    color: isSelected ? Colors.white : Colors.white60,
-                    size: 26,
-                  ),
+                  Icon(icon,
+                      color: isSelected ? Colors.white : Colors.white60,
+                      size: 26),
                   const SizedBox(height: 8),
                   Text(
                     title,
@@ -734,9 +619,7 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     Text(
                       'Immersive Ambient Mode',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -783,9 +666,7 @@ class SettingsScreen extends StatelessWidget {
                       children: [
                         Text(
                           'Music Visualizer',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -821,31 +702,22 @@ class SettingsScreen extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: _visualizerStyleOption(
-                                  context,
-                                  'Classic Bars',
-                                  Icons.bar_chart_rounded,
-                                  'bars',
-                                  settings,
+                                  context, 'Classic Bars', Icons.bar_chart_rounded,
+                                  'bars', settings,
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: _visualizerStyleOption(
-                                  context,
-                                  'Circular Wave',
-                                  Icons.donut_large_rounded,
-                                  'circle',
-                                  settings,
+                                  context, 'Circular Wave', Icons.donut_large_rounded,
+                                  'circle', settings,
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: _visualizerStyleOption(
-                                  context,
-                                  'Fluid Wave',
-                                  Icons.waves_rounded,
-                                  'waveform',
-                                  settings,
+                                  context, 'Fluid Wave', Icons.waves_rounded,
+                                  'waveform', settings,
                                 ),
                               ),
                             ],
@@ -913,21 +785,13 @@ class SettingsScreen extends StatelessWidget {
             width: 1.2,
           ),
           boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: primary.withValues(alpha: 0.25),
-                    blurRadius: 10,
-                  ),
-                ]
+              ? [BoxShadow(color: primary.withValues(alpha: 0.25), blurRadius: 10)]
               : null,
         ),
         child: Column(
           children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? primary : AppColors.textTertiary,
-            ),
+            Icon(icon,
+                size: 18, color: isSelected ? primary : AppColors.textTertiary),
             const SizedBox(height: 6),
             Text(
               title,
@@ -961,9 +825,7 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   Text(
                     'App Playback Volume',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
                   ),
                   Text(
                     '${(settings.volume * 100).toInt()}%',
@@ -978,11 +840,7 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  const Icon(
-                    Icons.volume_down_rounded,
-                    color: AppColors.textTertiary,
-                    size: 20,
-                  ),
+                  const Icon(Icons.volume_down_rounded, color: AppColors.textTertiary, size: 20),
                   Expanded(
                     child: Slider(
                       value: settings.volume,
@@ -992,11 +850,7 @@ class SettingsScreen extends StatelessWidget {
                       onChanged: settings.setVolume,
                     ),
                   ),
-                  const Icon(
-                    Icons.volume_up_rounded,
-                    color: AppColors.textTertiary,
-                    size: 20,
-                  ),
+                  const Icon(Icons.volume_up_rounded, color: AppColors.textTertiary, size: 20),
                 ],
               ),
             ],
@@ -1025,9 +879,7 @@ class SettingsScreen extends StatelessWidget {
                       children: [
                         Text(
                           'Crossfade',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -1077,9 +929,7 @@ class SettingsScreen extends StatelessWidget {
             children: [
               Text(
                 'Acoustic Sound Enhancer',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
               ),
               const SizedBox(height: 4),
               Text(
@@ -1141,25 +991,15 @@ class SettingsScreen extends StatelessWidget {
                         settings.setSoundEnhancer(enhancer);
                       }
                     },
-                    selectedColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.2),
-                    backgroundColor: AppColors.surfaceVariant.withValues(
-                      alpha: 0.5,
-                    ),
+                    selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                    backgroundColor: AppColors.surfaceVariant.withValues(alpha: 0.5),
                     labelStyle: TextStyle(
-                      color: isSelected
-                          ? Colors.white
-                          : AppColors.textSecondary,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
+                      color: isSelected ? Colors.white : AppColors.textSecondary,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                       fontSize: 12,
                     ),
                     side: BorderSide(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.transparent,
+                      color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
                       width: 1,
                     ),
                     shape: RoundedRectangleBorder(
@@ -1175,23 +1015,16 @@ class SettingsScreen extends StatelessWidget {
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const SoundStudioScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const SoundStudioScreen()),
                     );
                   },
                   icon: const Icon(Icons.tune_rounded, size: 18),
-                  label: const Text(
-                    'Open Sound Enhancer',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                  label: const Text('Open Sound Enhancer', style: TextStyle(fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                 ),
               ),
@@ -1212,9 +1045,7 @@ class SettingsScreen extends StatelessWidget {
             children: [
               Text(
                 'Streaming Audio Quality',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
               ),
               const SizedBox(height: 4),
               Text(
@@ -1255,9 +1086,7 @@ class SettingsScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.15)
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                               : AppColors.surfaceVariant.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
@@ -1274,9 +1103,7 @@ class SettingsScreen extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: isSelected
-                                    ? Colors.white
-                                    : AppColors.textSecondary,
+                                color: isSelected ? Colors.white : AppColors.textSecondary,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -1319,9 +1146,7 @@ class SettingsScreen extends StatelessWidget {
                     children: [
                       Text(
                         'Manual Custom Equalizer',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -1353,13 +1178,7 @@ class SettingsScreen extends StatelessWidget {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: List.generate(5, (index) {
-                              final bandLabels = [
-                                '60Hz',
-                                '230Hz',
-                                '910Hz',
-                                '4kHz',
-                                '14kHz',
-                              ];
+                              final bandLabels = ['60Hz', '230Hz', '910Hz', '4kHz', '14kHz'];
                               final gain = settings.customEqualizerGains[index];
                               return Expanded(
                                 child: Column(
@@ -1367,9 +1186,7 @@ class SettingsScreen extends StatelessWidget {
                                     Text(
                                       '${gain > 0 ? '+' : ''}${gain.toStringAsFixed(0)}dB',
                                       style: TextStyle(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.primary,
+                                        color: Theme.of(context).colorScheme.primary,
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -1381,29 +1198,17 @@ class SettingsScreen extends StatelessWidget {
                                         child: SliderTheme(
                                           data: SliderTheme.of(context).copyWith(
                                             trackHeight: 2,
-                                            thumbShape:
-                                                const RoundSliderThumbShape(
-                                                  enabledThumbRadius: 6,
-                                                ),
-                                            overlayShape:
-                                                const RoundSliderOverlayShape(
-                                                  overlayRadius: 12,
-                                                ),
+                                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                                           ),
                                           child: Slider(
                                             value: gain,
                                             min: -12.0,
                                             max: 12.0,
                                             onChanged: (newVal) {
-                                              final newGains =
-                                                  List<double>.from(
-                                                    settings
-                                                        .customEqualizerGains,
-                                                  );
+                                              final newGains = List<double>.from(settings.customEqualizerGains);
                                               newGains[index] = newVal;
-                                              settings.setCustomEqualizerGains(
-                                                newGains,
-                                              );
+                                              settings.setCustomEqualizerGains(newGains);
                                             },
                                           ),
                                         ),
@@ -1412,10 +1217,7 @@ class SettingsScreen extends StatelessWidget {
                                     const SizedBox(height: 4),
                                     Text(
                                       bandLabels[index],
-                                      style: const TextStyle(
-                                        color: AppColors.textTertiary,
-                                        fontSize: 8,
-                                      ),
+                                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 8),
                                     ),
                                   ],
                                 ),
@@ -1445,9 +1247,7 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Offline Mode Only',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(fontSize: 15),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -1483,6 +1283,7 @@ class SettingsScreen extends StatelessWidget {
     return const _StorageLocationCard();
   }
 
+
   Widget _buildAndroidAutoUpdaterCard(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     final appVersion = AppVersion.current;
@@ -1510,8 +1311,7 @@ class SettingsScreen extends StatelessWidget {
                     children: [
                       Text(
                         'Android 64-Bit System Updates',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
@@ -1519,10 +1319,7 @@ class SettingsScreen extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         'SonicWave v$appVersion (Android arm64-v8a Release)',
-                        style: const TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 11,
-                        ),
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
                       ),
                     ],
                   ),
@@ -1534,14 +1331,8 @@ class SettingsScreen extends StatelessWidget {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () async {
-                  AppToast.show(
-                    context,
-                    'Checking GitHub for latest 64-bit APK release...',
-                    type: ToastType.info,
-                  );
-                  final client = GitHubReleaseClient(
-                    currentVersion: appVersion,
-                  );
+                  AppToast.show(context, 'Checking GitHub for latest 64-bit APK release...', type: ToastType.info);
+                  final client = GitHubReleaseClient(currentVersion: appVersion);
                   try {
                     final release = await client.checkForUpdate();
                     if (!context.mounted) return;
@@ -1553,19 +1344,11 @@ class SettingsScreen extends StatelessWidget {
                         release: release,
                       );
                     } else {
-                      AppToast.show(
-                        context,
-                        'You are running the latest 64-bit Android release!',
-                        type: ToastType.success,
-                      );
+                      AppToast.show(context, 'You are running the latest 64-bit Android release!', type: ToastType.success);
                     }
                   } on GitHubRateLimitException {
                     if (!context.mounted) return;
-                    AppToast.show(
-                      context,
-                      'GitHub rate limit hit. Try again in a minute.',
-                      type: ToastType.warning,
-                    );
+                    AppToast.show(context, 'GitHub rate limit hit. Try again in a minute.', type: ToastType.warning);
                   } catch (e) {
                     if (!context.mounted) return;
                     final msg = e.toString().contains('SocketException')
@@ -1578,9 +1361,7 @@ class SettingsScreen extends StatelessWidget {
                   backgroundColor: primary.withValues(alpha: 0.20),
                   foregroundColor: Colors.white,
                   side: BorderSide(color: primary.withValues(alpha: 0.4)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   elevation: 0,
                 ),
@@ -1651,27 +1432,21 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
             children: [
               Row(
                 children: [
-                  Icon(
-                    Icons.storage_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 22,
-                  ),
+                  Icon(Icons.storage_rounded,
+                      color: Theme.of(context).colorScheme.primary, size: 22),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Storage Location',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(fontSize: 15),
-                        ),
+                        Text('Storage Location',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontSize: 15)),
                         const SizedBox(height: 2),
-                        Text(
-                          'Where downloaded files are saved',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
+                        Text('Where downloaded files are saved',
+                            style: Theme.of(context).textTheme.bodySmall),
                       ],
                     ),
                   ),
@@ -1693,35 +1468,28 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                   return Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
+                        horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceVariant.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: AppColors.glassBorder.withValues(alpha: 0.15),
-                      ),
+                          color:
+                              AppColors.glassBorder.withValues(alpha: 0.15)),
                     ),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.folder_open_rounded,
-                          size: 14,
-                          color: AppColors.textTertiary,
-                        ),
+                        Icon(Icons.folder_open_rounded,
+                            size: 14, color: AppColors.textTertiary),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            path,
-                            style: const TextStyle(
-                              color: AppColors.textTertiary,
-                              fontSize: 11,
-                              fontFamily: 'monospace',
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          child: Text(path,
+                              style: const TextStyle(
+                                color: AppColors.textTertiary,
+                                fontSize: 11,
+                                fontFamily: 'monospace',
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis),
                         ),
                       ],
                     ),
@@ -1742,68 +1510,60 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
+                          horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.1)
+                            ? Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.1)
                             : AppColors.surfaceVariant.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isSelected
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.4)
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.4)
                               : AppColors.glassBorder.withValues(alpha: 0.1),
                           width: isSelected ? 1.5 : 0.5,
                         ),
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            _icons[type] ?? Icons.storage_rounded,
-                            size: 20,
-                            color: isSelected
-                                ? Theme.of(context).colorScheme.primary
-                                : AppColors.textSecondary,
-                          ),
+                          Icon(_icons[type] ?? Icons.storage_rounded,
+                              size: 20,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : AppColors.textSecondary),
                           const SizedBox(width: 14),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  _labels[type] ?? '',
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : AppColors.textPrimary,
-                                    fontSize: 13,
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.w500,
-                                  ),
-                                ),
+                                Text(_labels[type] ?? '',
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : AppColors.textPrimary,
+                                      fontSize: 13,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w500,
+                                    )),
                                 const SizedBox(height: 2),
-                                Text(
-                                  _descriptions[type] ?? '',
-                                  style: const TextStyle(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 10,
-                                  ),
-                                ),
+                                Text(_descriptions[type] ?? '',
+                                    style: const TextStyle(
+                                        color: AppColors.textTertiary,
+                                        fontSize: 10)),
                               ],
                             ),
                           ),
                           if (isSelected)
-                            Icon(
-                              Icons.check_circle_rounded,
-                              color: Theme.of(context).colorScheme.primary,
-                              size: 20,
-                            ),
+                            Icon(Icons.check_circle_rounded,
+                                color:
+                                    Theme.of(context).colorScheme.primary,
+                                size: 20),
                         ],
                       ),
                     ),
@@ -1818,10 +1578,7 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
   }
 
   Future<void> _onTypeSelected(
-    BuildContext context,
-    SettingsProvider settings,
-    StorageType type,
-  ) async {
+      BuildContext context, SettingsProvider settings, StorageType type) async {
     if (type == settings.storageType || _isMigrating) return;
 
     final oldType = settings.storageType;
@@ -1830,14 +1587,14 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
     // C-1: request permission BEFORE touching any files — a denied dialog
     // after the copy+delete had already run left the library inaccessible.
     if (type != StorageType.appInternal) {
-      final granted = await settings.storageService.requestStoragePermission();
+      final granted =
+          await settings.storageService.requestStoragePermission();
       if (!granted) {
         if (context.mounted) {
           AppToast.show(
-            context,
-            'Storage permission required. Please grant in app settings.',
-            type: ToastType.warning,
-          );
+              context,
+              'Storage permission required. Please grant in app settings.',
+              type: ToastType.warning);
         }
         return;
       }
@@ -1848,16 +1605,12 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
     String? sdPath;
     if (type == StorageType.sdCard) {
       final volumes = await settings.getAvailableStorageVolumes();
-      final sdVolumes = volumes
-          .where((v) => v.type == StorageType.sdCard)
-          .toList();
+      final sdVolumes =
+          volumes.where((v) => v.type == StorageType.sdCard).toList();
       if (sdVolumes.isEmpty) {
         if (context.mounted) {
-          AppToast.show(
-            context,
-            'No SD card detected on this device',
-            type: ToastType.warning,
-          );
+          AppToast.show(context, 'No SD card detected on this device',
+              type: ToastType.warning);
         }
         return;
       }
@@ -1870,17 +1623,13 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
 
     setState(() => _isMigrating = true);
     if (context.mounted) {
-      AppToast.show(
-        context,
-        'Migrating files to ${_labels[type]}…',
-        type: ToastType.info,
-      );
+      AppToast.show(context,
+          'Migrating files to ${_labels[type]}…', type: ToastType.info);
     }
 
     try {
       final success = await player.migrateDownloadedFiles(
-        oldType,
-        type,
+        oldType, type,
         sdCardPath: sdPath,
       );
       await settings.setStorageType(type, sdCardPath: sdPath);
@@ -1903,11 +1652,8 @@ class _StorageLocationCardState extends State<_StorageLocationCard> {
       debugPrint('[StorageCard] migration failed: $e');
       await settings.setStorageType(oldType);
       if (context.mounted) {
-        AppToast.show(
-          context,
-          'Migration failed — location not changed.',
-          type: ToastType.warning,
-        );
+        AppToast.show(context, 'Migration failed — location not changed.',
+            type: ToastType.warning);
       }
     } finally {
       if (mounted) setState(() => _isMigrating = false);

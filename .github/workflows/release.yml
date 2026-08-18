@@ -156,27 +156,12 @@ jobs:
 
       - name: Publish GitHub Release
         if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ github.ref_name }}"
-          TITLE="SonicWave ${{ steps.version.outputs.name }}"
-          
-          echo "Checking release status for $TAG..."
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG exists — updating release assets..."
-            gh release upload "$TAG" \
-              build/app/outputs/bundle/release/app-release.aab \
-              build/app/outputs/flutter-apk/*.apk \
-              build/app/outputs/flutter-apk/*.sha256 \
-              --clobber
-          else
-            echo "Creating new GitHub Release $TAG..."
-            gh release create "$TAG" \
-              build/app/outputs/bundle/release/app-release.aab \
-              build/app/outputs/flutter-apk/*.apk \
-              build/app/outputs/flutter-apk/*.sha256 \
-              --title "$TITLE" \
-              --generate-notes
-          fi
-          echo "GitHub Release published successfully!"
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SonicWave ${{ steps.version.outputs.name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            build/app/outputs/bundle/release/app-release.aab
+            build/app/outputs/flutter-apk/*.apk
+            build/app/outputs/flutter-apk/*.sha256

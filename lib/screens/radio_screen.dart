@@ -85,9 +85,8 @@ class _RadioScreenState extends State<RadioScreen> {
         // Drop global hits already shown by the local list.
         final localIds = _filteredStations.map((s) => s.videoId).toSet();
         setState(() {
-          _globalResults = results
-              .where((s) => !localIds.contains(s.videoId))
-              .toList();
+          _globalResults =
+              results.where((s) => !localIds.contains(s.videoId)).toList();
           _isSearchingGlobal = false;
         });
       } catch (_) {
@@ -120,10 +119,7 @@ class _RadioScreenState extends State<RadioScreen> {
     List<Song> base = _allStations;
 
     if (_selectedCategoryChip != 'All') {
-      final chipKey = _selectedCategoryChip
-          .replaceAll(RegExp(r'[^\w\s]'), '')
-          .trim()
-          .toLowerCase();
+      final chipKey = _selectedCategoryChip.replaceAll(RegExp(r'[^\w\s]'), '').trim().toLowerCase();
       base = base.where((s) {
         final title = s.title.toLowerCase();
         final artist = s.artist.toLowerCase();
@@ -175,23 +171,15 @@ class _RadioScreenState extends State<RadioScreen> {
               controller: _filterController,
               style: Theme.of(context).textTheme.bodyLarge,
               decoration: InputDecoration(
-                hintText:
-                    'Search worldwide stations by name, genre, country...',
+                hintText: 'Search worldwide stations by name, genre, country...',
                 hintStyle: TextStyle(
                   color: AppColors.textTertiary.withValues(alpha: 0.6),
                   fontSize: 12.5,
                 ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: AppColors.textTertiary,
-                ),
+                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary),
                 suffixIcon: _filterController.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: AppColors.textTertiary,
-                          size: 18,
-                        ),
+                        icon: const Icon(Icons.close_rounded, color: AppColors.textTertiary, size: 18),
                         onPressed: () => _filterController.clear(),
                       )
                     : null,
@@ -208,10 +196,7 @@ class _RadioScreenState extends State<RadioScreen> {
                     width: 1.5,
                   ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
             ),
           ),
@@ -239,32 +224,21 @@ class _RadioScreenState extends State<RadioScreen> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? primaryColor
-                          : AppColors.surfaceVariant.withValues(alpha: 0.5),
+                      color: isSelected ? primaryColor : AppColors.surfaceVariant.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: isSelected
-                            ? primaryColor
-                            : AppColors.glassBorder,
+                        color: isSelected ? primaryColor : AppColors.glassBorder,
                         width: 1,
                       ),
                     ),
                     child: Text(
                       chip,
                       style: TextStyle(
-                        color: isSelected
-                            ? Colors.white
-                            : AppColors.textSecondary,
+                        color: isSelected ? Colors.white : AppColors.textSecondary,
                         fontSize: 12,
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.w500,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                       ),
                     ),
                   ),
@@ -276,7 +250,9 @@ class _RadioScreenState extends State<RadioScreen> {
           const SizedBox(height: 8),
 
           // Content
-          Expanded(child: _buildContent(playerProvider)),
+          Expanded(
+            child: _buildContent(playerProvider),
+          ),
         ],
       ),
     );
@@ -284,9 +260,7 @@ class _RadioScreenState extends State<RadioScreen> {
 
   Widget _buildLiveRadioHeader(PlayerProvider playerProvider) {
     final current = playerProvider.currentSong;
-    if (current == null || !RadioService.isRadioId(current.id)) {
-      return const SizedBox.shrink();
-    }
+    if (current == null || !RadioService.isRadioId(current.id)) return const SizedBox.shrink();
 
     final primary = Theme.of(context).colorScheme.primary;
     return Container(
@@ -311,11 +285,7 @@ class _RadioScreenState extends State<RadioScreen> {
               color: Colors.redAccent,
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(
-                  color: Colors.redAccent,
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
+                BoxShadow(color: Colors.redAccent, blurRadius: 8, spreadRadius: 1),
               ],
             ),
           ),
@@ -324,22 +294,10 @@ class _RadioScreenState extends State<RadioScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'BROADCASTING LIVE',
-                  style: TextStyle(
-                    color: Colors.redAccent,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
-                  ),
-                ),
+                const Text('BROADCASTING LIVE', style: TextStyle(color: Colors.redAccent, fontSize: 9.5, fontWeight: FontWeight.w900, letterSpacing: 1)),
                 Text(
                   current.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -368,29 +326,22 @@ class _RadioScreenState extends State<RadioScreen> {
       );
     }
 
-    if (_filteredStations.isEmpty &&
-        _globalResults.isEmpty &&
-        !_isSearchingGlobal) {
+    if (_filteredStations.isEmpty && _globalResults.isEmpty && !_isSearchingGlobal) {
       return const GlowEmptyState(
         icon: Icons.radio,
         title: 'No radio stations match your search.',
-        subtitle:
-            'Try a different name, genre or language — searches worldwide.',
+        subtitle: 'Try a different name, genre or language — searches worldwide.',
       );
     }
 
     // Combined list: local (Indian) matches first, then a "Worldwide" section
     // with global Radio-Browser results while a query is active.
-    final bool showGlobal =
-        _filterText.isNotEmpty &&
+    final bool showGlobal = _filterText.isNotEmpty &&
         (_globalResults.isNotEmpty || _isSearchingGlobal);
     final int localCount = _filteredStations.length;
     final int globalHeaderIndex = showGlobal ? localCount : -1;
-    final int totalCount =
-        localCount +
-        (showGlobal
-            ? 1 + _globalResults.length + (_isSearchingGlobal ? 1 : 0)
-            : 0);
+    final int totalCount = localCount +
+        (showGlobal ? 1 + _globalResults.length + (_isSearchingGlobal ? 1 : 0) : 0);
 
     return RefreshIndicator(
       onRefresh: _loadStations,
@@ -410,9 +361,7 @@ class _RadioScreenState extends State<RadioScreen> {
                 song: station,
                 index: index,
                 onTap: () {
-                  context.read<PlayerProvider>().playPlaylist([
-                    station,
-                  ], startIndex: 0);
+                  context.read<PlayerProvider>().playPlaylist([station], startIndex: 0);
                 },
               ),
             );
@@ -423,11 +372,8 @@ class _RadioScreenState extends State<RadioScreen> {
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.public_rounded,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  Icon(Icons.public_rounded,
+                      size: 16, color: Theme.of(context).colorScheme.primary),
                   const SizedBox(width: 8),
                   Text(
                     'WORLDWIDE STATIONS',
@@ -465,9 +411,7 @@ class _RadioScreenState extends State<RadioScreen> {
               song: station,
               index: index - 1,
               onTap: () {
-                context.read<PlayerProvider>().playPlaylist([
-                  station,
-                ], startIndex: 0);
+                context.read<PlayerProvider>().playPlaylist([station], startIndex: 0);
               },
             ),
           );

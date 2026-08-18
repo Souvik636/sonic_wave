@@ -50,8 +50,8 @@ class SongAlbumArt extends StatelessWidget {
     );
 
     // 2. Check for empty or placeholder thumbnails
-    final bool noThumb =
-        sanitizedUrl.isEmpty || sanitizedUrl.startsWith('placeholder_');
+    final bool noThumb = sanitizedUrl.isEmpty ||
+        sanitizedUrl.startsWith('placeholder_');
 
     if (noThumb && (song.isLocalFile || song.filePath != null)) {
       return ClipRRect(
@@ -96,7 +96,7 @@ class SongAlbumArt extends StatelessWidget {
     }
 
     final isHttp = url.startsWith('http://') || url.startsWith('https://');
-
+    
     // Resolve local file path (handles file:// URIs and standard paths)
     String? localFilePath;
     if (!isHttp && url.isNotEmpty) {
@@ -106,15 +106,12 @@ class SongAlbumArt extends StatelessWidget {
         } catch (_) {
           localFilePath = url.replaceFirst('file://', '');
         }
-      } else if (url.startsWith('/') ||
-          url.contains(r':\') ||
-          url.contains(':/')) {
+      } else if (url.startsWith('/') || url.contains(r':\') || url.contains(':/')) {
         localFilePath = url;
       }
     }
 
-    final bool isLocalValid =
-        localFilePath != null &&
+    final bool isLocalValid = localFilePath != null &&
         File(localFilePath).existsSync() &&
         File(localFilePath).lengthSync() > 32;
 
@@ -194,8 +191,7 @@ class SongAlbumArt extends StatelessWidget {
     if (song.videoId.isNotEmpty &&
         !song.videoId.startsWith('jiosaavn_') &&
         !song.videoId.startsWith('local_') &&
-        (failedUrl.contains('maxresdefault') ||
-            failedUrl.contains('sddefault'))) {
+        (failedUrl.contains('maxresdefault') || failedUrl.contains('sddefault'))) {
       return 'https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg';
     }
     if (song.highResThumbnailUrl.isNotEmpty &&
@@ -256,7 +252,11 @@ class _AbstractArtPainter extends CustomPainter {
     if (index == 0) {
       // DESIGN 1: Neon Synthwave (Magenta, Purple, Cyan)
       final gradient = const LinearGradient(
-        colors: [Color(0xFFD80073), Color(0xFF6A00FF), Color(0xFF00D2FF)],
+        colors: [
+          Color(0xFFD80073),
+          Color(0xFF6A00FF),
+          Color(0xFF00D2FF),
+        ],
         begin: Alignment.topRight,
         end: Alignment.bottomLeft,
       );
@@ -296,7 +296,11 @@ class _AbstractArtPainter extends CustomPainter {
     } else if (index == 1) {
       // DESIGN 2: Deep Cosmic Aurora (Emerald, Sapphire, Deep Navy)
       final gradient = const LinearGradient(
-        colors: [Color(0xFF00C9FF), Color(0xFF92FE9D), Color(0xFF00223E)],
+        colors: [
+          Color(0xFF00C9FF),
+          Color(0xFF92FE9D),
+          Color(0xFF00223E),
+        ],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       );

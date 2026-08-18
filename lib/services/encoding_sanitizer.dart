@@ -70,10 +70,7 @@ class EncodingSanitizer {
   /// Clean, normalize, and upgrade thumbnail URLs for reliable rendering.
   static String sanitizeThumbnailUrl(String rawUrl, {String? videoId}) {
     if (rawUrl.isEmpty) {
-      if (videoId != null &&
-          videoId.isNotEmpty &&
-          !videoId.startsWith('jiosaavn_') &&
-          !videoId.startsWith('local_')) {
+      if (videoId != null && videoId.isNotEmpty && !videoId.startsWith('jiosaavn_') && !videoId.startsWith('local_')) {
         return 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
       }
       return '';
@@ -101,19 +98,16 @@ class EncodingSanitizer {
 
     // 5. JioSaavn thumbnail quality upgrade: 50x50 / 150x150 -> 500x500
     if (url.contains('saavncdn.com') || url.contains('jiosaavn')) {
-      url = url
-          .replaceAll('150x150', '500x500')
-          .replaceAll('50x50', '500x500')
-          .replaceAll('_50x50.jpg', '_500x500.jpg')
-          .replaceAll('_150x150.jpg', '_500x500.jpg');
+      url = url.replaceAll('150x150', '500x500')
+               .replaceAll('50x50', '500x500')
+               .replaceAll('_50x50.jpg', '_500x500.jpg')
+               .replaceAll('_150x150.jpg', '_500x500.jpg');
     }
 
     // 6. YouTube thumbnail fallback & normalization
     if (url.contains('img.youtube.com') || url.contains('i.ytimg.com')) {
       // If thumbnail is empty placeholder, replace with standard resolution
-      if (url.contains('/default.jpg') &&
-          videoId != null &&
-          videoId.isNotEmpty) {
+      if (url.contains('/default.jpg') && videoId != null && videoId.isNotEmpty) {
         url = 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
       }
     }
@@ -155,9 +149,8 @@ class EncodingSanitizer {
     'divide': '÷',
   };
 
-  static final RegExp _htmlEntityRegex = RegExp(
-    r'&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);',
-  );
+  static final RegExp _htmlEntityRegex =
+      RegExp(r'&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);');
 
   static String _unescapeHtml(String input) {
     if (!input.contains('&')) return input;
@@ -171,9 +164,7 @@ class EncodingSanitizer {
         final entity = match.group(1)!;
 
         // Decimal: &#39; &#039;
-        if (entity.startsWith('#') &&
-            !entity.startsWith('#x') &&
-            !entity.startsWith('#X')) {
+        if (entity.startsWith('#') && !entity.startsWith('#x') && !entity.startsWith('#X')) {
           final code = int.tryParse(entity.substring(1));
           if (code != null && code > 0 && code < 0x10FFFF) {
             return String.fromCharCode(code);
@@ -237,42 +228,9 @@ class EncodingSanitizer {
   // ─────────────────────────────────────────────────────────
 
   static const List<String> _mojibakeSignatures = [
-    'Ã©',
-    'Ã¨',
-    'Ã ',
-    'Ã¡',
-    'Ã±',
-    'Ã³',
-    'Ã¼',
-    'Ã®',
-    'Ã´',
-    'Ã§',
-    'Ã»',
-    'Ã¶',
-    'Ã¤',
-    'Ãª',
-    'Ã­',
-    'Ãº',
-    'Ã²',
-    'Ã¬',
-    'Ã¹',
-    'Ã¥',
-    'Ã¦',
-    'Ã¸',
-    'Ã°',
-    'Ã¾',
-    'ÃŸ',
-    'â€™',
-    'â€œ',
-    'â€\x9D',
-    'â€“',
-    'â€”',
-    'â€¦',
-    'Â©',
-    'Â®',
-    'Â ',
-    'Ã ',
-    'Ã‹',
+    'Ã©', 'Ã¨', 'Ã ', 'Ã¡', 'Ã±', 'Ã³', 'Ã¼', 'Ã®', 'Ã´', 'Ã§', 'Ã»', 'Ã¶', 'Ã¤',
+    'Ãª', 'Ã­', 'Ãº', 'Ã²', 'Ã¬', 'Ã¹', 'Ã¥', 'Ã¦', 'Ã¸', 'Ã°', 'Ã¾', 'ÃŸ',
+    'â€™', 'â€œ', 'â€\x9D', 'â€“', 'â€”', 'â€¦', 'Â©', 'Â®', 'Â ', 'Ã ', 'Ã‹',
   ];
 
   static bool _hasLatin1Mojibake(String text) {
@@ -348,13 +306,9 @@ class EncodingSanitizer {
       for (final filterNulls in [true, false]) {
         final bytes = _unpack(trimmed, littleEndian, filterNulls: filterNulls);
         final repaired = _decodeIfPlausible(bytes);
-        if (repaired != null &&
-            repaired != trimmed &&
-            !hasMojibakeCjk(repaired)) {
-          debugPrint(
-            '[EncodingSanitizer] Repaired '
-            '${littleEndian ? 'LE' : 'BE'} (nullFilter=$filterNulls) mojibake: "$trimmed" -> "$repaired"',
-          );
+        if (repaired != null && repaired != trimmed && !hasMojibakeCjk(repaired)) {
+          debugPrint('[EncodingSanitizer] Repaired '
+              '${littleEndian ? 'LE' : 'BE'} (nullFilter=$filterNulls) mojibake: "$trimmed" -> "$repaired"');
           return repaired;
         }
       }
@@ -369,11 +323,7 @@ class EncodingSanitizer {
     return false;
   }
 
-  static List<int> _unpack(
-    String s,
-    bool littleEndian, {
-    required bool filterNulls,
-  }) {
+  static List<int> _unpack(String s, bool littleEndian, {required bool filterNulls}) {
     final out = <int>[];
     for (int i = 0; i < s.length; i++) {
       final code = s.codeUnitAt(i);
@@ -431,38 +381,10 @@ class EncodingSanitizer {
   }
 
   static const List<int> _cp1252Upper = [
-    0x20AC,
-    0x0081,
-    0x201A,
-    0x0192,
-    0x201E,
-    0x2026,
-    0x2020,
-    0x2021,
-    0x02C6,
-    0x2030,
-    0x0160,
-    0x2039,
-    0x0152,
-    0x008D,
-    0x017D,
-    0x008F,
-    0x0090,
-    0x2018,
-    0x2019,
-    0x201C,
-    0x201D,
-    0x2022,
-    0x2013,
-    0x2014,
-    0x02DC,
-    0x2122,
-    0x0161,
-    0x203A,
-    0x0153,
-    0x009D,
-    0x017E,
-    0x0178,
+    0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+    0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
+    0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178,
   ];
 
   static String _decodeWindows1252(List<int> bytes) {
@@ -482,9 +404,7 @@ class EncodingSanitizer {
     for (int i = 0; i < input.length; i++) {
       final code = input.codeUnitAt(i);
       // Strip null bytes and non-printable control characters (\x00-\x08, \x0B, \x0C, \x0E-\x1F, \x7F)
-      if (code == 0 ||
-          (code < 0x20 && code != 0x09 && code != 0x0A && code != 0x0D) ||
-          code == 0x7F) {
+      if (code == 0 || (code < 0x20 && code != 0x09 && code != 0x0A && code != 0x0D) || code == 0x7F) {
         continue;
       }
       buf.writeCharCode(code);
@@ -493,9 +413,7 @@ class EncodingSanitizer {
   }
 
   static bool _isControl(int rune) {
-    if (rune < 0x20 && rune != 0x09 && rune != 0x0A && rune != 0x0D) {
-      return true;
-    }
+    if (rune < 0x20 && rune != 0x09 && rune != 0x0A && rune != 0x0D) return true;
     if (rune == 0x7F) return true;
     if (rune == 0xFFFD) return true;
     return false;
@@ -521,9 +439,6 @@ class EncodingSanitizer {
   static bool _isRawBase64Image(String s) {
     if (s.length < 64) return false;
     // Fast check: starts with standard JPEG (/9j/) or PNG (iVBOR) base64 header
-    return s.startsWith('/9j/') ||
-        s.startsWith('iVBORw0KGgo') ||
-        s.startsWith('R0lGOD') ||
-        s.startsWith('UklGR');
+    return s.startsWith('/9j/') || s.startsWith('iVBORw0KGgo') || s.startsWith('R0lGOD') || s.startsWith('UklGR');
   }
 }

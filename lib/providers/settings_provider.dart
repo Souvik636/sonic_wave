@@ -7,7 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/storage_location_service.dart';
 import '../services/stream_cache_service.dart';
 
-enum AudioQuality { high, medium, low }
+enum AudioQuality {
+  high,
+  medium,
+  low,
+}
 
 enum ThemeAccent {
   purple,
@@ -112,8 +116,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get showVisualizer => _showVisualizer;
   String get playerStyle => _playerStyle;
   int get crossfadeSeconds => _crossfadeSeconds;
-  Map<String, List<double>> get customPresets =>
-      Map.unmodifiable(_customPresets);
+  Map<String, List<double>> get customPresets => Map.unmodifiable(_customPresets);
   bool get isInitialized => _isInitialized;
   StorageType get storageType => _storageType;
   StorageLocationService get storageService => _storageService;
@@ -199,9 +202,8 @@ class SettingsProvider extends ChangeNotifier {
         break;
       case ThemeAccent.system:
         // Blend toward a lighter tint of the wallpaper-derived accent.
-        endColor = (systemDynamicColor ?? const Color(0xFF6C63FF)).withValues(
-          alpha: 0.7,
-        );
+        endColor = (systemDynamicColor ?? const Color(0xFF6C63FF))
+            .withValues(alpha: 0.7);
         break;
     }
     return LinearGradient(
@@ -218,51 +220,53 @@ class SettingsProvider extends ChangeNotifier {
   // the static purple AppColors.primary* constants.
 
   /// Lighter shade of the accent (replaces AppColors.primaryLight).
-  Color get accentColorLight => Color.lerp(accentColor, Colors.white, 0.35)!;
+  Color get accentColorLight =>
+      Color.lerp(accentColor, Colors.white, 0.35)!;
 
   /// Darker shade of the accent (replaces AppColors.primaryDark).
-  Color get accentColorDark => Color.lerp(accentColor, Colors.black, 0.30)!;
+  Color get accentColorDark =>
+      Color.lerp(accentColor, Colors.black, 0.30)!;
 
   /// Radial glow behind hero elements (replaces AppColors.glowGradient).
   RadialGradient get glowGradient => RadialGradient(
-    colors: [
-      accentColor.withValues(alpha: 0.20),
-      accentColor.withValues(alpha: 0.067),
-      const Color(0x00060612),
-    ],
-    radius: 0.8,
-  );
+        colors: [
+          accentColor.withValues(alpha: 0.20),
+          accentColor.withValues(alpha: 0.067),
+          const Color(0x00060612),
+        ],
+        radius: 0.8,
+      );
 
   /// Player screen top wash (replaces AppColors.playerGradient) — the accent
   /// lerped deep into the dark base so every theme gets its own mood.
   LinearGradient get playerGradient => LinearGradient(
-    colors: [
-      Color.lerp(const Color(0xFF0D0D1A), accentColor, 0.16)!,
-      const Color(0xFF0D0D1A),
-    ],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  );
+        colors: [
+          Color.lerp(const Color(0xFF0D0D1A), accentColor, 0.16)!,
+          const Color(0xFF0D0D1A),
+        ],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      );
 
   /// App-wide background (replaces AppColors.backgroundGradient) — the dark
   /// navy base subtly tinted toward the accent hue so the whole app shifts
   /// mood with the selected theme.
   LinearGradient get tintedBackgroundGradient => LinearGradient(
-    colors: [
-      Color.lerp(const Color(0xFF060612), accentColor, 0.045)!,
-      Color.lerp(const Color(0xFF0A0A20), accentColor, 0.075)!,
-      Color.lerp(const Color(0xFF0D0D1A), accentColor, 0.05)!,
-    ],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  );
+        colors: [
+          Color.lerp(const Color(0xFF060612), accentColor, 0.045)!,
+          Color.lerp(const Color(0xFF0A0A20), accentColor, 0.075)!,
+          Color.lerp(const Color(0xFF0D0D1A), accentColor, 0.05)!,
+        ],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      );
 
   /// Download/progress fill (replaces AppColors.downloadGradient).
   LinearGradient get downloadGradient => LinearGradient(
-    colors: [accentColor, const Color(0xFF00C9A7)],
-    begin: Alignment.centerLeft,
-    end: Alignment.centerRight,
-  );
+        colors: [accentColor, const Color(0xFF00C9A7)],
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      );
 
   Future<void> _loadSettings() async {
     try {
@@ -332,9 +336,7 @@ class SettingsProvider extends ChangeNotifier {
       if (eqStr != null) {
         try {
           final decoded = json.decode(eqStr) as List<dynamic>;
-          _customEqualizerGains = decoded
-              .map((val) => (val as num).toDouble())
-              .toList();
+          _customEqualizerGains = decoded.map((val) => (val as num).toDouble()).toList();
         } catch (_) {
           _customEqualizerGains = [0.0, 0.0, 0.0, 0.0, 0.0];
         }
@@ -362,10 +364,7 @@ class SettingsProvider extends ChangeNotifier {
         try {
           final decoded = json.decode(customPresetsStr) as Map<String, dynamic>;
           _customPresets = decoded.map(
-            (k, v) => MapEntry(
-              k,
-              (v as List<dynamic>).map((e) => (e as num).toDouble()).toList(),
-            ),
+            (k, v) => MapEntry(k, (v as List<dynamic>).map((e) => (e as num).toDouble()).toList()),
           );
         } catch (_) {
           _customPresets = {};
@@ -421,9 +420,8 @@ class SettingsProvider extends ChangeNotifier {
       if (_themeAccent != ThemeAccent.system) _previousAccent = _themeAccent;
       await setThemeAccent(ThemeAccent.system);
     } else {
-      final restore = _previousAccent == ThemeAccent.system
-          ? ThemeAccent.purple
-          : _previousAccent;
+      final restore =
+          _previousAccent == ThemeAccent.system ? ThemeAccent.purple : _previousAccent;
       await setThemeAccent(restore);
     }
   }
@@ -530,6 +528,7 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setInt(_crossfadeKey, _crossfadeSeconds);
   }
 
+
   /// Set the storage location type and update the storage service.
   Future<void> setStorageType(StorageType type, {String? sdCardPath}) async {
     _storageType = type;
@@ -575,16 +574,14 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<bool> _isNetworkReachable() async {
     try {
-      final result = await InternetAddress.lookup(
-        'google.com',
-      ).timeout(const Duration(seconds: 5));
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 5));
       if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) return true;
     } catch (_) {}
 
     try {
-      final result = await InternetAddress.lookup(
-        'cloudflare.com',
-      ).timeout(const Duration(seconds: 5));
+      final result = await InternetAddress.lookup('cloudflare.com')
+          .timeout(const Duration(seconds: 5));
       if (result.isNotEmpty && result.first.rawAddress.isNotEmpty) return true;
     } catch (_) {}
 

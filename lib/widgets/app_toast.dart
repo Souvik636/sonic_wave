@@ -4,7 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 
-enum ToastType { success, info, warning, error, favorite, download }
+enum ToastType {
+  success,
+  info,
+  warning,
+  error,
+  favorite,
+  download,
+}
 
 class ToastConfig {
   final Color color;
@@ -38,8 +45,7 @@ class AppToast {
     final overlayState = Overlay.maybeOf(context);
     if (overlayState == null) return;
 
-    final autoDuration =
-        duration ?? _getSmartDuration(message, type, actionLabel != null);
+    final autoDuration = duration ?? _getSmartDuration(message, type, actionLabel != null);
     final config = _getToastConfig(type, Theme.of(context).colorScheme.primary);
 
     late OverlayEntry entry;
@@ -90,38 +96,21 @@ class AppToast {
       case ToastType.favorite:
         return const ToastConfig(Color(0xFFFF2A6D), Icons.favorite_rounded);
       case ToastType.download:
-        return const ToastConfig(
-          Color(0xFF00E5FF),
-          Icons.download_done_rounded,
-        );
+        return const ToastConfig(Color(0xFF00E5FF), Icons.download_done_rounded);
       case ToastType.warning:
-        return const ToastConfig(
-          Color(0xFFFF9100),
-          Icons.warning_amber_rounded,
-        );
+        return const ToastConfig(Color(0xFFFF9100), Icons.warning_amber_rounded);
       case ToastType.error:
-        return const ToastConfig(
-          Color(0xFFFF1744),
-          Icons.error_outline_rounded,
-        );
+        return const ToastConfig(Color(0xFFFF1744), Icons.error_outline_rounded);
       case ToastType.info:
         return ToastConfig(primaryColor, Icons.info_rounded);
     }
   }
 
-  static Duration _getSmartDuration(
-    String message,
-    ToastType type,
-    bool hasAction,
-  ) {
+  static Duration _getSmartDuration(String message, ToastType type, bool hasAction) {
     if (hasAction) return const Duration(milliseconds: 4500);
-    if (type == ToastType.error || type == ToastType.warning) {
-      return const Duration(milliseconds: 3800);
-    }
+    if (type == ToastType.error || type == ToastType.warning) return const Duration(milliseconds: 3800);
     if (message.length > 50) return const Duration(milliseconds: 3200);
-    if (type == ToastType.favorite || type == ToastType.success) {
-      return const Duration(milliseconds: 2000);
-    }
+    if (type == ToastType.favorite || type == ToastType.success) return const Duration(milliseconds: 2000);
     return const Duration(milliseconds: 2600);
   }
 }
@@ -149,8 +138,7 @@ class _TopToastCard extends StatefulWidget {
   State<_TopToastCard> createState() => _TopToastCardState();
 }
 
-class _TopToastCardState extends State<_TopToastCard>
-    with SingleTickerProviderStateMixin {
+class _TopToastCardState extends State<_TopToastCard> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _slideAnimation;
   late Animation<double> _scaleAnimation;
@@ -164,20 +152,17 @@ class _TopToastCardState extends State<_TopToastCard>
       duration: const Duration(milliseconds: 450),
     );
 
-    _slideAnimation = Tween<double>(
-      begin: -60.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+    _slideAnimation = Tween<double>(begin: -60.0, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    );
 
-    _scaleAnimation = Tween<double>(
-      begin: 0.90,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _scaleAnimation = Tween<double>(begin: 0.90, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
 
-    _opacityAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
 
     _controller.forward();
   }
@@ -197,7 +182,10 @@ class _TopToastCardState extends State<_TopToastCard>
           offset: Offset(0, _slideAnimation.value),
           child: Transform.scale(
             scale: _scaleAnimation.value,
-            child: Opacity(opacity: _opacityAnimation.value, child: child),
+            child: Opacity(
+              opacity: _opacityAnimation.value,
+              child: child,
+            ),
           ),
         );
       },
@@ -238,10 +226,7 @@ class _TopToastCardState extends State<_TopToastCard>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: widget.accentColor.withValues(alpha: 0.15),
-                      border: Border.all(
-                        color: widget.accentColor.withValues(alpha: 0.35),
-                        width: 1,
-                      ),
+                      border: Border.all(color: widget.accentColor.withValues(alpha: 0.35), width: 1),
                       boxShadow: [
                         BoxShadow(
                           color: widget.accentColor.withValues(alpha: 0.3),
@@ -271,8 +256,7 @@ class _TopToastCardState extends State<_TopToastCard>
                     ),
                   ),
                   // Action Button (if any)
-                  if (widget.actionLabel != null &&
-                      widget.onAction != null) ...[
+                  if (widget.actionLabel != null && widget.onAction != null) ...[
                     const SizedBox(width: 10),
                     TextButton(
                       onPressed: () {
@@ -281,23 +265,13 @@ class _TopToastCardState extends State<_TopToastCard>
                       },
                       style: TextButton.styleFrom(
                         foregroundColor: widget.accentColor,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        backgroundColor: widget.accentColor.withValues(
-                          alpha: 0.15,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        backgroundColor: widget.accentColor.withValues(alpha: 0.15),
                       ),
                       child: Text(
                         widget.actionLabel!,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                     ),
                   ],

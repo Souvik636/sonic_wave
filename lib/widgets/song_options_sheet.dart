@@ -90,8 +90,8 @@ void showSongOptionsSheet(BuildContext context, Song song) {
               subtitle: context.watch<PlayerProvider>().sleepAfterCurrentTrack
                   ? 'Active: stops after this song'
                   : context.watch<PlayerProvider>().sleepTimerMinutes > 0
-                  ? 'Active: ${context.watch<PlayerProvider>().sleepTimerMinutes}m left'
-                  : 'Not active',
+                      ? 'Active: ${context.watch<PlayerProvider>().sleepTimerMinutes}m left'
+                      : 'Not active',
               onTap: () {
                 Navigator.pop(context);
                 _showSleepTimerPicker(context);
@@ -141,19 +141,14 @@ void showSongOptionsSheet(BuildContext context, Song song) {
                   );
                 }
 
-                final isDownloaded = provider.downloadedSongs.any(
-                  (s) => s.videoId == song.videoId,
-                );
-                final isLocalFile =
-                    song.isLocalFile ||
-                    (song.filePath != null &&
-                        song.filePath!.isNotEmpty &&
-                        File(song.filePath!).existsSync()) ||
+                final isDownloaded = provider.downloadedSongs
+                    .any((s) => s.videoId == song.videoId);
+                final isLocalFile = song.isLocalFile ||
+                    (song.filePath != null && song.filePath!.isNotEmpty && File(song.filePath!).existsSync()) ||
                     song.videoId.startsWith('/') ||
                     song.videoId.startsWith('file://') ||
                     song.videoId.startsWith('content://');
-                final downloadProgress =
-                    provider.downloadProgress[song.videoId];
+                final downloadProgress = provider.downloadProgress[song.videoId];
                 final downloadStatus = provider.getDownloadStatus(song.videoId);
                 final isDownloading =
                     downloadProgress != null || downloadStatus != null;
@@ -274,19 +269,14 @@ Widget _buildOptionTile({
     title: Text(
       title,
       style: const TextStyle(
-        color: Colors.white,
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
-      ),
+          color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
     ),
     subtitle: Text(
       subtitle,
       style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
     ),
-    trailing: const Icon(
-      Icons.chevron_right_rounded,
-      color: AppColors.textTertiary,
-    ),
+    trailing:
+        const Icon(Icons.chevron_right_rounded, color: AppColors.textTertiary),
     contentPadding: EdgeInsets.zero,
     onTap: onTap,
   );
@@ -307,9 +297,7 @@ void _showSleepTimerPicker(BuildContext context) {
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setModalState) {
-          final activeMinutes = context
-              .watch<PlayerProvider>()
-              .sleepTimerMinutes;
+          final activeMinutes = context.watch<PlayerProvider>().sleepTimerMinutes;
 
           return Container(
             padding: EdgeInsets.only(
@@ -337,13 +325,12 @@ void _showSleepTimerPicker(BuildContext context) {
                     if (activeMinutes > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
+                            horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.15),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -379,14 +366,13 @@ void _showSleepTimerPicker(BuildContext context) {
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
+                            horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
                           color: active
-                              ? Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.12)
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.12)
                               : AppColors.surfaceLight,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
@@ -416,9 +402,9 @@ void _showSleepTimerPicker(BuildContext context) {
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: active
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primaryLight
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primaryLight
                                           : Colors.white,
                                     ),
                                   ),
@@ -434,9 +420,8 @@ void _showSleepTimerPicker(BuildContext context) {
                             ),
                             Switch(
                               value: active,
-                              activeThumbColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
+                              activeThumbColor:
+                                  Theme.of(context).colorScheme.primary,
                               onChanged: (v) {
                                 setModalState(() {
                                   provider.setSleepAfterCurrentTrack(v);
@@ -465,56 +450,26 @@ void _showSleepTimerPicker(BuildContext context) {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildPresetChip(
-                      context,
-                      'Off',
-                      0,
-                      playerProvider,
-                      setModalState,
-                      () {
-                        customMinutes = 30.0;
-                      },
-                    ),
-                    _buildPresetChip(
-                      context,
-                      '15m',
-                      15,
-                      playerProvider,
-                      setModalState,
-                      () {
-                        customMinutes = 15.0;
-                      },
-                    ),
-                    _buildPresetChip(
-                      context,
-                      '30m',
-                      30,
-                      playerProvider,
-                      setModalState,
-                      () {
-                        customMinutes = 30.0;
-                      },
-                    ),
-                    _buildPresetChip(
-                      context,
-                      '45m',
-                      45,
-                      playerProvider,
-                      setModalState,
-                      () {
-                        customMinutes = 45.0;
-                      },
-                    ),
-                    _buildPresetChip(
-                      context,
-                      '60m',
-                      60,
-                      playerProvider,
-                      setModalState,
-                      () {
-                        customMinutes = 60.0;
-                      },
-                    ),
+                    _buildPresetChip(context, 'Off', 0, playerProvider,
+                        setModalState, () {
+                      customMinutes = 30.0;
+                    }),
+                    _buildPresetChip(context, '15m', 15, playerProvider,
+                        setModalState, () {
+                      customMinutes = 15.0;
+                    }),
+                    _buildPresetChip(context, '30m', 30, playerProvider,
+                        setModalState, () {
+                      customMinutes = 30.0;
+                    }),
+                    _buildPresetChip(context, '45m', 45, playerProvider,
+                        setModalState, () {
+                      customMinutes = 45.0;
+                    }),
+                    _buildPresetChip(context, '60m', 60, playerProvider,
+                        setModalState, () {
+                      customMinutes = 60.0;
+                    }),
                   ],
                 ),
                 const SizedBox(height: 28),
@@ -548,13 +503,13 @@ void _showSleepTimerPicker(BuildContext context) {
                     activeTrackColor: Theme.of(context).colorScheme.primary,
                     inactiveTrackColor: AppColors.surfaceLight,
                     thumbColor: Colors.white,
-                    overlayColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.2),
+                    overlayColor: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.2),
                     valueIndicatorColor: Theme.of(context).colorScheme.primary,
-                    valueIndicatorTextStyle: const TextStyle(
-                      color: Colors.white,
-                    ),
+                    valueIndicatorTextStyle:
+                        const TextStyle(color: Colors.white),
                   ),
                   child: Slider(
                     value: customMinutes,
@@ -584,40 +539,35 @@ void _showSleepTimerPicker(BuildContext context) {
                       icon: Icons.timer_rounded,
                     );
                   },
-                  child: Builder(
-                    builder: (context) {
-                      final settings = Provider.of<SettingsProvider>(
-                        context,
-                        listen: false,
-                      );
-                      return Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          gradient: settings.accentGradient,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: settings.accentColor.withValues(
-                                alpha: 0.3,
-                              ),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          'Apply Sleep Timer',
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                  child: Builder(builder: (context) {
+                    final settings =
+                        Provider.of<SettingsProvider>(context, listen: false);
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        gradient: settings.accentGradient,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                settings.accentColor.withValues(alpha: 0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Apply Sleep Timer',
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  }),
                 ),
               ],
             ),
@@ -747,19 +697,16 @@ void _showLyricsDialog(BuildContext context, Song song) {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const SizedBox(
-                      width: 48,
-                    ), // Spacer to balance the right icon
+                    const SizedBox(width: 48), // Spacer to balance the right icon
                     Expanded(
                       child: Column(
                         children: [
                           Text(
                             song.title,
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18),
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -767,9 +714,7 @@ void _showLyricsDialog(BuildContext context, Song song) {
                           Text(
                             song.artist,
                             style: const TextStyle(
-                              color: AppColors.textTertiary,
-                              fontSize: 13,
-                            ),
+                                color: AppColors.textTertiary, fontSize: 13),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -819,7 +764,9 @@ void _showLyricsDialog(BuildContext context, Song song) {
                     builder: (context, lyricsSnapshot) {
                       if (lyricsSnapshot.connectionState ==
                           ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
                       }
                       if (lyricsSnapshot.hasError ||
                           !lyricsSnapshot.hasData ||
@@ -875,28 +822,25 @@ void _showLyricsDialog(BuildContext context, Song song) {
 
                               return AnimatedOpacity(
                                 duration: const Duration(milliseconds: 300),
-                                opacity: isActive
-                                    ? 1.0
-                                    : (isPassed ? 0.4 : 0.25),
+                                opacity:
+                                    isActive ? 1.0 : (isPassed ? 0.4 : 0.25),
                                 child: GestureDetector(
                                   onTap: () {
-                                    playerProvider.seek(
-                                      lyricEntries[index].time,
-                                    );
+                                    playerProvider
+                                        .seek(lyricEntries[index].time);
                                   },
                                   child: Container(
                                     height: 55,
                                     alignment: Alignment.center,
                                     padding: const EdgeInsets.symmetric(
-                                      vertical: 4,
-                                    ),
+                                        vertical: 4),
                                     child: Text(
                                       lyricEntries[index].text,
                                       style: TextStyle(
                                         color: isActive
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.primary
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
                                             : Colors.white,
                                         fontSize: isActive ? 18 : 15,
                                         fontWeight: isActive
@@ -910,7 +854,7 @@ void _showLyricsDialog(BuildContext context, Song song) {
                                                       .primary
                                                       .withValues(alpha: 0.6),
                                                   blurRadius: 10,
-                                                ),
+                                                )
                                               ]
                                             : null,
                                       ),
@@ -931,10 +875,9 @@ void _showLyricsDialog(BuildContext context, Song song) {
                 const Text(
                   'Lyrics synced perfectly with SonicWave Karaoke',
                   style: TextStyle(
-                    color: Colors.white38,
-                    fontSize: 10,
-                    fontStyle: FontStyle.italic,
-                  ),
+                      color: Colors.white38,
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic),
                 ),
                 const SizedBox(height: 10),
               ],
@@ -952,10 +895,8 @@ void _showMetadataDialog(BuildContext context, Song song) {
     builder: (context) {
       return AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text(
-          'Song Metadata',
-          style: TextStyle(color: Colors.white),
-        ),
+        title:
+            const Text('Song Metadata', style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -989,10 +930,9 @@ Widget _buildMetaRow(String label, String value) {
           TextSpan(
             text: '$label: ',
             style: const TextStyle(
-              color: AppColors.textTertiary,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
+                color: AppColors.textTertiary,
+                fontWeight: FontWeight.bold,
+                fontSize: 13),
           ),
           TextSpan(
             text: value,
@@ -1037,11 +977,7 @@ void _showDownloadAndAddToAlbumDialog(BuildContext context, Song song) {
                         color: accentColor.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        Icons.create_new_folder_rounded,
-                        color: accentColor,
-                        size: 24,
-                      ),
+                      child: Icon(Icons.create_new_folder_rounded, color: accentColor, size: 24),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -1083,24 +1019,15 @@ void _showDownloadAndAddToAlbumDialog(BuildContext context, Song song) {
                       _showCreateNewAlbumDialog(context, song);
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
                         color: accentColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: accentColor.withValues(alpha: 0.3),
-                        ),
+                        border: Border.all(color: accentColor.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            Icons.add_circle_outline_rounded,
-                            color: accentColor,
-                            size: 22,
-                          ),
+                          Icon(Icons.add_circle_outline_rounded, color: accentColor, size: 22),
                           const SizedBox(width: 12),
                           Text(
                             'Create New Album',
@@ -1153,9 +1080,7 @@ void _showDownloadAndAddToAlbumDialog(BuildContext context, Song song) {
                       itemBuilder: (context, index) {
                         final album = albums[index];
                         final songCount = album.songs.length;
-                        final isAlreadyInAlbum = album.songs.any(
-                          (s) => s.videoId == song.videoId,
-                        );
+                        final isAlreadyInAlbum = album.songs.any((s) => s.videoId == song.videoId);
 
                         return Material(
                           color: Colors.transparent,
@@ -1170,11 +1095,7 @@ void _showDownloadAndAddToAlbumDialog(BuildContext context, Song song) {
                                 color: accentColor.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(
-                                Icons.folder_rounded,
-                                color: accentColor,
-                                size: 20,
-                              ),
+                              child: Icon(Icons.folder_rounded, color: accentColor, size: 20),
                             ),
                             title: Text(
                               album.name,
@@ -1187,28 +1108,18 @@ void _showDownloadAndAddToAlbumDialog(BuildContext context, Song song) {
                             subtitle: Text(
                               '$songCount song${songCount == 1 ? '' : 's'}${isAlreadyInAlbum ? ' • Already in album' : ''}',
                               style: GoogleFonts.inter(
-                                color: isAlreadyInAlbum
-                                    ? accentColor
-                                    : AppColors.textTertiary,
+                                color: isAlreadyInAlbum ? accentColor : AppColors.textTertiary,
                                 fontSize: 12,
                               ),
                             ),
                             trailing: Icon(
-                              isAlreadyInAlbum
-                                  ? Icons.check_circle_rounded
-                                  : Icons.download_for_offline_rounded,
-                              color: isAlreadyInAlbum
-                                  ? accentColor
-                                  : Colors.white70,
+                              isAlreadyInAlbum ? Icons.check_circle_rounded : Icons.download_for_offline_rounded,
+                              color: isAlreadyInAlbum ? accentColor : Colors.white70,
                               size: 22,
                             ),
                             onTap: () {
                               Navigator.pop(context);
-                              provider.downloadSongAndAddToAlbum(
-                                song,
-                                album,
-                                context: context,
-                              );
+                              provider.downloadSongAndAddToAlbum(song, album, context: context);
                             },
                           ),
                         );
@@ -1239,11 +1150,7 @@ void _showCreateNewAlbumDialog(BuildContext context, Song song) {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Create New Album',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
+          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         content: TextField(
           controller: controller,
@@ -1263,10 +1170,7 @@ void _showCreateNewAlbumDialog(BuildContext context, Song song) {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textTertiary),
-            ),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textTertiary)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -1275,24 +1179,15 @@ void _showCreateNewAlbumDialog(BuildContext context, Song song) {
                 Navigator.pop(context);
                 final newAlbum = await provider.createAlbum(name);
                 if (context.mounted) {
-                  await provider.downloadSongAndAddToAlbum(
-                    song,
-                    newAlbum,
-                    context: context,
-                  );
+                  await provider.downloadSongAndAddToAlbum(song, newAlbum, context: context);
                 }
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: accentColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text(
-              'Create & Download',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Create & Download', style: TextStyle(color: Colors.white)),
           ),
         ],
       );

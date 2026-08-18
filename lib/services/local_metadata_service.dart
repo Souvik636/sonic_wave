@@ -23,8 +23,7 @@ import 'encoding_sanitizer.dart';
 ///   survives across sessions.
 /// - Bulk scans parse inside a background isolate to keep the UI smooth.
 class LocalMetadataService {
-  static final LocalMetadataService _instance =
-      LocalMetadataService._internal();
+  static final LocalMetadataService _instance = LocalMetadataService._internal();
   factory LocalMetadataService() => _instance;
   LocalMetadataService._internal();
 
@@ -42,9 +41,8 @@ class LocalMetadataService {
       if (!await _artDir!.exists()) {
         await _artDir!.create(recursive: true);
       }
-      _indexFile = File(
-        '${support.path}${Platform.pathSeparator}local_meta_index.json',
-      );
+      _indexFile =
+          File('${support.path}${Platform.pathSeparator}local_meta_index.json');
       final loaded = <String, _CachedMeta>{};
       if (await _indexFile!.exists()) {
         final raw = json.decode(await _indexFile!.readAsString());
@@ -63,10 +61,8 @@ class LocalMetadataService {
             }
           });
         } else {
-          debugPrint(
-            '[LocalMeta] index dropped — sanitizer v'
-            '${EncodingSanitizer.version} supersedes it; files will reparse',
-          );
+          debugPrint('[LocalMeta] index dropped — sanitizer v'
+              '${EncodingSanitizer.version} supersedes it; files will reparse');
         }
       }
       _cache = loaded;
@@ -90,8 +86,7 @@ class LocalMetadataService {
     try {
       final map = _cache!.map((k, v) => MapEntry(k, v.toJson()));
       await _indexFile!.writeAsString(
-        json.encode({'v': EncodingSanitizer.version, 'e': map}),
-      );
+          json.encode({'v': EncodingSanitizer.version, 'e': map}));
     } catch (e) {
       debugPrint('[LocalMeta] index save failed: $e');
     }
@@ -100,8 +95,7 @@ class LocalMetadataService {
   /// Apply cached/parsed real metadata onto [song] (which must reference a
   /// local file). Falls back to the song's existing values field-by-field.
   Future<Song> enrichSong(Song song) async {
-    final path =
-        song.filePath ??
+    final path = song.filePath ??
         (song.isLocalFile && !song.videoId.startsWith('local_')
             ? song.videoId
             : null);
@@ -125,8 +119,7 @@ class LocalMetadataService {
 
     for (int i = 0; i < result.length; i++) {
       final s = result[i];
-      final path =
-          s.filePath ??
+      final path = s.filePath ??
           (s.isLocalFile && !s.videoId.startsWith('local_') ? s.videoId : null);
       if (path == null || path.isEmpty) continue;
 
@@ -144,10 +137,8 @@ class LocalMetadataService {
         // Check if the cached result still has garbled CJK
         final applied = result[i];
         if (EncodingSanitizer.hasMojibakeCjk(applied.title) ||
-            (applied.artist != 'Local Audio' &&
-                EncodingSanitizer.hasMojibakeCjk(applied.artist)) ||
-            (applied.thumbnailUrl.isEmpty &&
-                applied.highResThumbnailUrl.isEmpty)) {
+            (applied.artist != 'Local Audio' && EncodingSanitizer.hasMojibakeCjk(applied.artist)) ||
+            (applied.thumbnailUrl.isEmpty && applied.highResThumbnailUrl.isEmpty)) {
           cacheNeedNative[i] = path;
         }
       } else {
@@ -178,25 +169,15 @@ class LocalMetadataService {
               mtimeMs: cache[path]?.mtimeMs ?? 0,
             );
             cache[path] = updatedMeta;
-            result[idx] = _applyNative(
-              song,
-              updatedMeta,
-              titleGarbled: EncodingSanitizer.hasMojibakeCjk(song.title),
-              artistGarbled:
-                  song.artist != 'Local Audio' &&
-                  EncodingSanitizer.hasMojibakeCjk(song.artist),
-              missingArt:
-                  song.thumbnailUrl.isEmpty && song.highResThumbnailUrl.isEmpty,
-            );
+            result[idx] = _applyNative(song, updatedMeta,
+                titleGarbled: EncodingSanitizer.hasMojibakeCjk(song.title),
+                artistGarbled: song.artist != 'Local Audio' && EncodingSanitizer.hasMojibakeCjk(song.artist),
+                missingArt: song.thumbnailUrl.isEmpty && song.highResThumbnailUrl.isEmpty);
             _dirty = true;
-            debugPrint(
-              '[LocalMeta] Native fallback (cache) applied for: $path',
-            );
+            debugPrint('[LocalMeta] Native fallback (cache) applied for: $path');
           }
         } catch (e) {
-          debugPrint(
-            '[LocalMeta] Native fallback (cache) failed for $path: $e',
-          );
+          debugPrint('[LocalMeta] Native fallback (cache) failed for $path: $e');
         }
       }
       if (_dirty) _scheduleSave();
@@ -229,11 +210,10 @@ class LocalMetadataService {
       final idx = indices[j];
       final song = result[idx];
       final titleGarbled = EncodingSanitizer.hasMojibakeCjk(song.title);
-      final artistGarbled =
-          song.artist != 'Local Audio' &&
+      final artistGarbled = song.artist != 'Local Audio' &&
           EncodingSanitizer.hasMojibakeCjk(song.artist);
-      final missingArt =
-          song.thumbnailUrl.isEmpty && song.highResThumbnailUrl.isEmpty;
+      final missingArt = song.thumbnailUrl.isEmpty &&
+          song.highResThumbnailUrl.isEmpty;
 
       if (titleGarbled || artistGarbled || missingArt) {
         try {
@@ -248,21 +228,16 @@ class LocalMetadataService {
             final updatedMeta = _CachedMeta(
               title: nTitle ?? cache[paths[j]]?.title,
               artist: nArtist ?? cache[paths[j]]?.artist,
-              durationMs: nDurMs > 0
-                  ? nDurMs
-                  : (cache[paths[j]]?.durationMs ?? 0),
+              durationMs: nDurMs > 0 ? nDurMs : (cache[paths[j]]?.durationMs ?? 0),
               artPath: nArtPath ?? cache[paths[j]]?.artPath,
               sizeBytes: cache[paths[j]]?.sizeBytes ?? 0,
               mtimeMs: cache[paths[j]]?.mtimeMs ?? 0,
             );
             cache[paths[j]] = updatedMeta;
-            result[idx] = _applyNative(
-              result[idx],
-              updatedMeta,
-              titleGarbled: titleGarbled,
-              artistGarbled: artistGarbled,
-              missingArt: missingArt,
-            );
+            result[idx] = _applyNative(result[idx], updatedMeta,
+                titleGarbled: titleGarbled,
+                artistGarbled: artistGarbled,
+                missingArt: missingArt);
             debugPrint('[LocalMeta] Native fallback applied for: ${paths[j]}');
           }
         } catch (e) {
@@ -276,41 +251,23 @@ class LocalMetadataService {
   }
 
   Song _apply(Song song, _CachedMeta meta) {
-    final hasArt =
-        meta.artPath != null &&
+    final hasArt = meta.artPath != null &&
         meta.artPath!.isNotEmpty &&
         File(meta.artPath!).existsSync();
-    final cleanTitle = meta.title != null
-        ? EncodingSanitizer.sanitize(meta.title!)
-        : null;
-    final cleanArtist = meta.artist != null
-        ? EncodingSanitizer.sanitize(meta.artist!)
-        : null;
+    final cleanTitle = meta.title != null ? EncodingSanitizer.sanitize(meta.title!) : null;
+    final cleanArtist = meta.artist != null ? EncodingSanitizer.sanitize(meta.artist!) : null;
 
-    final resolvedTitle =
-        (cleanTitle != null &&
-            cleanTitle.trim().isNotEmpty &&
-            !EncodingSanitizer.hasMojibakeCjk(cleanTitle))
+    final resolvedTitle = (cleanTitle != null && cleanTitle.trim().isNotEmpty && !EncodingSanitizer.hasMojibakeCjk(cleanTitle))
         ? cleanTitle.trim()
-        : ((song.title.trim().isEmpty ||
-                  song.title == song.filePath ||
-                  song.title == 'Unknown Track' ||
-                  song.title.endsWith('.mp3') ||
-                  song.title.endsWith('.m4a') ||
-                  song.title.endsWith('.flac'))
-              ? cleanTitleFromFilename(song.filePath ?? song.videoId)
-              : song.title);
+        : ((song.title.trim().isEmpty || song.title == song.filePath || song.title == 'Unknown Track' || song.title.endsWith('.mp3') || song.title.endsWith('.m4a') || song.title.endsWith('.flac'))
+            ? cleanTitleFromFilename(song.filePath ?? song.videoId)
+            : song.title);
 
-    final resolvedArtist =
-        (cleanArtist != null &&
-            cleanArtist.trim().isNotEmpty &&
-            !EncodingSanitizer.hasMojibakeCjk(cleanArtist))
+    final resolvedArtist = (cleanArtist != null && cleanArtist.trim().isNotEmpty && !EncodingSanitizer.hasMojibakeCjk(cleanArtist))
         ? cleanArtist.trim()
-        : ((song.artist.trim().isEmpty ||
-                  song.artist == 'Unknown Artist' ||
-                  song.artist == '<unknown>')
-              ? cleanArtistFromFilename(song.filePath ?? song.videoId)
-              : song.artist);
+        : ((song.artist.trim().isEmpty || song.artist == 'Unknown Artist' || song.artist == '<unknown>')
+            ? cleanArtistFromFilename(song.filePath ?? song.videoId)
+            : song.artist);
 
     return song.copyWith(
       title: resolvedTitle,
@@ -325,38 +282,27 @@ class LocalMetadataService {
 
   /// Apply native metadata selectively — only override fields that were
   /// garbled or missing from the Dart parser.
-  Song _applyNative(
-    Song song,
-    _CachedMeta meta, {
+  Song _applyNative(Song song, _CachedMeta meta, {
     required bool titleGarbled,
     required bool artistGarbled,
     required bool missingArt,
   }) {
-    final hasNativeArt =
-        meta.artPath != null &&
+    final hasNativeArt = meta.artPath != null &&
         meta.artPath!.isNotEmpty &&
         File(meta.artPath!).existsSync();
 
     return song.copyWith(
-      title:
-          (titleGarbled && meta.title != null && meta.title!.trim().isNotEmpty)
+      title: (titleGarbled && meta.title != null && meta.title!.trim().isNotEmpty)
           ? meta.title!.trim()
           : song.title,
-      artist:
-          (artistGarbled &&
-              meta.artist != null &&
-              meta.artist!.trim().isNotEmpty)
+      artist: (artistGarbled && meta.artist != null && meta.artist!.trim().isNotEmpty)
           ? meta.artist!.trim()
           : song.artist,
       duration: meta.durationMs > 0
           ? Duration(milliseconds: meta.durationMs)
           : song.duration,
-      thumbnailUrl: (missingArt && hasNativeArt)
-          ? meta.artPath!
-          : song.thumbnailUrl,
-      highResThumbnailUrl: (missingArt && hasNativeArt)
-          ? meta.artPath!
-          : song.highResThumbnailUrl,
+      thumbnailUrl: (missingArt && hasNativeArt) ? meta.artPath! : song.thumbnailUrl,
+      highResThumbnailUrl: (missingArt && hasNativeArt) ? meta.artPath! : song.highResThumbnailUrl,
     );
   }
 
@@ -366,9 +312,7 @@ class LocalMetadataService {
     try {
       if (!Platform.isAndroid) return null;
       const channel = MethodChannel('com.sonicwave.sonic_wave/media');
-      final result = await channel.invokeMethod<Map>('readNativeMetadata', {
-        'path': path,
-      });
+      final result = await channel.invokeMethod<Map>('readNativeMetadata', {'path': path});
       if (result == null) return null;
       return Map<String, dynamic>.from(result);
     } catch (e) {
@@ -380,9 +324,7 @@ class LocalMetadataService {
   /// Runs inside a background isolate (also used inline as fallback).
   /// Must stay self-contained: no plugins, only dart:io + the parser.
   static List<Map<String, dynamic>> _parseFilesSync(
-    List<String> paths,
-    String artDirPath,
-  ) {
+      List<String> paths, String artDirPath) {
     final out = <Map<String, dynamic>>[];
     for (final path in paths) {
       String? title;
@@ -405,12 +347,8 @@ class LocalMetadataService {
         }
 
         if (meta != null) {
-          title = meta.title != null
-              ? EncodingSanitizer.sanitize(meta.title!)
-              : null;
-          artist = meta.artist != null
-              ? EncodingSanitizer.sanitize(meta.artist!)
-              : null;
+          title = meta.title != null ? EncodingSanitizer.sanitize(meta.title!) : null;
+          artist = meta.artist != null ? EncodingSanitizer.sanitize(meta.artist!) : null;
           durationMs = meta.duration?.inMilliseconds ?? 0;
         }
 
@@ -437,18 +375,15 @@ class LocalMetadataService {
           final fallbackImg = _extractEmbeddedImageFallback(file);
           if (fallbackImg != null) {
             rawImageBytes = fallbackImg.bytes;
-            imageExt = fallbackImg.isPng
-                ? 'png'
-                : (fallbackImg.isWebp ? 'webp' : 'jpg');
+            imageExt = fallbackImg.isPng ? 'png' : (fallbackImg.isWebp ? 'webp' : 'jpg');
           }
         }
 
         if (rawImageBytes != null && rawImageBytes.isNotEmpty) {
           final hash =
               '${path.hashCode.toUnsigned(32).toRadixString(16)}_${sizeBytes.toRadixString(16)}';
-          final artFile = File(
-            '$artDirPath${Platform.pathSeparator}$hash.$imageExt',
-          );
+          final artFile =
+              File('$artDirPath${Platform.pathSeparator}$hash.$imageExt');
           if (!artFile.existsSync() ||
               artFile.lengthSync() != rawImageBytes.length) {
             artFile.writeAsBytesSync(rawImageBytes);
@@ -462,31 +397,14 @@ class LocalMetadataService {
             final parentDir = file.parent;
             if (parentDir.existsSync()) {
               final candidates = [
-                'cover.jpg',
-                'cover.png',
-                'cover.jpeg',
-                'cover.webp',
-                'folder.jpg',
-                'folder.png',
-                'folder.jpeg',
-                'folder.webp',
-                'album.jpg',
-                'album.png',
-                'album.jpeg',
-                'album.webp',
-                'front.jpg',
-                'front.png',
-                'front.jpeg',
-                'front.webp',
-                'artwork.jpg',
-                'artwork.png',
-                'artwork.jpeg',
-                'artwork.webp',
+                'cover.jpg', 'cover.png', 'cover.jpeg', 'cover.webp',
+                'folder.jpg', 'folder.png', 'folder.jpeg', 'folder.webp',
+                'album.jpg', 'album.png', 'album.jpeg', 'album.webp',
+                'front.jpg', 'front.png', 'front.jpeg', 'front.webp',
+                'artwork.jpg', 'artwork.png', 'artwork.jpeg', 'artwork.webp',
               ];
               for (final cand in candidates) {
-                final candFile = File(
-                  '${parentDir.path}${Platform.pathSeparator}$cand',
-                );
+                final candFile = File('${parentDir.path}${Platform.pathSeparator}$cand');
                 if (candFile.existsSync() && candFile.lengthSync() > 0) {
                   artPath = candFile.path;
                   break;
@@ -496,10 +414,7 @@ class LocalMetadataService {
                 for (final entity in parentDir.listSync()) {
                   if (entity is File) {
                     final name = entity.path.toLowerCase();
-                    if (name.endsWith('.jpg') ||
-                        name.endsWith('.jpeg') ||
-                        name.endsWith('.png') ||
-                        name.endsWith('.webp')) {
+                    if (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.webp')) {
                       artPath = entity.path;
                       break;
                     }
@@ -512,16 +427,14 @@ class LocalMetadataService {
       } catch (_) {
         // Corrupt file or inaccessible file
       }
-      out.add(
-        _CachedMeta(
-          title: title,
-          artist: artist,
-          durationMs: durationMs,
-          artPath: artPath,
-          sizeBytes: sizeBytes,
-          mtimeMs: mtimeMs,
-        ).toJson(),
-      );
+      out.add(_CachedMeta(
+        title: title,
+        artist: artist,
+        durationMs: durationMs,
+        artPath: artPath,
+        sizeBytes: sizeBytes,
+        mtimeMs: mtimeMs,
+      ).toJson());
     }
     return out;
   }
@@ -539,12 +452,9 @@ class LocalMetadataService {
     name = name.replaceAll(RegExp(r'[_+]'), ' ');
     name = name.replaceFirst(RegExp(r'^\s*(\d{1,3}[.\-_\s]+\s*)+'), '');
     name = name.replaceAll(
-      RegExp(
-        r'\s*(\[|\()(?:\s*(?:official\s*(?:video|audio|music\s*video|hd|lyric\s*video)?|lyrics?|320\s*kbps|1080p|720p|4k|remastered|hq|audio|video)\s*)(\]|\))',
-        caseSensitive: false,
-      ),
-      '',
-    );
+        RegExp(r'\s*(\[|\()(?:\s*(?:official\s*(?:video|audio|music\s*video|hd|lyric\s*video)?|lyrics?|320\s*kbps|1080p|720p|4k|remastered|hq|audio|video)\s*)(\]|\))',
+            caseSensitive: false),
+        '');
     if (name.contains(' - ')) {
       final parts = name.split(' - ');
       if (parts.length >= 2 && parts.last.trim().isNotEmpty) {
@@ -584,7 +494,7 @@ class LocalMetadataService {
       if (stat.size < 1024) return null;
 
       final raf = file.openSync(mode: FileMode.read);
-
+      
       // 1. Read first 4MB (or whole file)
       final headLen = stat.size > 4 * 1024 * 1024 ? 4 * 1024 * 1024 : stat.size;
       final headBytes = raf.readSync(headLen);
@@ -607,8 +517,7 @@ class LocalMetadataService {
         final tailLen = 512 * 1024;
         raf.setPositionSync(stat.size - tailLen);
         final tailBytes = raf.readSync(tailLen);
-        img =
-            _findImageInBytes(tailBytes) ?? _findBase64ImageInBytes(tailBytes);
+        img = _findImageInBytes(tailBytes) ?? _findBase64ImageInBytes(tailBytes);
       }
 
       raf.closeSync();
@@ -620,15 +529,9 @@ class LocalMetadataService {
   static _ExtractedImage? _findImageInBytes(Uint8List bytes) {
     // 1. MP4 'covr' atom detection
     for (int i = 0; i < bytes.length - 16; i++) {
-      if (bytes[i] == 0x63 &&
-          bytes[i + 1] == 0x6F &&
-          bytes[i + 2] == 0x76 &&
-          bytes[i + 3] == 0x72) {
+      if (bytes[i] == 0x63 && bytes[i + 1] == 0x6F && bytes[i + 2] == 0x76 && bytes[i + 3] == 0x72) {
         for (int j = i + 4; j < i + 24 && j < bytes.length - 8; j++) {
-          if (bytes[j] == 0x64 &&
-              bytes[j + 1] == 0x61 &&
-              bytes[j + 2] == 0x74 &&
-              bytes[j + 3] == 0x61) {
+          if (bytes[j] == 0x64 && bytes[j + 1] == 0x61 && bytes[j + 2] == 0x74 && bytes[j + 3] == 0x61) {
             final dataStart = j + 12;
             if (dataStart < bytes.length) {
               final subSlice = Uint8List.sublistView(bytes, dataStart);
@@ -642,30 +545,18 @@ class LocalMetadataService {
 
     // 2. ID3v2 APIC / PIC frame detection
     for (int i = 0; i < bytes.length - 10; i++) {
-      if ((bytes[i] == 0x41 &&
-              bytes[i + 1] == 0x50 &&
-              bytes[i + 2] == 0x49 &&
-              bytes[i + 3] == 0x43) ||
+      if ((bytes[i] == 0x41 && bytes[i + 1] == 0x50 && bytes[i + 2] == 0x49 && bytes[i + 3] == 0x43) ||
           (bytes[i] == 0x50 && bytes[i + 1] == 0x49 && bytes[i + 2] == 0x43)) {
         final searchOffset = bytes[i] == 0x41 ? i + 10 : i + 6;
         if (searchOffset < bytes.length) {
-          final scanLimit = searchOffset + 512 < bytes.length
-              ? searchOffset + 512
-              : bytes.length;
-          final headerSlice = Uint8List.sublistView(
-            bytes,
-            searchOffset,
-            scanLimit,
-          );
+          final scanLimit = searchOffset + 512 < bytes.length ? searchOffset + 512 : bytes.length;
+          final headerSlice = Uint8List.sublistView(bytes, searchOffset, scanLimit);
           final subImg = _findDirectImage(headerSlice);
           if (subImg != null) {
             final firstByte = subImg.bytes.first;
             final imgRelIdx = headerSlice.indexOf(firstByte);
             if (imgRelIdx >= 0) {
-              final fullSlice = Uint8List.sublistView(
-                bytes,
-                searchOffset + imgRelIdx,
-              );
+              final fullSlice = Uint8List.sublistView(bytes, searchOffset + imgRelIdx);
               final directFull = _findDirectImage(fullSlice);
               if (directFull != null) return directFull;
             }
@@ -710,9 +601,7 @@ class LocalMetadataService {
       if (bytes[i] == 0xFF && bytes[i + 1] == 0xD8 && bytes[i + 2] == 0xFF) {
         // Find last EOI within reasonable boundary (up to 4MB)
         int lastEoi = -1;
-        final searchLimit = (i + 4 * 1024 * 1024 < bytes.length)
-            ? i + 4 * 1024 * 1024
-            : bytes.length;
+        final searchLimit = (i + 4 * 1024 * 1024 < bytes.length) ? i + 4 * 1024 * 1024 : bytes.length;
         for (int j = i + 3; j < searchLimit - 1; j++) {
           if (bytes[j] == 0xFF && bytes[j + 1] == 0xD9) {
             lastEoi = j + 2;
@@ -734,8 +623,7 @@ class LocalMetadataService {
           bytes[i + 9] == 0x45 &&
           bytes[i + 10] == 0x42 &&
           bytes[i + 11] == 0x50) {
-        final len =
-            bytes[i + 4] |
+        final len = bytes[i + 4] |
             (bytes[i + 5] << 8) |
             (bytes[i + 6] << 16) |
             (bytes[i + 7] << 24);
@@ -752,16 +640,11 @@ class LocalMetadataService {
 
   static _ExtractedImage? _findBase64ImageInBytes(Uint8List bytes) {
     try {
-      final asciiStr = String.fromCharCodes(
-        bytes.where((b) => b >= 32 && b <= 126),
-      );
+      final asciiStr = String.fromCharCodes(bytes.where((b) => b >= 32 && b <= 126));
       // Base64 JPEG header starts with '/9j/'
       final jpgIndex = asciiStr.indexOf('/9j/');
       if (jpgIndex != -1) {
-        final rawB64 = asciiStr
-            .substring(jpgIndex)
-            .split(RegExp(r'[^A-Za-z0-9+/=]'))
-            .first;
+        final rawB64 = asciiStr.substring(jpgIndex).split(RegExp(r'[^A-Za-z0-9+/=]')).first;
         if (rawB64.length > 512) {
           final decoded = base64Decode(base64.normalize(rawB64));
           if (decoded.length >= 1024) {
@@ -772,10 +655,7 @@ class LocalMetadataService {
       // Base64 PNG header starts with 'iVBORw0KGgo'
       final pngIndex = asciiStr.indexOf('iVBORw0KGgo');
       if (pngIndex != -1) {
-        final rawB64 = asciiStr
-            .substring(pngIndex)
-            .split(RegExp(r'[^A-Za-z0-9+/=]'))
-            .first;
+        final rawB64 = asciiStr.substring(pngIndex).split(RegExp(r'[^A-Za-z0-9+/=]')).first;
         if (rawB64.length > 512) {
           final decoded = base64Decode(base64.normalize(rawB64));
           if (decoded.length >= 512) {
@@ -813,20 +693,20 @@ class _CachedMeta {
   });
 
   Map<String, dynamic> toJson() => {
-    't': title,
-    'a': artist,
-    'd': durationMs,
-    'p': artPath,
-    's': sizeBytes,
-    'm': mtimeMs,
-  };
+        't': title,
+        'a': artist,
+        'd': durationMs,
+        'p': artPath,
+        's': sizeBytes,
+        'm': mtimeMs,
+      };
 
   factory _CachedMeta.fromJson(Map<String, dynamic> j) => _CachedMeta(
-    title: j['t'] as String?,
-    artist: j['a'] as String?,
-    durationMs: (j['d'] as num?)?.toInt() ?? 0,
-    artPath: j['p'] as String?,
-    sizeBytes: (j['s'] as num?)?.toInt() ?? 0,
-    mtimeMs: (j['m'] as num?)?.toInt() ?? 0,
-  );
+        title: j['t'] as String?,
+        artist: j['a'] as String?,
+        durationMs: (j['d'] as num?)?.toInt() ?? 0,
+        artPath: j['p'] as String?,
+        sizeBytes: (j['s'] as num?)?.toInt() ?? 0,
+        mtimeMs: (j['m'] as num?)?.toInt() ?? 0,
+      );
 }

@@ -18,7 +18,7 @@ class LyricsService {
   LyricsService._internal();
 
   static const String _userAgent =
-      'SonicWave/1.2.7 (https://github.com/sonicwave; contact@sonicwave.app)';
+      'SonicWave/1.2.6 (https://github.com/sonicwave; contact@sonicwave.app)';
 
   // ─────────────────────────────────────────────────────────
   // Public API
@@ -33,8 +33,8 @@ class LyricsService {
     for (final line in lines) {
       final match = timeRegExp.firstMatch(line);
       if (match != null) {
-        final minutes = int.parse(match.group(1)!);
-        final seconds = int.parse(match.group(2)!);
+        final minutes     = int.parse(match.group(1)!);
+        final seconds     = int.parse(match.group(2)!);
         final milliseconds = int.parse(match.group(3)!) * 10;
         final time = Duration(
           minutes: minutes,
@@ -99,7 +99,7 @@ class LyricsService {
 
   Future<Directory> _lrcCacheDir() async {
     final base = await getApplicationCacheDirectory();
-    final dir = Directory('${base.path}/lyrics');
+    final dir  = Directory('${base.path}/lyrics');
     if (!await dir.exists()) await dir.create(recursive: true);
     return dir;
   }
@@ -109,7 +109,7 @@ class LyricsService {
 
   Future<String?> _readLrcCache(String videoId) async {
     try {
-      final dir = await _lrcCacheDir();
+      final dir  = await _lrcCacheDir();
       final file = File('${dir.path}/${_safeCacheId(videoId)}.lrc');
       if (await file.exists()) return await file.readAsString();
     } catch (e) {
@@ -120,7 +120,7 @@ class LyricsService {
 
   Future<void> _writeLrcCache(String videoId, String lrcText) async {
     try {
-      final dir = await _lrcCacheDir();
+      final dir  = await _lrcCacheDir();
       final file = File('${dir.path}/${_safeCacheId(videoId)}.lrc');
       await file.writeAsString(lrcText);
     } catch (e) {
@@ -134,9 +134,9 @@ class LyricsService {
 
   Future<String?> _readEmbeddedLyrics(String filePath) async {
     try {
-      final file = File(filePath);
+      final file   = File(filePath);
       if (!await file.exists()) return null;
-      final tag = readMetadata(file, getImage: false);
+      final tag    = readMetadata(file, getImage: false);
       final lyrics = tag.lyrics;
       if (lyrics != null && lyrics.trim().isNotEmpty) return lyrics.trim();
     } catch (e) {
@@ -150,28 +150,28 @@ class LyricsService {
   // ─────────────────────────────────────────────────────────
 
   Future<List<LyricEntry>?> _fetchFromLrcLib(Song song) async {
-    final cleanTitle = _cleanQuery(song.title);
+    final cleanTitle  = _cleanQuery(song.title);
     final cleanArtist = _cleanQuery(song.artist);
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
 
     try {
       // — Step 3: /api/get (exact match with duration) —
       final getParams = <String, String>{
-        'track_name': cleanTitle,
+        'track_name':  cleanTitle,
         'artist_name': cleanArtist,
       };
       if (song.duration.inSeconds > 0) {
         getParams['duration'] = song.duration.inSeconds.toString();
       }
 
-      final getUri = Uri.https('lrclib.net', '/api/get', getParams);
-      final getReq = await client.getUrl(getUri);
+      final getUri  = Uri.https('lrclib.net', '/api/get', getParams);
+      final getReq  = await client.getUrl(getUri);
       getReq.headers.add('User-Agent', _userAgent);
       final getResp = await getReq.close().timeout(const Duration(seconds: 10));
 
       if (getResp.statusCode == HttpStatus.ok) {
-        final body = await getResp.transform(utf8.decoder).join();
-        final data = json.decode(body) as Map<String, dynamic>;
+        final body    = await getResp.transform(utf8.decoder).join();
+        final data    = json.decode(body) as Map<String, dynamic>;
         final entries = _extractLrcLibEntries(data, song);
         if (entries != null) {
           await _writeLrcCache(song.videoId, _entriesToLrc(entries));
@@ -182,17 +182,15 @@ class LyricsService {
       }
 
       // — Step 4: /api/search (fuzzy fallback) —
-      final searchUri = Uri.https('lrclib.net', '/api/search', {
+      final searchUri  = Uri.https('lrclib.net', '/api/search', {
         'q': '$cleanTitle $cleanArtist',
       });
-      final searchReq = await client.getUrl(searchUri);
+      final searchReq  = await client.getUrl(searchUri);
       searchReq.headers.add('User-Agent', _userAgent);
-      final searchResp = await searchReq.close().timeout(
-        const Duration(seconds: 10),
-      );
+      final searchResp = await searchReq.close().timeout(const Duration(seconds: 10));
 
       if (searchResp.statusCode == HttpStatus.ok) {
-        final body = await searchResp.transform(utf8.decoder).join();
+        final body    = await searchResp.transform(utf8.decoder).join();
         final results = json.decode(body) as List<dynamic>;
 
         // Pick the best result: prefer synced lyrics, match duration ±5s
@@ -201,16 +199,15 @@ class LyricsService {
 
         for (final item in results.cast<Map<String, dynamic>>()) {
           final itemDur = (item['duration'] as num?)?.toInt() ?? 0;
-          final withinWindow =
-              durationSecs == 0 || (itemDur - durationSecs).abs() <= 5;
+          final withinWindow = durationSecs == 0 ||
+              (itemDur - durationSecs).abs() <= 5;
           if (!withinWindow) continue;
 
           final hasSynced = (item['syncedLyrics'] as String? ?? '').isNotEmpty;
           if (best == null) {
             best = item;
           } else {
-            final bestSynced =
-                (best['syncedLyrics'] as String? ?? '').isNotEmpty;
+            final bestSynced = (best['syncedLyrics'] as String? ?? '').isNotEmpty;
             if (!bestSynced && hasSynced) best = item;
           }
         }
@@ -233,17 +230,12 @@ class LyricsService {
     return null;
   }
 
-  List<LyricEntry>? _extractLrcLibEntries(
-    Map<String, dynamic> data,
-    Song song,
-  ) {
+  List<LyricEntry>? _extractLrcLibEntries(Map<String, dynamic> data, Song song) {
     final synced = data['syncedLyrics'] as String?;
     if (synced != null && synced.isNotEmpty) return parseLrc(synced);
 
     final plain = data['plainLyrics'] as String?;
-    if (plain != null && plain.isNotEmpty) {
-      return _generatePlainLrc(plain, song);
-    }
+    if (plain != null && plain.isNotEmpty) return _generatePlainLrc(plain, song);
 
     return null;
   }
@@ -254,7 +246,7 @@ class LyricsService {
 
   Future<List<LyricEntry>?> _fetchFromJioSaavn(Song song) async {
     // Strip the 'jiosaavn_' prefix to get the raw PID
-    final pid = song.videoId.replaceFirst('jiosaavn_', '');
+    final pid    = song.videoId.replaceFirst('jiosaavn_', '');
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
 
     const List<String> wrapperBases = [
@@ -264,12 +256,10 @@ class LyricsService {
 
     for (final base in wrapperBases) {
       try {
-        final uri = Uri.parse('$base/api/songs/$pid');
+        final uri     = Uri.parse('$base/api/songs/$pid');
         final request = await client.getUrl(uri);
         request.headers.add('User-Agent', _userAgent);
-        final response = await request.close().timeout(
-          const Duration(seconds: 8),
-        );
+        final response = await request.close().timeout(const Duration(seconds: 8));
 
         if (response.statusCode == HttpStatus.ok) {
           final body = await response.transform(utf8.decoder).join();
@@ -319,10 +309,10 @@ class LyricsService {
   String _cleanQuery(String input) {
     return input
         .replaceAll(RegExp(r'\(feat\..*?\)', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\(ft\..*?\)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\(ft\..*?\)',   caseSensitive: false), '')
         .replaceAll(RegExp(r'\(.*?version.*?\)', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\(.*?remix.*?\)', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\[.*?\]'), '')
+        .replaceAll(RegExp(r'\(.*?remix.*?\)',   caseSensitive: false), '')
+        .replaceAll(RegExp(r'\[.*?\]'),  '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
@@ -331,12 +321,9 @@ class LyricsService {
   String _entriesToLrc(List<LyricEntry> entries) {
     final buf = StringBuffer();
     for (final e in entries) {
-      final m = e.time.inMinutes.toString().padLeft(2, '0');
-      final s = (e.time.inSeconds % 60).toString().padLeft(2, '0');
-      final ms = ((e.time.inMilliseconds % 1000) ~/ 10).toString().padLeft(
-        2,
-        '0',
-      );
+      final m  = e.time.inMinutes.toString().padLeft(2, '0');
+      final s  = (e.time.inSeconds % 60).toString().padLeft(2, '0');
+      final ms = ((e.time.inMilliseconds % 1000) ~/ 10).toString().padLeft(2, '0');
       buf.writeln('[$m:$s.$ms]${e.text}');
     }
     return buf.toString();
@@ -344,36 +331,23 @@ class LyricsService {
 
   List<LyricEntry> _generatePlainLrc(String plainLyrics, Song song) {
     final List<LyricEntry> entries = [];
-    final lines = plainLyrics
-        .split('\n')
-        .where((l) => l.trim().isNotEmpty)
-        .toList();
+    final lines = plainLyrics.split('\n').where((l) => l.trim().isNotEmpty).toList();
     if (lines.isEmpty) return _generateDynamicLrc(song);
 
-    final totalSeconds = song.duration.inSeconds > 0
-        ? song.duration.inSeconds
-        : 180;
-    const startOffset = 5;
+    final totalSeconds  = song.duration.inSeconds > 0 ? song.duration.inSeconds : 180;
+    const startOffset   = 5;
     final activeDuration = (totalSeconds * 0.8) - startOffset;
-    final interval = lines.length > 1
-        ? activeDuration / (lines.length - 1)
-        : 10.0;
+    final interval       = lines.length > 1 ? activeDuration / (lines.length - 1) : 10.0;
 
     entries.add(LyricEntry(Duration.zero, '(Intro)'));
     for (int i = 0; i < lines.length; i++) {
       final seconds = startOffset + (i * interval);
-      entries.add(
-        LyricEntry(Duration(seconds: seconds.toInt()), lines[i].trim()),
-      );
+      entries.add(LyricEntry(Duration(seconds: seconds.toInt()), lines[i].trim()));
     }
-    entries.add(
-      LyricEntry(
-        Duration(
-          seconds: (totalSeconds - 4).clamp(startOffset, totalSeconds).toInt(),
-        ),
-        '(Outro)',
-      ),
-    );
+    entries.add(LyricEntry(
+      Duration(seconds: (totalSeconds - 4).clamp(startOffset, totalSeconds).toInt()),
+      '(Outro)',
+    ));
     return entries;
   }
 
@@ -388,52 +362,34 @@ class LyricsService {
 
   List<LyricEntry> _generateDynamicLrc(Song song) {
     final List<LyricEntry> entries = [];
-    final totalSeconds = song.duration.inSeconds > 0
-        ? song.duration.inSeconds
-        : 180;
+    final totalSeconds = song.duration.inSeconds > 0 ? song.duration.inSeconds : 180;
 
-    final title = song.title;
-    final artist = song.artist;
-    final titleLower = title.toLowerCase();
+    final title       = song.title;
+    final artist      = song.artist;
+    final titleLower  = title.toLowerCase();
     final artistLower = artist.toLowerCase();
 
-    final bool isIndian =
-        _hasIndianCharacters(title) ||
-        _hasIndianCharacters(artist) ||
-        titleLower.contains('tum') ||
-        titleLower.contains('dil') ||
-        titleLower.contains('ki') ||
-        titleLower.contains('se') ||
-        titleLower.contains('mere') ||
-        titleLower.contains('tera') ||
-        titleLower.contains('meri') ||
-        titleLower.contains('ishq') ||
-        titleLower.contains('naan') ||
-        titleLower.contains('nee') ||
-        titleLower.contains('prema') ||
-        titleLower.contains('kaadhal') ||
-        artistLower.contains('arijit') ||
-        artistLower.contains('lata') ||
-        artistLower.contains('kishore') ||
-        artistLower.contains('rahman') ||
-        artistLower.contains('anirudh') ||
-        artistLower.contains('spb');
+    final bool isIndian = _hasIndianCharacters(title) ||
+                    _hasIndianCharacters(artist) ||
+                    titleLower.contains('tum')  || titleLower.contains('dil')   ||
+                    titleLower.contains('ki')   || titleLower.contains('se')    ||
+                    titleLower.contains('mere') || titleLower.contains('tera')  ||
+                    titleLower.contains('meri') || titleLower.contains('ishq')  ||
+                    titleLower.contains('naan') || titleLower.contains('nee')   ||
+                    titleLower.contains('prema')|| titleLower.contains('kaadhal')||
+                    artistLower.contains('arijit')  || artistLower.contains('lata') ||
+                    artistLower.contains('kishore') || artistLower.contains('rahman')||
+                    artistLower.contains('anirudh') || artistLower.contains('spb');
 
-    final bool isJapanese =
-        _hasJapaneseCharacters(title) ||
-        _hasJapaneseCharacters(artist) ||
-        artistLower.contains('yoasobi') ||
-        artistLower.contains('lisa') ||
-        artistLower.contains('radwimps');
+    final bool isJapanese = _hasJapaneseCharacters(title) ||
+                      _hasJapaneseCharacters(artist) ||
+                      artistLower.contains('yoasobi') || artistLower.contains('lisa') ||
+                      artistLower.contains('radwimps');
 
-    final bool isSpanish =
-        titleLower.contains('despacito') ||
-        titleLower.contains('amor') ||
-        titleLower.contains('cancion') ||
-        titleLower.contains('te amo') ||
-        artistLower.contains('enrique') ||
-        artistLower.contains('shakira') ||
-        artistLower.contains('bad bunny');
+    final bool isSpanish = titleLower.contains('despacito') || titleLower.contains('amor') ||
+                     titleLower.contains('cancion')   || titleLower.contains('te amo') ||
+                     artistLower.contains('enrique')  || artistLower.contains('shakira') ||
+                     artistLower.contains('bad bunny');
 
     final List<String> template;
     if (isIndian) {

@@ -52,23 +52,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _fadeController;
 
   String _formatDate(DateTime dt) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${dt.day} ${months[dt.month - 1]}';
   }
-
   late Animation<double> _fadeAnimation;
 
   @override
@@ -110,7 +96,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         // Small delay so the home screen is fully rendered before showing.
         await Future<void>.delayed(const Duration(seconds: 2));
         if (mounted) {
-          UpdateDialog.show(context, updateClient: client, release: release);
+          UpdateDialog.show(
+            context,
+            updateClient: client,
+            release: release,
+          );
         }
       }
     } catch (e) {
@@ -174,25 +164,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     right: 20,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
                         color: Colors.redAccent.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.redAccent.withValues(alpha: 0.3),
-                          width: 0.8,
-                        ),
+                        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3), width: 0.8),
                       ),
                       child: const Row(
                         children: [
-                          Icon(
-                            Icons.wifi_off_rounded,
-                            color: Colors.redAccent,
-                            size: 20,
-                          ),
+                          Icon(Icons.wifi_off_rounded, color: Colors.redAccent, size: 20),
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -223,9 +203,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         error,
                         type: ToastType.error,
                         actionLabel: failedSong != null ? 'RETRY' : null,
-                        onAction: failedSong != null
-                            ? () => playerProvider.playSong(failedSong)
-                            : null,
+                        onAction: failedSong != null ? () => playerProvider.playSong(failedSong) : null,
                       );
                       playerProvider.clearPlaybackError();
                     });
@@ -327,230 +305,210 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               parent: AlwaysScrollableScrollPhysics(),
             ),
             slivers: [
-              // App bar
-              SliverAppBar(
-                floating: true,
-                backgroundColor: Colors.transparent,
-                toolbarHeight: 70,
-                title: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildGreetingWidget(context),
-                    const SizedBox(height: 4),
-                    ShaderMask(
-                      shaderCallback: (bounds) => LinearGradient(
-                        colors: [
-                          Colors.white,
-                          Theme.of(context).colorScheme.primary,
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ).createShader(bounds),
-                      child: Text(
-                        'SonicWave',
-                        style: Theme.of(context).textTheme.headlineLarge
-                            ?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                      ),
-                    ),
-                  ],
-                ),
-                actions: [
-                  // Live refresh indicator
-                  if (homeProvider.isRefreshing)
-                    Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(
-                                Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
+            // App bar
+            SliverAppBar(
+              floating: true,
+              backgroundColor: Colors.transparent,
+              toolbarHeight: 70,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildGreetingWidget(context),
+                  const SizedBox(height: 4),
+                  ShaderMask(
+                    shaderCallback: (bounds) => LinearGradient(
+                      colors: [
+                        Colors.white,
+                        Theme.of(context).colorScheme.primary,
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ).createShader(bounds),
+                    child: Text(
+                      'SonicWave',
+                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Updating',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  // Quick Offline mode toggle
-                  Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      onPressed: () {
-                        settings.setOfflineModeOnly(true);
-                      },
-                      icon: const Icon(
-                        Icons.cloud_queue_rounded,
-                        color: AppColors.textSecondary,
-                        size: 22,
-                      ),
-                      tooltip: 'Go Offline',
-                    ),
-                  ),
-                  Container(
-                    margin: const EdgeInsets.only(right: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const SettingsScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(
-                        Icons.settings_rounded,
-                        color: AppColors.textSecondary,
-                        size: 22,
-                      ),
                     ),
                   ),
                 ],
               ),
-
-              // Trending section
-              SliverToBoxAdapter(
-                child: _StaggeredListSlideIn(
-                  index: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 14),
+              actions: [
+                // Live refresh indicator
+                if (homeProvider.isRefreshing)
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 4,
-                              height: 20,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Theme.of(context).colorScheme.primary,
-                                    AppColors.secondary,
-                                  ],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                ),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
+                        SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(
+                              Theme.of(context).colorScheme.primary,
                             ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Trending Now',
-                              style: Theme.of(context).textTheme.headlineMedium,
-                            ),
-                            const SizedBox(width: 8),
-                            const _LivePulseDot(),
-                          ],
+                          ),
                         ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => SectionDetailScreen(
-                                  title: 'Trending Now',
-                                  songs: homeProvider.trendingSongs,
-                                ),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            'See All',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Updating',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ),
-
-              // Trending horizontal list
-              SliverToBoxAdapter(
-                child: homeProvider.isLoading
-                    ? const ShimmerHorizontalList(
-                        cardHeight: 250,
-                        cardWidth: 190,
-                      )
-                    : _StaggeredListSlideIn(
-                        index: 1,
-                        child: _buildTrendingCards(homeProvider.trendingSongs),
-                      ),
-              ),
-
-              // Recently Played
-              SliverToBoxAdapter(child: _buildRecentlyPlayedSection()),
-
-              ...homeProvider.categorySongs.entries
-                  .toList()
-                  .asMap()
-                  .entries
-                  .map((indexed) {
-                    return SliverToBoxAdapter(
-                      child: _StaggeredListSlideIn(
-                        index: indexed.key + 2,
-                        child: _buildCategorySection(
-                          indexed.value.key,
-                          indexed.value.value,
-                        ),
-                      ),
-                    );
-                  }),
-
-              // Shimmer placeholders for categories still loading in
-              if (homeProvider.categorySongs.length <
-                      HomeProvider.categories.length &&
-                  !homeProvider.isLoading)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 20),
-                    child: ShimmerLoadingList(itemCount: 3),
+                // Quick Offline mode toggle
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      settings.setOfflineModeOnly(true);
+                    },
+                    icon: const Icon(Icons.cloud_queue_rounded,
+                        color: AppColors.textSecondary, size: 22),
+                    tooltip: 'Go Offline',
                   ),
                 ),
+                Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                      );
+                    },
+                    icon: const Icon(Icons.settings_rounded,
+                        color: AppColors.textSecondary, size: 22),
+                  ),
+                ),
+              ],
+            ),
 
-              // Bottom padding for mini player
-              const SliverToBoxAdapter(child: SizedBox(height: 140)),
-            ],
+
+            // Trending section
+            SliverToBoxAdapter(
+              child: _StaggeredListSlideIn(
+                index: 0,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Theme.of(context).colorScheme.primary,
+                                  AppColors.secondary,
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Trending Now',
+                            style: Theme.of(context).textTheme.headlineMedium,
+                          ),
+                          const SizedBox(width: 8),
+                          const _LivePulseDot(),
+                        ],
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => SectionDetailScreen(
+                                title: 'Trending Now',
+                                songs: homeProvider.trendingSongs,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'See All',
+                          style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Trending horizontal list
+            SliverToBoxAdapter(
+              child: homeProvider.isLoading
+                  ? const ShimmerHorizontalList(cardHeight: 250, cardWidth: 190)
+                  : _StaggeredListSlideIn(
+                      index: 1,
+                      child: _buildTrendingCards(homeProvider.trendingSongs),
+                    ),
+            ),
+
+            // Recently Played
+            SliverToBoxAdapter(
+              child: _buildRecentlyPlayedSection(),
+            ),
+
+            ...homeProvider.categorySongs.entries.toList().asMap().entries.map((indexed) {
+              return SliverToBoxAdapter(
+                child: _StaggeredListSlideIn(
+                  index: indexed.key + 2,
+                  child: _buildCategorySection(indexed.value.key, indexed.value.value),
+                ),
+              );
+            }),
+
+            // Shimmer placeholders for categories still loading in
+            if (homeProvider.categorySongs.length < HomeProvider.categories.length &&
+                !homeProvider.isLoading)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 20),
+                  child: ShimmerLoadingList(itemCount: 3),
+                ),
+              ),
+
+            // Bottom padding for mini player
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 140),
+            ),
+          ],
           ),
         );
       },
     );
   }
+
+
 
   Widget _buildTrendingCards(List<Song> songs) {
     if (songs.isEmpty) {
@@ -569,10 +527,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             song: song,
             index: index,
             onTap: () {
-              context.read<PlayerProvider>().playPlaylist(
-                songs,
-                startIndex: index,
-              );
+              context.read<PlayerProvider>().playPlaylist(songs, startIndex: index);
             },
           );
         },
@@ -596,9 +551,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.12),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -615,7 +568,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
             ),
-            ...recentlyPlayed.take(5).map((song) => SongTile(song: song)),
+            ...recentlyPlayed.take(5).map(
+                  (song) => SongTile(song: song),
+                ),
           ],
         );
       },
@@ -662,35 +617,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) =>
-                          SectionDetailScreen(title: category, songs: songs),
+                      builder: (context) => SectionDetailScreen(
+                        title: category,
+                        songs: songs,
+                      ),
                     ),
                   );
                 },
                 child: Text(
                   'See All',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  style: TextStyle(color: Theme.of(context).colorScheme.primary),
                 ),
               ),
             ],
           ),
         ),
-        ...songs
-            .take(5)
-            .toList()
-            .asMap()
-            .entries
-            .map(
+        ...songs.take(5).toList().asMap().entries.map(
               (entry) => SongTile(
                 song: entry.value,
                 index: entry.key,
                 onTap: () {
-                  context.read<PlayerProvider>().playPlaylist(
-                    songs,
-                    startIndex: entry.key,
-                  );
+                  context
+                      .read<PlayerProvider>()
+                      .playPlaylist(songs, startIndex: entry.key);
                 },
               ),
             ),
@@ -715,8 +664,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   child: Text(
                     'Storage',
                     style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                          fontWeight: FontWeight.w800,
+                        ),
                   ),
                 ),
                 Padding(
@@ -730,14 +679,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     labelColor: Colors.white,
                     unselectedLabelColor: AppColors.textTertiary,
-                    labelStyle: GoogleFonts.outfit(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                    unselectedLabelStyle: GoogleFonts.outfit(
-                      fontWeight: FontWeight.w500,
-                      fontSize: 13,
-                    ),
+                    labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13),
+                    unselectedLabelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w500, fontSize: 13),
                     tabs: const [
                       Tab(text: 'Local'),
                       Tab(text: 'Albums'),
@@ -751,17 +694,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
         body: TabBarView(
           physics: const BouncingScrollPhysics(),
-          children: [_buildLocalTab(), _buildAlbumsTab(), _buildDownloadsTab()],
+          children: [
+            _buildLocalTab(),
+            _buildAlbumsTab(),
+            _buildDownloadsTab(),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildAlbumsGrid(
-    PlayerProvider provider,
-    List<UserAlbum> filteredAlbums, {
-    String? highlightQuery,
-  }) {
+  Widget _buildAlbumsGrid(PlayerProvider provider, List<UserAlbum> filteredAlbums, {String? highlightQuery}) {
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       sliver: SliverGrid(
@@ -771,19 +714,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           mainAxisSpacing: 14,
           childAspectRatio: 0.85,
         ),
-        delegate: SliverChildBuilderDelegate((context, index) {
-          // First item is a "Create Album" placeholder
-          if (index == 0) {
-            return _buildCreateAlbumCard(context, provider);
-          }
-          final album = filteredAlbums[index - 1];
-          return _buildAlbumCard(
-            context,
-            album,
-            provider,
-            highlightQuery: highlightQuery,
-          );
-        }, childCount: filteredAlbums.length + 1),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            // First item is a "Create Album" placeholder
+            if (index == 0) {
+              return _buildCreateAlbumCard(context, provider);
+            }
+            final album = filteredAlbums[index - 1];
+            return _buildAlbumCard(context, album, provider, highlightQuery: highlightQuery);
+          },
+          childCount: filteredAlbums.length + 1,
+        ),
       ),
     );
   }
@@ -804,19 +745,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.add_circle_outline_rounded,
-              size: 36,
-              color: AppColors.textSecondary,
-            ),
+            Icon(Icons.add_circle_outline_rounded, size: 36, color: AppColors.textSecondary),
             SizedBox(height: 10),
             Text(
               'Create Album',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 2),
             Text(
@@ -829,19 +762,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildAlbumCard(
-    BuildContext context,
-    UserAlbum album,
-    PlayerProvider provider, {
-    String? highlightQuery,
-  }) {
+  Widget _buildAlbumCard(BuildContext context, UserAlbum album, PlayerProvider provider, {String? highlightQuery}) {
     final hasThumbnail = album.thumbnail.isNotEmpty;
     Song? matchedSong;
     if (highlightQuery != null && highlightQuery.trim().isNotEmpty) {
       final q = highlightQuery.trim().toLowerCase();
       for (final s in album.songs) {
-        if (s.title.toLowerCase().contains(q) ||
-            s.artist.toLowerCase().contains(q)) {
+        if (s.title.toLowerCase().contains(q) || s.artist.toLowerCase().contains(q)) {
           matchedSong = s;
           break;
         }
@@ -851,12 +778,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return _AnimatedPressScale(
-      onTap: () => _showAlbumDetailsSheet(
-        context,
-        album,
-        provider,
-        highlightQuery: highlightQuery,
-      ),
+      onTap: () => _showAlbumDetailsSheet(context, album, provider, highlightQuery: highlightQuery),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.surfaceVariant.withValues(alpha: 0.4),
@@ -891,27 +813,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ? CachedNetworkImage(
                             imageUrl: album.thumbnail,
                             fit: BoxFit.cover,
-                            errorWidget: (context, url, error) =>
-                                _buildAlbumFallbackArt(album),
+                            errorWidget: (context, url, error) => _buildAlbumFallbackArt(album),
                           )
                         : Image.file(
                             File(album.thumbnail),
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                _buildAlbumFallbackArt(album),
+                            errorBuilder: (context, error, stackTrace) => _buildAlbumFallbackArt(album),
                           )
                   else
                     _buildAlbumFallbackArt(album),
-
+                  
                   // Size overlay
                   Positioned(
                     top: 8,
                     left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 3,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(6),
@@ -923,11 +840,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
-                            Icons.storage_rounded,
-                            size: 8,
-                            color: AppColors.primaryLight,
-                          ),
+                          const Icon(Icons.storage_rounded, size: 8, color: AppColors.primaryLight),
                           const SizedBox(width: 4),
                           Text(
                             album.formattedTotalSize,
@@ -941,16 +854,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-
+                  
                   // Last updated date overlay
                   Positioned(
                     top: 8,
                     right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 3,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(6),
@@ -969,7 +879,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-
+                  
                   // Dark gradient overlay at bottom
                   Positioned(
                     bottom: 0,
@@ -979,10 +889,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.8),
-                          ],
+                          colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                         ),
@@ -996,10 +903,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       left: 8,
                       right: 48,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 3,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(
                           color: primaryColor.withValues(alpha: 0.90),
                           borderRadius: BorderRadius.circular(8),
@@ -1012,20 +916,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         child: Row(
                           children: [
-                            const Icon(
-                              Icons.music_note_rounded,
-                              size: 10,
-                              color: Colors.white,
-                            ),
+                            const Icon(Icons.music_note_rounded, size: 10, color: Colors.white),
                             const SizedBox(width: 3),
                             Expanded(
                               child: Text(
                                 matchedSong.title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1047,11 +943,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           color: Theme.of(context).colorScheme.primary,
                         ),
                         child: Center(
-                          child: Icon(
-                            Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
+                          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20),
                         ),
                       ),
                     ),
@@ -1066,11 +958,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 children: [
                   Text(
                     album.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1081,47 +969,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       Row(
                         children: [
                           if (album.isFolderBased) ...[
-                            Icon(
-                              Icons.folder_rounded,
-                              size: 10,
-                              color: Colors.amber.withValues(alpha: 0.8),
-                            ),
+                            Icon(Icons.folder_rounded, size: 10, color: Colors.amber.withValues(alpha: 0.8)),
                             const SizedBox(width: 4),
                           ],
                           Text(
                             '${album.songCount} track${album.songCount == 1 ? '' : 's'}',
-                            style: const TextStyle(
-                              color: AppColors.textTertiary,
-                              fontSize: 10,
-                            ),
+                            style: const TextStyle(color: AppColors.textTertiary, fontSize: 10),
                           ),
                         ],
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: album.isFolderBased
                               ? Colors.amber.withValues(alpha: 0.15)
                               : album.isCustom
-                              ? AppColors.primary.withValues(alpha: 0.15)
-                              : AppColors.secondary.withValues(alpha: 0.15),
+                                  ? AppColors.primary.withValues(alpha: 0.15)
+                                  : AppColors.secondary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          album.isFolderBased
-                              ? 'Folder'
-                              : album.isCustom
-                              ? 'Custom'
-                              : 'Prefilled',
+                          album.isFolderBased ? 'Folder' : album.isCustom ? 'Custom' : 'Prefilled',
                           style: TextStyle(
                             color: album.isFolderBased
                                 ? Colors.amber
                                 : album.isCustom
-                                ? AppColors.primaryLight
-                                : AppColors.secondaryLight,
+                                    ? AppColors.primaryLight
+                                    : AppColors.secondaryLight,
                             fontSize: 8,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1199,9 +1073,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
-                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               child: Column(
                 children: [
@@ -1210,33 +1082,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppColors.primary.withValues(alpha: 0.15),
-                      border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.3),
-                        width: 1.5,
-                      ),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.5),
                     ),
-                    child: const Icon(
-                      Icons.library_add_rounded,
-                      color: AppColors.primaryLight,
-                      size: 28,
-                    ),
+                    child: const Icon(Icons.library_add_rounded, color: AppColors.primaryLight, size: 28),
                   ),
                   const SizedBox(height: 12),
                   const Text(
                     'Create Album',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
                   const Text(
                     'Organize your songs into a custom collection',
-                    style: TextStyle(
-                      color: AppColors.textTertiary,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
                   ),
                 ],
               ),
@@ -1249,34 +1107,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 style: const TextStyle(color: Colors.white, fontSize: 15),
                 decoration: InputDecoration(
                   hintText: 'Album name...',
-                  hintStyle: TextStyle(
-                    color: AppColors.textTertiary.withValues(alpha: 0.5),
-                  ),
-                  prefixIcon: const Icon(
-                    Icons.album_rounded,
-                    color: AppColors.textTertiary,
-                    size: 20,
-                  ),
+                  hintStyle: TextStyle(color: AppColors.textTertiary.withValues(alpha: 0.5)),
+                  prefixIcon: const Icon(Icons.album_rounded, color: AppColors.textTertiary, size: 20),
                   filled: true,
                   fillColor: AppColors.surfaceVariant.withValues(alpha: 0.5),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(
-                      color: AppColors.glassBorder.withValues(alpha: 0.2),
-                    ),
+                    borderSide: BorderSide(color: AppColors.glassBorder.withValues(alpha: 0.2)),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(
-                      color: AppColors.glassBorder.withValues(alpha: 0.1),
-                    ),
+                    borderSide: BorderSide(color: AppColors.glassBorder.withValues(alpha: 0.1)),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(
-                      color: AppColors.primary,
-                      width: 1.5,
-                    ),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
                   ),
                 ),
                 autofocus: true,
@@ -1292,17 +1137,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       onPressed: () => Navigator.pop(ctx),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                      ),
+                      child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1313,11 +1150,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         gradient: AppColors.primaryGradient,
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
+                          BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
                         ],
                       ),
                       child: Material(
@@ -1336,11 +1169,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             child: Center(
                               child: Text(
                                 'Create Album',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ),
@@ -1357,12 +1186,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showAlbumDetailsSheet(
-    BuildContext context,
-    UserAlbum album,
-    PlayerProvider provider, {
-    String? highlightQuery,
-  }) {
+  void _showAlbumDetailsSheet(BuildContext context, UserAlbum album, PlayerProvider provider, {String? highlightQuery}) {
     final scrollController = ScrollController();
 
     showModalBottomSheet(
@@ -1371,34 +1195,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       isScrollControlled: true,
       builder: (context) {
         String searchQuery = '';
-        String songSortType =
-            'default'; // 'default', 'title', 'size', 'duration'
+        String songSortType = 'default'; // 'default', 'title', 'size', 'duration'
         final primaryColor = Theme.of(context).colorScheme.primary;
 
         return StatefulBuilder(
           builder: (context, setSheetState) {
             // Fetch updated album instance from provider to keep it in sync after edits
-            final currentAlbum = provider.albums.firstWhere(
-              (a) => a.id == album.id,
-              orElse: () => album,
-            );
+            final currentAlbum = provider.albums.firstWhere((a) => a.id == album.id, orElse: () => album);
             final hasThumbnail = currentAlbum.thumbnail.isNotEmpty;
-
+            
             final filteredSongs = currentAlbum.songs.where((s) {
               final query = searchQuery.toLowerCase();
-              return s.title.toLowerCase().contains(query) ||
-                  s.artist.toLowerCase().contains(query);
+              return s.title.toLowerCase().contains(query) || s.artist.toLowerCase().contains(query);
             }).toList();
 
             if (songSortType == 'title') {
-              filteredSongs.sort(
-                (a, b) =>
-                    a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-              );
+              filteredSongs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
             } else if (songSortType == 'size') {
-              filteredSongs.sort(
-                (a, b) => b.fileSizeInBytes.compareTo(a.fileSizeInBytes),
-              );
+              filteredSongs.sort((a, b) => b.fileSizeInBytes.compareTo(a.fileSizeInBytes));
             } else if (songSortType == 'duration') {
               filteredSongs.sort((a, b) => b.duration.compareTo(a.duration));
             }
@@ -1408,8 +1222,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             if (highlightQuery != null && highlightQuery.trim().isNotEmpty) {
               final q = highlightQuery.trim().toLowerCase();
               for (final s in filteredSongs) {
-                if (s.title.toLowerCase().contains(q) ||
-                    s.artist.toLowerCase().contains(q)) {
+                if (s.title.toLowerCase().contains(q) || s.artist.toLowerCase().contains(q)) {
                   targetSongId = s.videoId;
                   break;
                 }
@@ -1417,25 +1230,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             }
             // Fallback: Currently playing song if inside this album
             if (targetSongId == null && provider.currentSong != null) {
-              if (filteredSongs.any(
-                (s) => s.videoId == provider.currentSong!.videoId,
-              )) {
+              if (filteredSongs.any((s) => s.videoId == provider.currentSong!.videoId)) {
                 targetSongId = provider.currentSong!.videoId;
               }
             }
 
             // Trigger smooth auto-scroll to matched/playing song position
             if (targetSongId != null) {
-              final targetIdx = filteredSongs.indexWhere(
-                (s) => s.videoId == targetSongId,
-              );
+              final targetIdx = filteredSongs.indexWhere((s) => s.videoId == targetSongId);
               if (targetIdx >= 0) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (scrollController.hasClients) {
-                    final targetOffset = (targetIdx * 76.0).clamp(
-                      0.0,
-                      scrollController.position.maxScrollExtent,
-                    );
+                    final targetOffset = (targetIdx * 76.0).clamp(0.0, scrollController.position.maxScrollExtent);
                     scrollController.animateTo(
                       targetOffset,
                       duration: const Duration(milliseconds: 500),
@@ -1472,16 +1278,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     builder: (context, animValue, child) {
                       return Transform.translate(
                         offset: Offset(0, 20 * (1.0 - animValue)),
-                        child: Opacity(opacity: animValue, child: child),
+                        child: Opacity(
+                          opacity: animValue,
+                          child: child,
+                        ),
                       );
                     },
                     child: Container(
                       width: double.infinity,
                       margin: const EdgeInsets.symmetric(horizontal: 16),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -1506,56 +1312,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 context: context,
                                 backgroundColor: AppColors.surface,
                                 shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(20),
-                                  ),
+                                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                                 ),
                                 builder: (ctx) => SafeArea(
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       ListTile(
-                                        leading: const Icon(
-                                          Icons.photo_library_rounded,
-                                          color: Colors.white,
-                                        ),
-                                        title: const Text(
-                                          'Choose Cover from Gallery',
-                                          style: TextStyle(color: Colors.white),
-                                        ),
+                                        leading: const Icon(Icons.photo_library_rounded, color: Colors.white),
+                                        title: const Text('Choose Cover from Gallery', style: TextStyle(color: Colors.white)),
                                         onTap: () async {
                                           Navigator.pop(ctx);
                                           final picker = ImagePicker();
-                                          final image = await picker.pickImage(
-                                            source: ImageSource.gallery,
-                                          );
+                                          final image = await picker.pickImage(source: ImageSource.gallery);
                                           if (image != null) {
-                                            await provider.updateAlbumCover(
-                                              currentAlbum.id,
-                                              image.path,
-                                            );
+                                            await provider.updateAlbumCover(currentAlbum.id, image.path);
                                             setSheetState(() {});
                                           }
                                         },
                                       ),
                                       if (currentAlbum.coverImagePath != null)
                                         ListTile(
-                                          leading: const Icon(
-                                            Icons.no_photography_rounded,
-                                            color: Colors.redAccent,
-                                          ),
-                                          title: const Text(
-                                            'Remove Custom Cover',
-                                            style: TextStyle(
-                                              color: Colors.redAccent,
-                                            ),
-                                          ),
+                                          leading: const Icon(Icons.no_photography_rounded, color: Colors.redAccent),
+                                          title: const Text('Remove Custom Cover', style: TextStyle(color: Colors.redAccent)),
                                           onTap: () async {
                                             Navigator.pop(ctx);
-                                            await provider.updateAlbumCover(
-                                              currentAlbum.id,
-                                              null,
-                                            );
+                                            await provider.updateAlbumCover(currentAlbum.id, null);
                                             setSheetState(() {});
                                           },
                                         ),
@@ -1572,52 +1354,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     width: 72,
                                     height: 72,
                                     child: hasThumbnail
-                                        ? (currentAlbum.thumbnail.startsWith(
-                                                'http',
+                                        ? (currentAlbum.thumbnail.startsWith('http')
+                                            ? CachedNetworkImage(
+                                                imageUrl: currentAlbum.thumbnail,
+                                                fit: BoxFit.cover,
+                                                errorWidget: (context, url, error) => _buildAlbumFallbackArt(currentAlbum),
                                               )
-                                              ? CachedNetworkImage(
-                                                  imageUrl:
-                                                      currentAlbum.thumbnail,
-                                                  fit: BoxFit.cover,
-                                                  errorWidget:
-                                                      (context, url, error) =>
-                                                          _buildAlbumFallbackArt(
-                                                            currentAlbum,
-                                                          ),
-                                                )
-                                              : Image.file(
-                                                  File(currentAlbum.thumbnail),
-                                                  key: ValueKey(
-                                                    'album_cover_${currentAlbum.id}_${currentAlbum.lastUpdated.millisecondsSinceEpoch}',
-                                                  ),
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder:
-                                                      (
-                                                        context,
-                                                        error,
-                                                        stackTrace,
-                                                      ) =>
-                                                          _buildAlbumFallbackArt(
-                                                            currentAlbum,
-                                                          ),
-                                                ))
+                                            : Image.file(
+                                                File(currentAlbum.thumbnail),
+                                                key: ValueKey('album_cover_${currentAlbum.id}_${currentAlbum.lastUpdated.millisecondsSinceEpoch}'),
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) => _buildAlbumFallbackArt(currentAlbum),
+                                              ))
                                         : _buildAlbumFallbackArt(currentAlbum),
                                   ),
                                 ),
                                 Positioned.fill(
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.3,
-                                      ),
+                                      color: Colors.black.withValues(alpha: 0.3),
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                     child: const Center(
-                                      child: Icon(
-                                        Icons.camera_alt_rounded,
-                                        color: Colors.white70,
-                                        size: 20,
-                                      ),
+                                      child: Icon(Icons.camera_alt_rounded, color: Colors.white70, size: 20),
                                     ),
                                   ),
                                 ),
@@ -1632,11 +1391,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               children: [
                                 Text(
                                   currentAlbum.name,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -1644,26 +1399,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 Row(
                                   children: [
                                     if (currentAlbum.isFolderBased) ...[
-                                      Icon(
-                                        Icons.folder_rounded,
-                                        size: 12,
-                                        color: Colors.amber.withValues(
-                                          alpha: 0.8,
-                                        ),
-                                      ),
+                                      Icon(Icons.folder_rounded, size: 12, color: Colors.amber.withValues(alpha: 0.8)),
                                       const SizedBox(width: 4),
                                     ],
                                     Expanded(
                                       child: Text(
-                                        '${currentAlbum.isFolderBased
-                                            ? 'Folder Album'
-                                            : currentAlbum.isCustom
-                                            ? 'Custom Album'
-                                            : 'Category Album'} • ${currentAlbum.songCount} songs',
-                                        style: const TextStyle(
-                                          color: AppColors.textTertiary,
-                                          fontSize: 12,
-                                        ),
+                                        '${currentAlbum.isFolderBased ? 'Folder Album' : currentAlbum.isCustom ? 'Custom Album' : 'Category Album'} • ${currentAlbum.songCount} songs',
+                                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -1673,11 +1415,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 const SizedBox(height: 4),
                                 Text(
                                   'Size: ${currentAlbum.formattedTotalSize} • Updated: ${_formatDate(currentAlbum.lastUpdated)}',
-                                  style: const TextStyle(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                  style: const TextStyle(color: AppColors.textTertiary, fontSize: 10, fontWeight: FontWeight.w500),
                                 ),
                               ],
                             ),
@@ -1690,15 +1428,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.all(12),
                               ),
-                              icon: const Icon(
-                                Icons.play_arrow_rounded,
-                                size: 26,
-                              ),
+                              icon: const Icon(Icons.play_arrow_rounded, size: 26),
                               onPressed: () {
-                                provider.playPlaylist(
-                                  currentAlbum.songs,
-                                  startIndex: 0,
-                                );
+                                provider.playPlaylist(currentAlbum.songs, startIndex: 0);
                               },
                             ),
                         ],
@@ -1713,79 +1445,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton.icon(
-                          onPressed: () => _showManageAlbumSongsDialog(
-                            context,
-                            currentAlbum,
-                            provider,
-                            () {
-                              setSheetState(() {});
-                            },
-                          ),
+                          onPressed: () => _showManageAlbumSongsDialog(context, currentAlbum, provider, () {
+                            setSheetState(() {});
+                          }),
                           icon: const Icon(Icons.edit_rounded, size: 16),
                           label: const Text('Manage Songs'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppColors.primaryLight,
-                          ),
+                          style: TextButton.styleFrom(foregroundColor: AppColors.primaryLight),
                         ),
                         if (currentAlbum.isCustom) ...[
                           const SizedBox(width: 10),
                           TextButton.icon(
                             onPressed: () {
-                              _confirmDeleteAlbumWithProtection(
-                                context,
-                                currentAlbum,
-                                provider,
-                              );
+                              _confirmDeleteAlbumWithProtection(context, currentAlbum, provider);
                             },
-                            icon: const Icon(
-                              Icons.delete_outline_rounded,
-                              size: 16,
-                            ),
+                            icon: const Icon(Icons.delete_outline_rounded, size: 16),
                             label: const Text('Delete'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.redAccent,
-                            ),
+                            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
                           ),
                         ],
                       ],
                     ),
                   ),
                   const Divider(height: 20, color: AppColors.divider),
-
+                  
                   // Song Search & Sorting bar
                   if (currentAlbum.songs.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
                       child: Row(
                         children: [
                           Expanded(
                             child: TextField(
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                              ),
+                              style: const TextStyle(color: Colors.white, fontSize: 13),
                               decoration: InputDecoration(
                                 hintText: 'Search songs in this album...',
-                                hintStyle: const TextStyle(
-                                  color: AppColors.textTertiary,
-                                  fontSize: 12,
-                                ),
-                                prefixIcon: const Icon(
-                                  Icons.search_rounded,
-                                  color: AppColors.textTertiary,
-                                  size: 18,
-                                ),
+                                hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 18),
                                 filled: true,
-                                fillColor: AppColors.surfaceVariant.withValues(
-                                  alpha: 0.5,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 10,
-                                ),
+                                fillColor: AppColors.surfaceVariant.withValues(alpha: 0.5),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: BorderSide.none,
@@ -1801,16 +1499,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           const SizedBox(width: 10),
                           Container(
                             decoration: BoxDecoration(
-                              color: AppColors.surfaceVariant.withValues(
-                                alpha: 0.5,
-                              ),
+                              color: AppColors.surfaceVariant.withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: PopupMenuButton<String>(
-                              icon: const Icon(
-                                Icons.filter_list_rounded,
-                                color: Colors.white,
-                              ),
+                              icon: const Icon(Icons.filter_list_rounded, color: Colors.white),
                               tooltip: 'Sort Songs',
                               onSelected: (val) {
                                 setSheetState(() {
@@ -1818,49 +1511,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 });
                               },
                               color: AppColors.surface,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               itemBuilder: (ctx) => [
                                 const PopupMenuItem(
                                   value: 'default',
-                                  child: Text(
-                                    'Default Order',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                    ),
-                                  ),
+                                  child: Text('Default Order', style: TextStyle(color: Colors.white, fontSize: 13)),
                                 ),
                                 const PopupMenuItem(
                                   value: 'title',
-                                  child: Text(
-                                    'Sort by Title',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                    ),
-                                  ),
+                                  child: Text('Sort by Title', style: TextStyle(color: Colors.white, fontSize: 13)),
                                 ),
                                 const PopupMenuItem(
                                   value: 'size',
-                                  child: Text(
-                                    'Sort by Size',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                    ),
-                                  ),
+                                  child: Text('Sort by Size', style: TextStyle(color: Colors.white, fontSize: 13)),
                                 ),
                                 const PopupMenuItem(
                                   value: 'duration',
-                                  child: Text(
-                                    'Sort by Duration',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                    ),
-                                  ),
+                                  child: Text('Sort by Duration', style: TextStyle(color: Colors.white, fontSize: 13)),
                                 ),
                               ],
                             ),
@@ -1868,7 +1535,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ],
                       ),
                     ),
-
+                    
                   // Album songs list with auto scroll, equalizer animation, and info details option
                   Expanded(
                     child: currentAlbum.songs.isEmpty
@@ -1876,360 +1543,203 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(
-                                  Icons.music_note_rounded,
-                                  size: 48,
-                                  color: AppColors.textTertiary,
-                                ),
+                                const Icon(Icons.music_note_rounded, size: 48, color: AppColors.textTertiary),
                                 const SizedBox(height: 12),
                                 Text(
                                   'This album is empty',
-                                  style: TextStyle(
-                                    color: AppColors.textTertiary.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                    fontSize: 13,
-                                  ),
+                                  style: TextStyle(color: AppColors.textTertiary.withValues(alpha: 0.7), fontSize: 13),
                                 ),
                               ],
                             ),
                           )
                         : (filteredSongs.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    'No matching songs found',
-                                    style: TextStyle(
-                                      color: AppColors.textTertiary,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                )
-                              : ListView.builder(
-                                  controller: scrollController,
-                                  physics: const BouncingScrollPhysics(),
-                                  padding: const EdgeInsets.only(bottom: 24),
-                                  itemCount: filteredSongs.length,
-                                  itemBuilder: (context, index) {
-                                    final song = filteredSongs[index];
-                                    final isCurrentlyPlaying =
-                                        provider.isPlaying &&
-                                        (provider.currentSong?.videoId ==
-                                            song.videoId);
-                                    final isMatched =
-                                        targetSongId == song.videoId;
+                            ? const Center(
+                                child: Text('No matching songs found', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
+                              )
+                            : ListView.builder(
+                                controller: scrollController,
+                                physics: const BouncingScrollPhysics(),
+                                padding: const EdgeInsets.only(bottom: 24),
+                                itemCount: filteredSongs.length,
+                                itemBuilder: (context, index) {
+                                  final song = filteredSongs[index];
+                                  final isCurrentlyPlaying = provider.isPlaying && (provider.currentSong?.videoId == song.videoId);
+                                  final isMatched = targetSongId == song.videoId;
 
-                                    return _StaggeredListSlideIn(
-                                      index: index,
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 300,
-                                        ),
-                                        margin: const EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                          vertical: 6,
-                                        ),
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
+                                  return _StaggeredListSlideIn(
+                                    index: index,
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 300),
+                                      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: isCurrentlyPlaying
+                                            ? primaryColor.withValues(alpha: 0.18)
+                                            : (isMatched
+                                                ? primaryColor.withValues(alpha: 0.10)
+                                                : AppColors.surfaceVariant.withValues(alpha: 0.25)),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
                                           color: isCurrentlyPlaying
-                                              ? primaryColor.withValues(
-                                                  alpha: 0.18,
-                                                )
+                                              ? primaryColor.withValues(alpha: 0.7)
                                               : (isMatched
-                                                    ? primaryColor.withValues(
-                                                        alpha: 0.10,
-                                                      )
-                                                    : AppColors.surfaceVariant
-                                                          .withValues(
-                                                            alpha: 0.25,
-                                                          )),
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          border: Border.all(
-                                            color: isCurrentlyPlaying
-                                                ? primaryColor.withValues(
-                                                    alpha: 0.7,
-                                                  )
-                                                : (isMatched
-                                                      ? primaryColor.withValues(
-                                                          alpha: 0.4,
-                                                        )
-                                                      : Colors.white.withValues(
-                                                          alpha: 0.05,
-                                                        )),
-                                            width:
-                                                (isCurrentlyPlaying ||
-                                                    isMatched)
-                                                ? 1.2
-                                                : 0.5,
-                                          ),
-                                          boxShadow: isCurrentlyPlaying
-                                              ? [
-                                                  BoxShadow(
-                                                    color: primaryColor
-                                                        .withValues(
-                                                          alpha: 0.25,
-                                                        ),
-                                                    blurRadius: 10,
-                                                    offset: const Offset(0, 2),
-                                                  ),
-                                                ]
-                                              : null,
+                                                  ? primaryColor.withValues(alpha: 0.4)
+                                                  : Colors.white.withValues(alpha: 0.05)),
+                                          width: (isCurrentlyPlaying || isMatched) ? 1.2 : 0.5,
                                         ),
-                                        child: ListTile(
-                                          contentPadding: EdgeInsets.zero,
-                                          leading: Stack(
-                                            children: [
-                                              ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                child: SongAlbumArt(
-                                                  song: song,
-                                                  width: 44,
-                                                  height: 44,
+                                        boxShadow: isCurrentlyPlaying
+                                            ? [
+                                                BoxShadow(
+                                                  color: primaryColor.withValues(alpha: 0.25),
+                                                  blurRadius: 10,
+                                                  offset: const Offset(0, 2),
                                                 ),
-                                              ),
-                                              if (isCurrentlyPlaying)
-                                                Positioned.fill(
-                                                  child: Container(
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.black
-                                                          .withValues(
-                                                            alpha: 0.55,
-                                                          ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            8,
-                                                          ),
-                                                    ),
-                                                    child: Center(
-                                                      child:
-                                                          _AnimatedEqualizerBars(
-                                                            isPlaying: true,
-                                                            color: primaryColor,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                          title: Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  song.title,
-                                                  style: TextStyle(
-                                                    color: isCurrentlyPlaying
-                                                        ? primaryColor
-                                                        : Colors.white,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              if (isMatched &&
-                                                  !isCurrentlyPlaying) ...[
-                                                const SizedBox(width: 4),
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 5,
-                                                        vertical: 1.5,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: primaryColor
-                                                        .withValues(alpha: 0.2),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          4,
-                                                        ),
-                                                  ),
-                                                  child: Text(
-                                                    'Matched',
-                                                    style: TextStyle(
-                                                      color: primaryColor,
-                                                      fontSize: 8,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                          subtitle: Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  song.artist,
-                                                  style: const TextStyle(
-                                                    color:
-                                                        AppColors.textTertiary,
-                                                    fontSize: 11,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              if (song
-                                                  .formattedFileSize
-                                                  .isNotEmpty) ...[
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 6,
-                                                        vertical: 2,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: AppColors.primary
-                                                        .withValues(
-                                                          alpha: 0.15,
-                                                        ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          6,
-                                                        ),
-                                                  ),
-                                                  child: Text(
-                                                    song.formattedFileSize,
-                                                    style: const TextStyle(
-                                                      color: AppColors
-                                                          .primaryLight,
-                                                      fontSize: 8,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 6),
-                                              ],
-                                              Text(
-                                                song.formattedDuration,
-                                                style: const TextStyle(
-                                                  color: AppColors.textTertiary,
-                                                  fontSize: 10,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          trailing: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              // Details Icon Button
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.info_outline_rounded,
-                                                  color: Colors.white70,
-                                                  size: 18,
-                                                ),
-                                                tooltip: 'Song Details',
-                                                onPressed: () =>
-                                                    _showSongDetailsSheet(
-                                                      context,
-                                                      song,
-                                                      provider,
-                                                    ),
-                                              ),
-                                              // Move Song
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.drive_file_move_rounded,
-                                                  color: Colors.white70,
-                                                  size: 18,
-                                                ),
-                                                tooltip: 'Move Song',
-                                                onPressed: () async {
-                                                  final targetAlbum =
-                                                      await _showAlbumPickerForMove(
-                                                        context,
-                                                        provider,
-                                                        currentAlbum.id,
-                                                      );
-                                                  if (targetAlbum == null ||
-                                                      !context.mounted) {
-                                                    return;
-                                                  }
-                                                  final op =
-                                                      await _promptMoveType(
-                                                        context,
-                                                      );
-                                                  if (op == null) return;
-                                                  final success = await provider
-                                                      .moveSongToAnotherAlbumFolder(
-                                                        song,
-                                                        targetAlbum.id,
-                                                        physicalMove:
-                                                            op.physicalMove,
-                                                        isCopyMode:
-                                                            op.isCopyMode,
-                                                      );
-                                                  if (context.mounted) {
-                                                    final msg = op.isCopyMode
-                                                        ? 'Copied to "${targetAlbum.name}"'
-                                                        : (op.physicalMove
-                                                              ? 'Moved to "${targetAlbum.name}"'
-                                                              : 'Added to "${targetAlbum.name}"');
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          success
-                                                              ? msg
-                                                              : 'Failed to process song',
-                                                        ),
-                                                        backgroundColor: success
-                                                            ? AppColors.success
-                                                                  .withValues(
-                                                                    alpha: 0.9,
-                                                                  )
-                                                            : AppColors.error
-                                                                  .withValues(
-                                                                    alpha: 0.9,
-                                                                  ),
-                                                      ),
-                                                    );
-                                                    setSheetState(() {});
-                                                  }
-                                                },
-                                              ),
-                                              // Remove Song
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.delete_outline_rounded,
-                                                  color: Colors.redAccent,
-                                                  size: 18,
-                                                ),
-                                                tooltip: 'Remove Song',
-                                                onPressed: () {
-                                                  _showDeleteSongDialog(
-                                                    context,
-                                                    song,
-                                                    currentAlbum,
-                                                    provider,
-                                                    () {
-                                                      setSheetState(() {});
-                                                    },
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                          onTap: () {
-                                            provider.playPlaylist(
-                                              filteredSongs,
-                                              startIndex: index,
-                                            );
-                                          },
-                                        ),
+                                              ]
+                                            : null,
                                       ),
-                                    );
-                                  },
-                                )),
+                                      child: ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: Stack(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: SongAlbumArt(song: song, width: 44, height: 44),
+                                            ),
+                                            if (isCurrentlyPlaying)
+                                              Positioned.fill(
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black.withValues(alpha: 0.55),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: Center(
+                                                    child: _AnimatedEqualizerBars(
+                                                      isPlaying: true,
+                                                      color: primaryColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        title: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                song.title,
+                                                style: TextStyle(
+                                                  color: isCurrentlyPlaying ? primaryColor : Colors.white,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (isMatched && !isCurrentlyPlaying) ...[
+                                              const SizedBox(width: 4),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: primaryColor.withValues(alpha: 0.2),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  'Matched',
+                                                  style: TextStyle(color: primaryColor, fontSize: 8, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        subtitle: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                song.artist,
+                                                style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            if (song.formattedFileSize.isNotEmpty) ...[
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primary.withValues(alpha: 0.15),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  song.formattedFileSize,
+                                                  style: const TextStyle(color: AppColors.primaryLight, fontSize: 8, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            Text(
+                                              song.formattedDuration,
+                                              style: const TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                                            ),
+                                          ],
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            // Details Icon Button
+                                            IconButton(
+                                              icon: const Icon(Icons.info_outline_rounded, color: Colors.white70, size: 18),
+                                              tooltip: 'Song Details',
+                                              onPressed: () => _showSongDetailsSheet(context, song, provider),
+                                            ),
+                                            // Move Song
+                                            IconButton(
+                                              icon: const Icon(Icons.drive_file_move_rounded, color: Colors.white70, size: 18),
+                                              tooltip: 'Move Song',
+                                              onPressed: () async {
+                                                final targetAlbum = await _showAlbumPickerForMove(context, provider, currentAlbum.id);
+                                                if (targetAlbum == null || !context.mounted) return;
+                                                final op = await _promptMoveType(context);
+                                                if (op == null) return;
+                                                final success = await provider.moveSongToAnotherAlbumFolder(
+                                                  song,
+                                                  targetAlbum.id,
+                                                  physicalMove: op.physicalMove,
+                                                  isCopyMode: op.isCopyMode,
+                                                );
+                                                if (context.mounted) {
+                                                  final msg = op.isCopyMode
+                                                      ? 'Copied to "${targetAlbum.name}"'
+                                                      : (op.physicalMove ? 'Moved to "${targetAlbum.name}"' : 'Added to "${targetAlbum.name}"');
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(success ? msg : 'Failed to process song'),
+                                                      backgroundColor: success ? AppColors.success.withValues(alpha: 0.9) : AppColors.error.withValues(alpha: 0.9),
+                                                    ),
+                                                  );
+                                                  setSheetState(() {});
+                                                }
+                                              },
+                                            ),
+                                            // Remove Song
+                                            IconButton(
+                                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                              tooltip: 'Remove Song',
+                                              onPressed: () {
+                                                _showDeleteSongDialog(context, song, currentAlbum, provider, () {
+                                                  setSheetState(() {});
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                        onTap: () {
+                                          provider.playPlaylist(filteredSongs, startIndex: index);
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )),
                   ),
                 ],
               ),
@@ -2240,11 +1750,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _confirmDeleteAlbumWithProtection(
-    BuildContext context,
-    UserAlbum album,
-    PlayerProvider provider,
-  ) {
+  void _confirmDeleteAlbumWithProtection(BuildContext context, UserAlbum album, PlayerProvider provider) {
     final otherAlbums = provider.albums.where((a) => a.id != album.id).toList();
 
     if (album.songs.isEmpty) {
@@ -2253,18 +1759,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return;
     }
 
-    String? selectedTargetAlbumId = otherAlbums.isNotEmpty
-        ? otherAlbums.first.id
-        : null;
+    String? selectedTargetAlbumId = otherAlbums.isNotEmpty ? otherAlbums.first.id : null;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) => AlertDialog(
           backgroundColor: const Color(0xFF16162C),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               const Icon(Icons.shield_outlined, color: Colors.amber, size: 22),
@@ -2272,11 +1774,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Expanded(
                 child: Text(
                   'Delete "${album.name}"?',
-                  style: GoogleFonts.outfit(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                 ),
               ),
             ],
@@ -2287,20 +1785,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: [
               Text(
                 'This album contains ${album.songs.length} song(s). Please choose how to handle these tracks:',
-                style: GoogleFonts.inter(
-                  color: AppColors.textSecondary,
-                  fontSize: 13,
-                ),
+                style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 16),
               if (otherAlbums.isNotEmpty) ...[
                 Text(
                   'Move Songs to Another Album (Recommended):',
-                  style: GoogleFonts.inter(
-                    color: AppColors.primaryLight,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: GoogleFonts.inter(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
                 Container(
@@ -2336,25 +1827,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.amber.withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.info_outline_rounded,
-                      color: Colors.amber,
-                      size: 18,
-                    ),
+                    const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Choosing "Move to Recovery" preserves tracks in a hidden recovery folder with a RECOVERY badge tag.',
-                        style: GoogleFonts.inter(
-                          color: Colors.amber.shade200,
-                          fontSize: 11,
-                        ),
+                        style: GoogleFonts.inter(color: Colors.amber.shade200, fontSize: 11),
                       ),
                     ),
                   ],
@@ -2365,18 +1847,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: Colors.white60),
-              ),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white60)),
             ),
             if (otherAlbums.isNotEmpty)
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () async {
                   Navigator.pop(ctx);
@@ -2386,22 +1863,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   );
                   if (context.mounted) Navigator.pop(context);
                 },
-                icon: const Icon(
-                  Icons.drive_file_move_rounded,
-                  size: 16,
-                  color: Colors.white,
-                ),
-                label: const Text(
-                  'Move to Album',
-                  style: TextStyle(color: Colors.white),
-                ),
+                icon: const Icon(Icons.drive_file_move_rounded, size: 16, color: Colors.white),
+                label: const Text('Move to Album', style: TextStyle(color: Colors.white)),
               ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.amber.shade900,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () async {
                 Navigator.pop(ctx);
@@ -2411,15 +1879,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 );
                 if (context.mounted) Navigator.pop(context);
               },
-              icon: const Icon(
-                Icons.restore_from_trash_rounded,
-                size: 16,
-                color: Colors.white,
-              ),
-              label: const Text(
-                'Move to Recovery',
-                style: TextStyle(color: Colors.white),
-              ),
+              icon: const Icon(Icons.restore_from_trash_rounded, size: 16, color: Colors.white),
+              label: const Text('Move to Recovery', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -2427,11 +1888,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showSongDetailsSheet(
-    BuildContext context,
-    Song song,
-    PlayerProvider provider,
-  ) {
+  void _showSongDetailsSheet(BuildContext context, Song song, PlayerProvider provider) {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     showModalBottomSheet(
@@ -2445,9 +1902,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: AppColors.surface.withValues(alpha: 0.95),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
               border: Border.all(color: AppColors.glassBorder, width: 0.8),
             ),
             child: Column(
@@ -2478,22 +1933,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         children: [
                           Text(
                             song.title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
                           Text(
                             song.artist,
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
+                            style: TextStyle(color: primaryColor, fontSize: 13, fontWeight: FontWeight.w500),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2515,67 +1962,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   mainAxisSpacing: 10,
                   childAspectRatio: 2.4,
                   children: [
-                    _buildSongMetaCard(
-                      'Duration',
-                      song.formattedDuration,
-                      Icons.timer_rounded,
-                      primaryColor,
-                    ),
-                    _buildSongMetaCard(
-                      'File Size',
-                      song.formattedFileSize.isNotEmpty
-                          ? song.formattedFileSize
-                          : 'Streamed',
-                      Icons.sd_card_rounded,
-                      primaryColor,
-                    ),
-                    _buildSongMetaCard(
-                      'Album / Folder',
-                      song.albumFolderName ?? 'General Catalog',
-                      Icons.album_rounded,
-                      primaryColor,
-                    ),
-                    _buildSongMetaCard(
-                      'Speed / Pitch',
-                      '${song.speed}x / ${song.pitch}',
-                      Icons.tune_rounded,
-                      primaryColor,
-                    ),
+                    _buildSongMetaCard('Duration', song.formattedDuration, Icons.timer_rounded, primaryColor),
+                    _buildSongMetaCard('File Size', song.formattedFileSize.isNotEmpty ? song.formattedFileSize : 'Streamed', Icons.sd_card_rounded, primaryColor),
+                    _buildSongMetaCard('Album / Folder', song.albumFolderName ?? 'General Catalog', Icons.album_rounded, primaryColor),
+                    _buildSongMetaCard('Speed / Pitch', '${song.speed}x / ${song.pitch}', Icons.tune_rounded, primaryColor),
                   ],
                 ),
                 const SizedBox(height: 12),
-
+                
                 // Location / Video ID Bar
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: AppColors.surfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.glassBorder,
-                      width: 0.5,
-                    ),
+                    border: Border.all(color: AppColors.glassBorder, width: 0.5),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.insert_drive_file_rounded,
-                        size: 16,
-                        color: AppColors.textTertiary,
-                      ),
+                      const Icon(Icons.insert_drive_file_rounded, size: 16, color: AppColors.textTertiary),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           song.videoId,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
-                            fontFamily: 'monospace',
-                          ),
+                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontFamily: 'monospace'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -2602,9 +2013,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           backgroundColor: primaryColor,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
                     ),
@@ -2613,10 +2022,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       onPressed: () {
                         provider.addSongToQueue(song);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Added to Queue'),
-                            duration: Duration(seconds: 2),
-                          ),
+                          const SnackBar(content: Text('Added to Queue'), duration: Duration(seconds: 2)),
                         );
                       },
                       icon: const Icon(Icons.queue_music_rounded, size: 20),
@@ -2630,9 +2036,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             p.toggleFavorite(song);
                           },
                           icon: Icon(
-                            isFav
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
+                            isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                             color: isFav ? Colors.redAccent : Colors.white,
                             size: 20,
                           ),
@@ -2651,21 +2055,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSongMetaCard(
-    String label,
-    String value,
-    IconData icon,
-    Color primaryColor,
-  ) {
+  Widget _buildSongMetaCard(String label, String value, IconData icon, Color primaryColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: AppColors.surfaceVariant.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.glassBorder.withValues(alpha: 0.1),
-          width: 0.6,
-        ),
+        border: Border.all(color: AppColors.glassBorder.withValues(alpha: 0.1), width: 0.6),
       ),
       child: Row(
         children: [
@@ -2676,21 +2072,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.textTertiary,
-                  ),
-                ),
+                Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textTertiary)),
                 const SizedBox(height: 1),
                 Text(
                   value,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -2702,12 +2088,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showManageAlbumSongsDialog(
-    BuildContext context,
-    UserAlbum album,
-    PlayerProvider provider,
-    VoidCallback onUpdated,
-  ) {
+  void _showManageAlbumSongsDialog(BuildContext context, UserAlbum album, PlayerProvider provider, VoidCallback onUpdated) {
     final List<Song> allSongs = [];
     final Set<String> ids = {};
 
@@ -2745,13 +2126,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'No Songs Available',
-            style: TextStyle(color: Colors.white),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('No Songs Available', style: TextStyle(color: Colors.white)),
           content: const Text(
             'To add songs to this album, please play some songs, favorite them, download them, or scan your local device storage.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
@@ -2776,17 +2152,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         String dialogSearchQuery = '';
         return AlertDialog(
           backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          title: const Text(
-            'Manage Album Songs',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('Manage Album Songs', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
           content: SizedBox(
             width: MediaQuery.of(context).size.width * 0.9,
             height: 420,
@@ -2795,7 +2162,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 final filteredAllSongs = allSongs.where((song) {
                   final query = dialogSearchQuery.toLowerCase();
                   return song.title.toLowerCase().contains(query) ||
-                      song.artist.toLowerCase().contains(query);
+                         song.artist.toLowerCase().contains(query);
                 }).toList();
 
                 return Column(
@@ -2804,23 +2171,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       style: const TextStyle(color: Colors.white, fontSize: 13),
                       decoration: InputDecoration(
                         hintText: 'Search songs to add...',
-                        hintStyle: const TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 12,
-                        ),
-                        prefixIcon: const Icon(
-                          Icons.search_rounded,
-                          color: AppColors.textTertiary,
-                          size: 18,
-                        ),
+                        hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 18),
                         filled: true,
-                        fillColor: AppColors.surfaceVariant.withValues(
-                          alpha: 0.4,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
+                        fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -2836,22 +2191,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     Expanded(
                       child: filteredAllSongs.isEmpty
                           ? const Center(
-                              child: Text(
-                                'No matching songs found',
-                                style: TextStyle(
-                                  color: AppColors.textTertiary,
-                                  fontSize: 13,
-                                ),
-                              ),
+                              child: Text('No matching songs found', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
                             )
                           : ListView.builder(
                               shrinkWrap: true,
                               itemCount: filteredAllSongs.length,
                               itemBuilder: (ctx, index) {
                                 final song = filteredAllSongs[index];
-                                final isChecked = selectedSongs.any(
-                                  (s) => s.videoId == song.videoId,
-                                );
+                                final isChecked = selectedSongs.any((s) => s.videoId == song.videoId);
                                 final tag = _getSongSourceTag(song, provider);
                                 final hasThumb = song.thumbnailUrl.isNotEmpty;
 
@@ -2861,32 +2208,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                       if (!isChecked) {
                                         selectedSongs.add(song);
                                       } else {
-                                        selectedSongs.removeWhere(
-                                          (s) => s.videoId == song.videoId,
-                                        );
+                                        selectedSongs.removeWhere((s) => s.videoId == song.videoId);
                                       }
                                     });
                                   },
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
-                                    margin: const EdgeInsets.symmetric(
-                                      vertical: 4,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 8,
-                                    ),
+                                    margin: const EdgeInsets.symmetric(vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                                     decoration: BoxDecoration(
-                                      color: isChecked
-                                          ? AppColors.primary.withValues(
-                                              alpha: 0.08,
-                                            )
+                                      color: isChecked 
+                                          ? AppColors.primary.withValues(alpha: 0.08)
                                           : Colors.transparent,
                                       border: Border.all(
                                         color: isChecked
-                                            ? AppColors.primary.withValues(
-                                                alpha: 0.3,
-                                              )
+                                            ? AppColors.primary.withValues(alpha: 0.3)
                                             : Colors.transparent,
                                         width: 1,
                                       ),
@@ -2897,79 +2233,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         Icon(
                                           isChecked
                                               ? Icons.check_circle_rounded
-                                              : Icons
-                                                    .radio_button_unchecked_rounded,
-                                          color: isChecked
-                                              ? AppColors.primary
-                                              : AppColors.textTertiary,
+                                              : Icons.radio_button_unchecked_rounded,
+                                          color: isChecked ? AppColors.primary : AppColors.textTertiary,
                                           size: 20,
                                         ),
                                         const SizedBox(width: 12),
                                         ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
+                                          borderRadius: BorderRadius.circular(8),
                                           child: SizedBox(
                                             width: 40,
                                             height: 40,
                                             child: hasThumb
-                                                ? (song.thumbnailUrl.startsWith(
-                                                        'http',
+                                                ? (song.thumbnailUrl.startsWith('http')
+                                                    ? CachedNetworkImage(
+                                                        imageUrl: song.thumbnailUrl,
+                                                        fit: BoxFit.cover,
+                                                        errorWidget: (context, url, error) => const Icon(Icons.music_note, color: Colors.white54),
                                                       )
-                                                      ? CachedNetworkImage(
-                                                          imageUrl:
-                                                              song.thumbnailUrl,
-                                                          fit: BoxFit.cover,
-                                                          errorWidget:
-                                                              (
-                                                                context,
-                                                                url,
-                                                                error,
-                                                              ) => const Icon(
-                                                                Icons
-                                                                    .music_note,
-                                                                color: Colors
-                                                                    .white54,
-                                                              ),
-                                                        )
-                                                      : Image.file(
-                                                          File(
-                                                            song.thumbnailUrl,
-                                                          ),
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder:
-                                                              (
-                                                                context,
-                                                                error,
-                                                                stackTrace,
-                                                              ) => const Icon(
-                                                                Icons
-                                                                    .music_note,
-                                                                color: Colors
-                                                                    .white54,
-                                                              ),
-                                                        ))
+                                                    : Image.file(
+                                                        File(song.thumbnailUrl),
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.music_note, color: Colors.white54),
+                                                      ))
                                                 : Container(
                                                     color: Colors.white10,
-                                                    child: const Icon(
-                                                      Icons.music_note,
-                                                      color: Colors.white54,
-                                                    ),
+                                                    child: const Icon(Icons.music_note, color: Colors.white54),
                                                   ),
                                           ),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Text(
                                                 song.title,
                                                 style: TextStyle(
-                                                  color: isChecked
-                                                      ? Colors.white
-                                                      : AppColors.textPrimary,
+                                                  color: isChecked ? Colors.white : AppColors.textPrimary,
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.bold,
                                                 ),
@@ -2982,41 +2282,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                                   Expanded(
                                                     child: Text(
                                                       song.artist,
-                                                      style: const TextStyle(
-                                                        color: AppColors
-                                                            .textTertiary,
-                                                        fontSize: 11,
-                                                      ),
+                                                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
                                                       maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
                                                   ),
                                                   if (tag != null) ...[
                                                     const SizedBox(width: 6),
                                                     Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 5,
-                                                            vertical: 1.5,
-                                                          ),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                                       decoration: BoxDecoration(
-                                                        color: _getTagBgColor(
-                                                          tag,
-                                                        ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              3,
-                                                            ),
+                                                        color: _getTagBgColor(tag),
+                                                        borderRadius: BorderRadius.circular(3),
                                                       ),
                                                       child: Text(
                                                         tag.toUpperCase(),
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: 7,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
+                                                        style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold),
                                                       ),
                                                     ),
                                                   ],
@@ -3040,10 +2321,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
             ),
             TextButton(
               onPressed: () {
@@ -3051,10 +2329,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Navigator.pop(ctx);
                 onUpdated();
               },
-              child: const Text(
-                'Save',
-                style: TextStyle(color: AppColors.primary),
-              ),
+              child: const Text('Save', style: TextStyle(color: AppColors.primary)),
             ),
           ],
         );
@@ -3095,22 +2370,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (context, playerProvider, _) {
         final localSongs = playerProvider.localSongsMerged;
         final primaryColor = Theme.of(context).colorScheme.primary;
-        final hasExternal = localSongs.any(
-          (s) =>
-              s.isLocalFile &&
-              s.filePath != null &&
-              !StorageLocationService().isFileInAppFolderSync(s.filePath!),
-        );
+        final hasExternal = localSongs.any((s) => s.isLocalFile && s.filePath != null && !StorageLocationService().isFileInAppFolderSync(s.filePath!));
 
         // Filter and sort local songs
         final searchQuery = _localSearchQuery.trim().toLowerCase();
         final filteredLocalSongs = localSongs.where((song) {
-          if (_localFilterCategory == 'local' &&
-              !song.id.startsWith('local_')) {
+          if (_localFilterCategory == 'local' && !song.id.startsWith('local_')) {
             return false;
           }
-          if (_localFilterCategory == 'downloaded' &&
-              song.id.startsWith('local_')) {
+          if (_localFilterCategory == 'downloaded' && song.id.startsWith('local_')) {
             return false;
           }
           if (_localFilterCategory == 'edited' && !song.isEdited) {
@@ -3120,24 +2388,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           if (searchQuery.isEmpty) return true;
           final titleMatch = song.title.toLowerCase().contains(searchQuery);
           final artistMatch = song.artist.toLowerCase().contains(searchQuery);
-          final pathMatch = (song.filePath ?? '').toLowerCase().contains(
-            searchQuery,
-          );
+          final pathMatch = (song.filePath ?? '').toLowerCase().contains(searchQuery);
           return titleMatch || artistMatch || pathMatch;
         }).toList();
 
         if (_localSortType == 'title') {
-          filteredLocalSongs.sort(
-            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-          );
+          filteredLocalSongs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
         } else if (_localSortType == 'artist') {
-          filteredLocalSongs.sort(
-            (a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()),
-          );
+          filteredLocalSongs.sort((a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()));
         } else if (_localSortType == 'size') {
-          filteredLocalSongs.sort(
-            (a, b) => b.fileSizeInBytes.compareTo(a.fileSizeInBytes),
-          );
+          filteredLocalSongs.sort((a, b) => b.fileSizeInBytes.compareTo(a.fileSizeInBytes));
         } else if (_localSortType == 'duration') {
           filteredLocalSongs.sort((a, b) => b.duration.compareTo(a.duration));
         }
@@ -3153,30 +2413,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 12),
+            ),
 
             if (playerProvider.scanPermissionDenied)
               SliverToBoxAdapter(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 6,
-                  ),
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFB74D).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: const Color(0xFFFFB74D).withValues(alpha: 0.35),
-                    ),
+                    border: Border.all(color: const Color(0xFFFFB74D).withValues(alpha: 0.35)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.warning_amber_rounded,
-                        color: Color(0xFFFFB74D),
-                        size: 24,
-                      ),
+                      const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFB74D), size: 24),
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Column(
@@ -3184,19 +2437,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           children: [
                             Text(
                               'Storage Permission Required',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                             ),
                             SizedBox(height: 2),
                             Text(
                               'Permission was denied. Grant storage access in app settings to scan audio files on your device.',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 11,
-                              ),
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
                             ),
                           ],
                         ),
@@ -3205,18 +2451,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         onPressed: () => openAppSettings(),
                         style: TextButton.styleFrom(
                           foregroundColor: const Color(0xFFFFB74D),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         ),
-                        child: const Text(
-                          'Settings',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
+                        child: const Text('Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ],
                   ),
@@ -3242,16 +2479,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: primaryColor.withValues(alpha: 0.15),
-                            border: Border.all(
-                              color: primaryColor.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
+                            border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 1),
                           ),
-                          child: Icon(
-                            Icons.folder_special_rounded,
-                            color: primaryColor,
-                            size: 20,
-                          ),
+                          child: Icon(Icons.folder_special_rounded, color: primaryColor, size: 20),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -3260,39 +2490,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             children: [
                               const Text(
                                 'Local Music & Downloads',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 '${filteredLocalSongs.length} track(s)${formattedTotalSize.isNotEmpty ? ' • $formattedTotalSize' : ''}',
-                                style: const TextStyle(
-                                  color: AppColors.textTertiary,
-                                  fontSize: 11,
-                                ),
+                                style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
                               ),
                             ],
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: primaryColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             '${filteredLocalSongs.length}',
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
@@ -3310,28 +2526,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 ? const SizedBox(
                                     width: 14,
                                     height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                   )
                                 : const Icon(Icons.refresh_rounded, size: 16),
-                            label: Text(
-                              playerProvider.isScanningLocal
-                                  ? 'Scanning...'
-                                  : 'Scan Storage',
-                            ),
+                            label: Text(playerProvider.isScanningLocal ? 'Scanning...' : 'Scan Storage'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.surfaceVariant,
                               foregroundColor: Colors.white,
                               elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             ),
                           ),
                           if (localSongs.isNotEmpty) ...[
@@ -3341,37 +2545,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
                                 gradient: LinearGradient(
-                                  colors: [primaryColor, Colors.purpleAccent],
+                                  colors: [
+                                    primaryColor,
+                                    Colors.purpleAccent,
+                                  ],
                                 ),
                               ),
                               child: ElevatedButton.icon(
-                                onPressed: () => _startAiCategorizationFlow(
-                                  context,
-                                  localSongs,
-                                  playerProvider,
-                                ),
-                                icon: const Icon(
-                                  Icons.auto_awesome_rounded,
-                                  size: 16,
-                                  color: Colors.white,
-                                ),
-                                label: const Text(
-                                  'AI Organize',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                onPressed: () => _startAiCategorizationFlow(context, localSongs, playerProvider),
+                                icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: Colors.white),
+                                label: const Text('AI Organize', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.transparent,
                                   shadowColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 8,
-                                  ),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                                 ),
                               ),
                             ),
@@ -3380,36 +2568,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             const SizedBox(width: 8),
                             // Move to App Folder Button
                             OutlinedButton.icon(
-                              onPressed: () => _showMoveSongsToAppFolderDialog(
-                                context,
-                                localSongs,
-                                playerProvider,
-                              ),
-                              icon: const Icon(
-                                Icons.drive_file_move_rounded,
-                                size: 16,
-                                color: AppColors.primaryLight,
-                              ),
-                              label: const Text(
-                                'Move to sonicWave',
-                                style: TextStyle(
-                                  color: AppColors.primaryLight,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                              onPressed: () => _showMoveSongsToAppFolderDialog(context, localSongs, playerProvider),
+                              icon: const Icon(Icons.drive_file_move_rounded, size: 16, color: AppColors.primaryLight),
+                              label: const Text('Move to sonicWave', style: TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.w600)),
                               style: OutlinedButton.styleFrom(
-                                side: BorderSide(
-                                  color: AppColors.primaryLight.withValues(
-                                    alpha: 0.4,
-                                  ),
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 8,
-                                ),
+                                side: BorderSide(color: AppColors.primaryLight.withValues(alpha: 0.4)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               ),
                             ),
                           ],
@@ -3423,11 +2588,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
             if (localSongs.isNotEmpty)
               SliverToBoxAdapter(
-                child: _buildLocalFilterBar(
-                  context,
-                  playerProvider,
-                  filteredLocalSongs,
-                ),
+                child: _buildLocalFilterBar(context, playerProvider, filteredLocalSongs),
               ),
 
             if (filteredLocalSongs.isEmpty)
@@ -3442,13 +2603,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.surfaceVariant.withValues(
-                              alpha: 0.4,
-                            ),
-                            border: Border.all(
-                              color: AppColors.glassBorder,
-                              width: 1,
-                            ),
+                            color: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                            border: Border.all(color: AppColors.glassBorder, width: 1),
                           ),
                           child: Icon(
                             Icons.library_music_rounded,
@@ -3458,12 +2614,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         const SizedBox(height: 20),
                         Text(
-                          localSongs.isEmpty
-                              ? 'No Local Music Found'
-                              : 'No Matching Tracks',
+                          localSongs.isEmpty ? 'No Local Music Found' : 'No Matching Tracks',
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -3474,11 +2627,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               ? 'Scanned local audio files and offline downloads will appear here.'
                               : 'Try adjusting your search query or filter chips.',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.textTertiary,
-                            fontSize: 13,
-                            height: 1.4,
-                          ),
+                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 13, height: 1.4),
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
@@ -3493,27 +2642,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               });
                             }
                           },
-                          icon: Icon(
-                            localSongs.isEmpty
-                                ? Icons.search_rounded
-                                : Icons.filter_alt_off_rounded,
-                            size: 18,
-                          ),
-                          label: Text(
-                            localSongs.isEmpty
-                                ? 'Scan Storage Now'
-                                : 'Clear Filters',
-                          ),
+                          icon: Icon(localSongs.isEmpty ? Icons.search_rounded : Icons.filter_alt_off_rounded, size: 18),
+                          label: Text(localSongs.isEmpty ? 'Scan Storage Now' : 'Clear Filters'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryColor,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
                       ],
@@ -3523,38 +2658,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               )
             else
               SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final localSong = filteredLocalSongs[index];
-                  return _StaggeredListSlideIn(
-                    index: index < 15 ? index : 15,
-                    child: SongTile(
-                      song: localSong,
-                      index: index,
-                      sourceTag: localSong.id.startsWith('local_')
-                          ? 'local'
-                          : 'downloaded',
-                      onTap: () {
-                        playerProvider.playPlaylist(
-                          filteredLocalSongs,
-                          startIndex: index,
-                        );
-                      },
-                    ),
-                  );
-                }, childCount: filteredLocalSongs.length),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final localSong = filteredLocalSongs[index];
+                    return _StaggeredListSlideIn(
+                      index: index < 15 ? index : 15,
+                      child: SongTile(
+                        song: localSong,
+                        index: index,
+                        sourceTag: localSong.id.startsWith('local_') ? 'local' : 'downloaded',
+                        onTap: () {
+                          playerProvider.playPlaylist(filteredLocalSongs, startIndex: index);
+                        },
+                      ),
+                    );
+                  },
+                  childCount: filteredLocalSongs.length,
+                ),
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: 140)),
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 140),
+            ),
           ],
         );
       },
     );
   }
 
-  Widget _buildLocalFilterBar(
-    BuildContext context,
-    PlayerProvider playerProvider,
-    List<Song> filteredSongs,
-  ) {
+  Widget _buildLocalFilterBar(BuildContext context, PlayerProvider playerProvider, List<Song> filteredSongs) {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Padding(
@@ -3574,22 +2705,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   },
                   decoration: InputDecoration(
                     hintText: 'Search title, artist or path...',
-                    hintStyle: const TextStyle(
-                      color: AppColors.textTertiary,
-                      fontSize: 12,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: AppColors.textTertiary,
-                      size: 18,
-                    ),
+                    hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                    prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 18),
                     suffixIcon: _localSearchQuery.isNotEmpty
                         ? IconButton(
-                            icon: const Icon(
-                              Icons.clear_rounded,
-                              color: AppColors.textTertiary,
-                              size: 18,
-                            ),
+                            icon: const Icon(Icons.clear_rounded, color: AppColors.textTertiary, size: 18),
                             onPressed: () {
                               _localSearchController.clear();
                               setState(() {
@@ -3600,10 +2720,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         : null,
                     filled: true,
                     fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -3625,29 +2742,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     color: AppColors.surfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.sort_rounded,
-                    color: Colors.white,
-                    size: 18,
-                  ),
+                  child: const Icon(Icons.sort_rounded, color: Colors.white, size: 18),
                 ),
                 itemBuilder: (ctx) => const [
-                  PopupMenuItem(
-                    value: 'title',
-                    child: Text('Sort by Title (A-Z)'),
-                  ),
-                  PopupMenuItem(
-                    value: 'artist',
-                    child: Text('Sort by Artist (A-Z)'),
-                  ),
-                  PopupMenuItem(
-                    value: 'size',
-                    child: Text('Sort by File Size'),
-                  ),
-                  PopupMenuItem(
-                    value: 'duration',
-                    child: Text('Sort by Duration'),
-                  ),
+                  PopupMenuItem(value: 'title', child: Text('Sort by Title (A-Z)')),
+                  PopupMenuItem(value: 'artist', child: Text('Sort by Artist (A-Z)')),
+                  PopupMenuItem(value: 'size', child: Text('Sort by File Size')),
+                  PopupMenuItem(value: 'duration', child: Text('Sort by Duration')),
                 ],
               ),
             ],
@@ -3665,11 +2766,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       const SizedBox(width: 6),
                       _buildLocalCategoryChip('Scanned', 'local', primaryColor),
                       const SizedBox(width: 6),
-                      _buildLocalCategoryChip(
-                        'Downloads',
-                        'downloaded',
-                        primaryColor,
-                      ),
+                      _buildLocalCategoryChip('Downloads', 'downloaded', primaryColor),
                       const SizedBox(width: 6),
                       _buildLocalCategoryChip('Edited', 'edited', primaryColor),
                     ],
@@ -3679,13 +2776,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               if (filteredSongs.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 IconButton(
-                  onPressed: () =>
-                      playerProvider.playPlaylist(filteredSongs, startIndex: 0),
-                  icon: const Icon(
-                    Icons.play_circle_fill_rounded,
-                    color: Colors.white,
-                    size: 28,
-                  ),
+                  onPressed: () => playerProvider.playPlaylist(filteredSongs, startIndex: 0),
+                  icon: const Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 28),
                   tooltip: 'Play All',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -3696,11 +2788,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     final list = List<Song>.from(filteredSongs)..shuffle();
                     playerProvider.playPlaylist(list, startIndex: 0);
                   },
-                  icon: Icon(
-                    Icons.shuffle_rounded,
-                    color: primaryColor,
-                    size: 24,
-                  ),
+                  icon: Icon(Icons.shuffle_rounded, color: primaryColor, size: 24),
                   tooltip: 'Shuffle All',
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -3713,11 +2801,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildLocalCategoryChip(
-    String label,
-    String categoryKey,
-    Color primaryColor,
-  ) {
+  Widget _buildLocalCategoryChip(String label, String categoryKey, Color primaryColor) {
     final isSelected = _localFilterCategory == categoryKey;
     return FilterChip(
       label: Text(
@@ -3749,32 +2833,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildAlbumsTab() {
     return Consumer2<PlayerProvider, SettingsProvider>(
       builder: (context, playerProvider, settingsProvider, _) {
-        final isInternal =
-            settingsProvider.storageType == StorageType.appInternal;
+        final isInternal = settingsProvider.storageType == StorageType.appInternal;
 
         final albums = List<UserAlbum>.from(playerProvider.albums);
         final searchQuery = _albumSearchQuery.trim().toLowerCase();
         final filteredAlbums = albums.where((album) {
           if (searchQuery.isEmpty) return true;
-          final matchesAlbumName = album.name.toLowerCase().contains(
-            searchQuery,
-          );
-          final matchesSongName = album.songs.any(
-            (s) =>
-                s.title.toLowerCase().contains(searchQuery) ||
-                s.artist.toLowerCase().contains(searchQuery),
-          );
+          final matchesAlbumName = album.name.toLowerCase().contains(searchQuery);
+          final matchesSongName = album.songs.any((s) =>
+              s.title.toLowerCase().contains(searchQuery) ||
+              s.artist.toLowerCase().contains(searchQuery));
           return matchesAlbumName || matchesSongName;
         }).toList();
 
         if (_albumSortType == 'name') {
-          filteredAlbums.sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-          );
+          filteredAlbums.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
         } else if (_albumSortType == 'size') {
-          filteredAlbums.sort(
-            (a, b) => b.totalSizeInBytes.compareTo(a.totalSizeInBytes),
-          );
+          filteredAlbums.sort((a, b) => b.totalSizeInBytes.compareTo(a.totalSizeInBytes));
         } else if (_albumSortType == 'date') {
           filteredAlbums.sort((a, b) => b.lastUpdated.compareTo(a.lastUpdated));
         } else if (_albumSortType == 'songs') {
@@ -3784,22 +2859,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 12),
+            ),
             if (isInternal)
               SliverToBoxAdapter(
-                child: _buildFolderOnboardingBanner(
-                  context,
-                  playerProvider,
-                  settingsProvider,
-                ),
+                child: _buildFolderOnboardingBanner(context, playerProvider, settingsProvider),
               ),
-            SliverToBoxAdapter(child: _buildAlbumFilterBar()),
-            _buildAlbumsGrid(
-              playerProvider,
-              filteredAlbums,
-              highlightQuery: _albumSearchQuery,
+            SliverToBoxAdapter(
+              child: _buildAlbumFilterBar(),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 140)),
+            _buildAlbumsGrid(playerProvider, filteredAlbums, highlightQuery: _albumSearchQuery),
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 140),
+            ),
           ],
         );
       },
@@ -3822,22 +2895,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               },
               decoration: InputDecoration(
                 hintText: 'Search albums...',
-                hintStyle: const TextStyle(
-                  color: AppColors.textTertiary,
-                  fontSize: 12,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: AppColors.textTertiary,
-                  size: 18,
-                ),
+                hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 18),
                 suffixIcon: _albumSearchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(
-                          Icons.clear_rounded,
-                          color: AppColors.textTertiary,
-                          size: 18,
-                        ),
+                        icon: const Icon(Icons.clear_rounded, color: AppColors.textTertiary, size: 18),
                         onPressed: () {
                           _albumSearchController.clear();
                           setState(() {
@@ -3848,10 +2910,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     : null,
                 filled: true,
                 fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -3874,24 +2933,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 });
               },
               color: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               itemBuilder: (ctx) => [
                 const PopupMenuItem(
                   value: 'name',
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.sort_by_alpha_rounded,
-                        color: Colors.white70,
-                        size: 18,
-                      ),
+                      Icon(Icons.sort_by_alpha_rounded, color: Colors.white70, size: 18),
                       SizedBox(width: 10),
-                      Text(
-                        'Name (A-Z)',
-                        style: TextStyle(color: Colors.white, fontSize: 13),
-                      ),
+                      Text('Name (A-Z)', style: TextStyle(color: Colors.white, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -3899,16 +2949,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   value: 'size',
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.storage_rounded,
-                        color: Colors.white70,
-                        size: 18,
-                      ),
+                      Icon(Icons.storage_rounded, color: Colors.white70, size: 18),
                       SizedBox(width: 10),
-                      Text(
-                        'Size (Largest)',
-                        style: TextStyle(color: Colors.white, fontSize: 13),
-                      ),
+                      Text('Size (Largest)', style: TextStyle(color: Colors.white, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -3916,16 +2959,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   value: 'date',
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.update_rounded,
-                        color: Colors.white70,
-                        size: 18,
-                      ),
+                      Icon(Icons.update_rounded, color: Colors.white70, size: 18),
                       SizedBox(width: 10),
-                      Text(
-                        'Last Updated',
-                        style: TextStyle(color: Colors.white, fontSize: 13),
-                      ),
+                      Text('Last Updated', style: TextStyle(color: Colors.white, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -3933,16 +2969,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   value: 'songs',
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.music_note_rounded,
-                        color: Colors.white70,
-                        size: 18,
-                      ),
+                      Icon(Icons.music_note_rounded, color: Colors.white70, size: 18),
                       SizedBox(width: 10),
-                      Text(
-                        'Song Count',
-                        style: TextStyle(color: Colors.white, fontSize: 13),
-                      ),
+                      Text('Song Count', style: TextStyle(color: Colors.white, fontSize: 13)),
                     ],
                   ),
                 ),
@@ -3966,7 +2995,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (context, animValue, child) {
         return Transform.translate(
           offset: Offset(0, 24 * (1.0 - animValue)),
-          child: Opacity(opacity: animValue, child: child),
+          child: Opacity(
+            opacity: animValue,
+            child: child,
+          ),
         );
       },
       child: Container(
@@ -3983,9 +3015,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.25),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.25),
             width: 0.8,
           ),
         ),
@@ -3997,24 +3027,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.12),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.folder_open_rounded,
-                    color: AppColors.primaryLight,
-                    size: 20,
-                  ),
+                  child: const Icon(Icons.folder_open_rounded, color: AppColors.primaryLight, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Text(
                   'Enable Folder Organization',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
               ],
             ),
@@ -4022,32 +3046,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Text(
               'Keep your audio files visible in phone storage (/sonicWave) and enable folder-based albums.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.4,
-              ),
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
             ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => _startFolderOnboarding(
-                  context,
-                  playerProvider,
-                  settingsProvider,
-                ),
+                onPressed: () => _startFolderOnboarding(context, playerProvider, settingsProvider),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Setup Folder Organization',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
+                child: const Text('Setup Folder Organization', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -4090,14 +3105,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     final selectedVolume = sdVolume ?? internalVolume;
 
-    final hasPermission = await StorageLocationService()
-        .requestStoragePermission(targetType: selectedVolume.type);
+    final hasPermission = await StorageLocationService().requestStoragePermission(targetType: selectedVolume.type);
     if (!context.mounted) return;
     if (!hasPermission) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Storage permissions are required to create a folder.'),
-        ),
+        const SnackBar(content: Text('Storage permissions are required to create a folder.')),
       );
       return;
     }
@@ -4109,9 +3121,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final isMigrated = await playerProvider.migrateDownloadedFiles(
       previousType,
       selectedVolume.type,
-      sdCardPath: selectedVolume.type == StorageType.sdCard
-          ? selectedVolume.path
-          : null,
+      sdCardPath: selectedVolume.type == StorageType.sdCard ? selectedVolume.path : null,
     );
 
     if (!isMigrated) {
@@ -4121,13 +3131,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           context: context,
           builder: (ctx) => AlertDialog(
             backgroundColor: AppColors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: const Text(
-              'Migration Failed',
-              style: TextStyle(color: Colors.redAccent),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('Migration Failed', style: TextStyle(color: Colors.redAccent)),
             content: const Text(
               'Could not create the target folder or migrate files. Please ensure your storage device is writeable and has appropriate permissions.',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
@@ -4147,19 +3152,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Migration succeeded, now safe to change settings storage type
     await settingsProvider.setStorageType(
       selectedVolume.type,
-      sdCardPath: selectedVolume.type == StorageType.sdCard
-          ? selectedVolume.path
-          : null,
+      sdCardPath: selectedVolume.type == StorageType.sdCard ? selectedVolume.path : null,
     );
 
     if (context.mounted) {
       Navigator.pop(context); // Dismiss loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Storage configured: ${selectedVolume.label}/sonicWave',
-          ),
-        ),
+        SnackBar(content: Text('Storage configured: ${selectedVolume.label}/sonicWave')),
       );
     }
 
@@ -4174,22 +3173,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final isOffline = homeProvider.isOffline;
 
         // Split active items by status
-        final downloadingItems = activeItems
-            .where(
-              (i) =>
-                  i.status == DownloadStatus.downloading ||
-                  i.status == DownloadStatus.retrying,
-            )
-            .toList();
-        final pausedItems = activeItems
-            .where((i) => i.status == DownloadStatus.paused)
-            .toList();
-        final queuedItems = activeItems
-            .where((i) => i.status == DownloadStatus.queued)
-            .toList();
-        final failedItems = activeItems
-            .where((i) => i.status == DownloadStatus.failed)
-            .toList();
+        final downloadingItems = activeItems.where((i) =>
+            i.status == DownloadStatus.downloading ||
+            i.status == DownloadStatus.retrying).toList();
+        final pausedItems = activeItems.where((i) => i.status == DownloadStatus.paused).toList();
+        final queuedItems = activeItems.where((i) => i.status == DownloadStatus.queued).toList();
+        final failedItems = activeItems.where((i) => i.status == DownloadStatus.failed).toList();
         final hasActiveDownloads = activeItems.isNotEmpty;
 
         return CustomScrollView(
@@ -4207,43 +3196,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         Container(
                           margin: const EdgeInsets.only(right: 4),
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceVariant.withValues(
-                              alpha: 0.6,
-                            ),
+                            color: AppColors.surfaceVariant.withValues(alpha: 0.6),
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
                             tooltip: 'Cancel All',
-                            icon: const Icon(
-                              Icons.cancel_rounded,
-                              color: Colors.redAccent,
-                              size: 22,
-                            ),
-                            onPressed: () => _showCancelAllDownloadsDialog(
-                              context,
-                              playerProvider,
-                            ),
+                            icon: const Icon(Icons.cancel_rounded, color: Colors.redAccent, size: 22),
+                            onPressed: () => _showCancelAllDownloadsDialog(context, playerProvider),
                           ),
                         ),
                       if (downloaded.isNotEmpty)
                         Container(
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceVariant.withValues(
-                              alpha: 0.6,
-                            ),
+                            color: AppColors.surfaceVariant.withValues(alpha: 0.6),
                             shape: BoxShape.circle,
                           ),
                           child: IconButton(
                             tooltip: 'Delete All',
-                            icon: const Icon(
-                              Icons.delete_sweep_rounded,
-                              color: Colors.redAccent,
-                              size: 22,
-                            ),
-                            onPressed: () => _showDeleteAllDownloadsDialog(
-                              context,
-                              playerProvider,
-                            ),
+                            icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 22),
+                            onPressed: () => _showDeleteAllDownloadsDialog(context, playerProvider),
                           ),
                         ),
                     ],
@@ -4253,36 +3224,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
             // Storage & Network Status Header
             SliverToBoxAdapter(
-              child: _buildDownloadsStatusHeader(
-                context,
-                playerProvider,
-                isOffline,
-                downloaded.length,
-              ),
+              child: _buildDownloadsStatusHeader(context, playerProvider, isOffline, downloaded.length),
             ),
 
             // Network Offline Warning Banner
             if (isOffline && hasActiveDownloads)
-              SliverToBoxAdapter(child: _buildOfflineDownloadBanner(context)),
+              SliverToBoxAdapter(
+                child: _buildOfflineDownloadBanner(context),
+              ),
 
             // 1. Downloading Items
             if (downloadingItems.isNotEmpty) ...[
               SliverToBoxAdapter(
                 child: _buildActiveDownloadsHeader(
-                  context,
-                  playerProvider,
-                  downloadingItems.length + pausedItems.length,
-                ),
+                    context, playerProvider, downloadingItems.length + pausedItems.length),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final item = downloadingItems[index];
-                  return DownloadProgressCard(
-                    key: ValueKey('dl_${item.song.videoId}'),
-                    item: item,
-                    playerProvider: playerProvider,
-                  );
-                }, childCount: downloadingItems.length),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final item = downloadingItems[index];
+                    return DownloadProgressCard(
+                      key: ValueKey('dl_${item.song.videoId}'),
+                      item: item,
+                      playerProvider: playerProvider,
+                    );
+                  },
+                  childCount: downloadingItems.length,
+                ),
               ),
             ],
 
@@ -4290,64 +3258,61 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             if (pausedItems.isNotEmpty) ...[
               if (downloadingItems.isEmpty)
                 SliverToBoxAdapter(
-                  child: _buildActiveDownloadsHeader(
-                    context,
-                    playerProvider,
-                    pausedItems.length,
-                  ),
+                  child: _buildActiveDownloadsHeader(context, playerProvider, pausedItems.length),
                 ),
               SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final item = pausedItems[index];
-                  return DownloadProgressCard(
-                    key: ValueKey('dl_${item.song.videoId}'),
-                    item: item,
-                    playerProvider: playerProvider,
-                  );
-                }, childCount: pausedItems.length),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final item = pausedItems[index];
+                    return DownloadProgressCard(
+                      key: ValueKey('dl_${item.song.videoId}'),
+                      item: item,
+                      playerProvider: playerProvider,
+                    );
+                  },
+                  childCount: pausedItems.length,
+                ),
               ),
             ],
 
             // 3. Queued Items
             if (queuedItems.isNotEmpty) ...[
               SliverToBoxAdapter(
-                child: _buildDownloadsSectionHeader(
-                  context,
-                  '⏳ Queued',
-                  '${queuedItems.length}',
-                ),
+                child: _buildDownloadsSectionHeader(context, '⏳ Queued', '${queuedItems.length}'),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final item = queuedItems[index];
-                  return QueuedDownloadTile(
-                    key: ValueKey('q_${item.song.videoId}'),
-                    item: item,
-                    index: index,
-                    playerProvider: playerProvider,
-                  );
-                }, childCount: queuedItems.length),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final item = queuedItems[index];
+                    return QueuedDownloadTile(
+                      key: ValueKey('q_${item.song.videoId}'),
+                      item: item,
+                      index: index,
+                      playerProvider: playerProvider,
+                    );
+                  },
+                  childCount: queuedItems.length,
+                ),
               ),
             ],
 
             // 4. Failed Items
             if (failedItems.isNotEmpty) ...[
               SliverToBoxAdapter(
-                child: _buildDownloadsSectionHeader(
-                  context,
-                  '❌ Failed',
-                  '${failedItems.length}',
-                ),
+                child: _buildDownloadsSectionHeader(context, '❌ Failed', '${failedItems.length}'),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final item = failedItems[index];
-                  return FailedDownloadTile(
-                    key: ValueKey('f_${item.song.videoId}'),
-                    item: item,
-                    playerProvider: playerProvider,
-                  );
-                }, childCount: failedItems.length),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final item = failedItems[index];
+                    return FailedDownloadTile(
+                      key: ValueKey('f_${item.song.videoId}'),
+                      item: item,
+                      playerProvider: playerProvider,
+                    );
+                  },
+                  childCount: failedItems.length,
+                ),
               ),
             ],
 
@@ -4367,15 +3332,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       Text(
                         'No Offline Downloads',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: AppColors.textTertiary,
-                        ),
+                              color: AppColors.textTertiary,
+                            ),
                       ),
                       const SizedBox(height: 10),
                       Text(
                         'Download songs to listen without internet',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textTertiary.withValues(alpha: 0.7),
-                        ),
+                              color: AppColors.textTertiary.withValues(alpha: 0.7),
+                            ),
                       ),
                     ],
                   ),
@@ -4383,22 +3348,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               )
             else if (downloaded.isNotEmpty) ...[
               SliverToBoxAdapter(
-                child: _buildDownloadsSectionHeader(
-                  context,
-                  '📥 Downloaded Songs',
-                  '${downloaded.length}',
-                ),
+                child: _buildDownloadsSectionHeader(context, '📥 Downloaded Songs', '${downloaded.length}'),
               ),
               SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  return DownloadedSongTile(
-                    key: ValueKey('d_${downloaded[index].videoId}'),
-                    song: downloaded[index],
-                    index: index,
-                    playerProvider: playerProvider,
-                    allDownloaded: downloaded,
-                  );
-                }, childCount: downloaded.length),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    return DownloadedSongTile(
+                      key: ValueKey('d_${downloaded[index].videoId}'),
+                      song: downloaded[index],
+                      index: index,
+                      playerProvider: playerProvider,
+                      allDownloaded: downloaded,
+                    );
+                  },
+                  childCount: downloaded.length,
+                ),
               ),
             ],
             const SliverToBoxAdapter(child: SizedBox(height: 140)),
@@ -4409,11 +3373,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildDownloadsStatusHeader(
-    BuildContext context,
-    PlayerProvider provider,
-    bool isOffline,
-    int downloadCount,
-  ) {
+      BuildContext context, PlayerProvider provider, bool isOffline, int downloadCount) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
       child: Column(
@@ -4422,10 +3382,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 400),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: isOffline
                       ? Colors.redAccent.withValues(alpha: 0.15)
@@ -4463,10 +3420,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(width: 10),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(20),
@@ -4474,29 +3428,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.download_done_rounded,
-                      size: 14,
-                      color: AppColors.textTertiary,
-                    ),
+                    const Icon(Icons.download_done_rounded, size: 14, color: AppColors.textTertiary),
                     const SizedBox(width: 5),
                     Text(
                       '$downloadCount songs',
-                      style: const TextStyle(
-                        color: AppColors.textTertiary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceVariant.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(20),
@@ -4504,19 +3447,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.storage_rounded,
-                      size: 14,
-                      color: AppColors.textTertiary,
-                    ),
+                    const Icon(Icons.storage_rounded, size: 14, color: AppColors.textTertiary),
                     const SizedBox(width: 5),
                     Text(
                       provider.formattedStorageUsed,
-                      style: const TextStyle(
-                        color: AppColors.textTertiary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: const TextStyle(color: AppColors.textTertiary, fontSize: 11, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -4537,10 +3472,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         decoration: BoxDecoration(
           color: Colors.amber.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.amber.withValues(alpha: 0.3),
-            width: 0.5,
-          ),
+          border: Border.all(color: Colors.amber.withValues(alpha: 0.3), width: 0.5),
         ),
         child: const Row(
           children: [
@@ -4549,11 +3481,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Expanded(
               child: Text(
                 'You\'re offline — Active downloads are paused',
-                style: TextStyle(
-                  color: Colors.amber,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w500),
               ),
             ),
           ],
@@ -4562,11 +3490,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildDownloadsSectionHeader(
-    BuildContext context,
-    String title,
-    String count,
-  ) {
+  Widget _buildDownloadsSectionHeader(BuildContext context, String title, String count) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
       child: Row(
@@ -4594,20 +3518,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   /// "Active Downloads" header with the live combined speed of all tasks.
-  Widget _buildActiveDownloadsHeader(
-    BuildContext context,
-    PlayerProvider provider,
-    int count,
-  ) {
+  Widget _buildActiveDownloadsHeader(BuildContext context, PlayerProvider provider, int count) {
     final totalSpeed = provider.formattedTotalDownloadSpeed;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
       child: Row(
         children: [
-          Text(
-            '⚡ Active Downloads',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
+          Text('⚡ Active Downloads', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(width: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -4639,11 +3556,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.speed_rounded,
-                    size: 13,
-                    color: AppColors.success,
-                  ),
+                  const Icon(Icons.speed_rounded, size: 13, color: AppColors.success),
                   const SizedBox(width: 5),
                   Text(
                     totalSpeed,
@@ -4661,19 +3574,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showCancelAllDownloadsDialog(
-    BuildContext context,
-    PlayerProvider provider,
-  ) {
+  void _showCancelAllDownloadsDialog(BuildContext context, PlayerProvider provider) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Cancel All Downloads?',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Cancel All Downloads?', style: TextStyle(color: Colors.white)),
         content: const Text(
           'This will cancel all active and queued downloads. This action cannot be undone.',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
@@ -4688,29 +3595,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               provider.cancelAllDownloads();
               Navigator.pop(ctx);
             },
-            child: const Text(
-              'Cancel All',
-              style: TextStyle(color: Colors.redAccent),
-            ),
+            child: const Text('Cancel All', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
     );
   }
 
-  void _showDeleteAllDownloadsDialog(
-    BuildContext context,
-    PlayerProvider provider,
-  ) {
+  void _showDeleteAllDownloadsDialog(BuildContext context, PlayerProvider provider) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Delete All Downloads?',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Delete All Downloads?', style: TextStyle(color: Colors.white)),
         content: const Text(
           'All downloaded songs will be permanently removed from your device.',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
@@ -4725,10 +3623,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               provider.deleteAllDownloads();
               Navigator.pop(ctx);
             },
-            child: const Text(
-              'Delete All',
-              style: TextStyle(color: Colors.redAccent),
-            ),
+            child: const Text('Delete All', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
@@ -4749,9 +3644,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               color: AppColors.surface.withValues(alpha: 0.95),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: AppColors.glassBorder.withValues(alpha: 0.15),
-              ),
+              border: Border.all(color: AppColors.glassBorder.withValues(alpha: 0.15)),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.primary.withValues(alpha: 0.15),
@@ -4774,16 +3667,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppColors.primary.withValues(
-                            alpha: 0.15 + 0.1 * value,
-                          ),
+                          color: AppColors.primary.withValues(alpha: 0.15 + 0.1 * value),
                           width: 3,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withValues(
-                              alpha: 0.1 + 0.05 * value,
-                            ),
+                            color: AppColors.primary.withValues(alpha: 0.1 + 0.05 * value),
                             blurRadius: 20 + 10 * value,
                             spreadRadius: 2 * value,
                           ),
@@ -4795,9 +3684,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           height: 36,
                           child: CircularProgressIndicator(
                             strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation(
-                              AppColors.primaryLight,
-                            ),
+                            valueColor: AlwaysStoppedAnimation(AppColors.primaryLight),
                           ),
                         ),
                       ),
@@ -4818,10 +3705,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 const SizedBox(height: 8),
                 Text(
                   'Please wait...',
-                  style: TextStyle(
-                    color: AppColors.textTertiary.withValues(alpha: 0.6),
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: AppColors.textTertiary.withValues(alpha: 0.6), fontSize: 11),
                 ),
               ],
             ),
@@ -4843,62 +3727,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Add Custom Category',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Add Custom Category', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: controller,
           style: const TextStyle(color: Colors.white, fontSize: 14),
           autofocus: true,
           decoration: InputDecoration(
             hintText: 'e.g. Party Hits, Workout, Classical...',
-            hintStyle: const TextStyle(
-              color: AppColors.textTertiary,
-              fontSize: 12,
-            ),
+            hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
             filled: true,
             fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary))),
           ElevatedButton(
             onPressed: () {
               final name = controller.text.trim();
               if (name.isNotEmpty) {
                 setSheetState(() {
-                  proposedAlbums.add(
-                    AiProposedAlbum(
-                      name: name,
-                      description: 'Custom user category',
-                      songIds: [],
-                      source: 'Custom',
-                    ),
-                  );
+                  proposedAlbums.add(AiProposedAlbum(
+                    name: name,
+                    description: 'Custom user category',
+                    songIds: [],
+                    source: 'Custom',
+                  ));
                   albumSelection.add(true);
                 });
                 Navigator.pop(ctx);
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary, foregroundColor: Colors.white),
             child: const Text('Add Category'),
           ),
         ],
@@ -4933,23 +3793,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
             final screenHeight = MediaQuery.of(sheetContext).size.height;
-            final totalSongsCount = proposedAlbums.fold<int>(
-              0,
-              (sum, item) => sum + item.songIds.length,
-            );
+            final totalSongsCount = proposedAlbums.fold<int>(0, (sum, item) => sum + item.songIds.length);
             final selectedCount = albumSelection.where((b) => b).length;
 
             // Filter logic
-            final indexedProposals = List.generate(
-              proposedAlbums.length,
-              (i) => MapEntry(i, proposedAlbums[i]),
-            );
+            final indexedProposals = List.generate(proposedAlbums.length, (i) => MapEntry(i, proposedAlbums[i]));
             final filteredEntries = indexedProposals.where((entry) {
               if (activeFilter == 'High Match') {
                 return entry.value.confidence >= 0.7;
               } else if (activeFilter == 'Custom') {
-                return entry.value.source == 'Your Category' ||
-                    entry.value.source == 'Unassigned';
+                return entry.value.source == 'Your Category' || entry.value.source == 'Unassigned';
               }
               return true;
             }).toList();
@@ -4958,9 +3811,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               height: screenHeight * 0.90,
               decoration: BoxDecoration(
                 color: AppColors.surface.withValues(alpha: 0.98),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
                 border: Border.all(color: AppColors.glassBorder, width: 0.8),
                 boxShadow: [
                   BoxShadow(
@@ -4985,10 +3836,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                   // Header Section
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 8,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -5006,17 +3854,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Theme.of(context).colorScheme.primary
-                                        .withValues(alpha: 0.4),
+                                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
                                     blurRadius: 14,
                                   ),
                                 ],
                               ),
-                              child: const Icon(
-                                Icons.auto_awesome_rounded,
-                                color: Colors.white,
-                                size: 22,
-                              ),
+                              child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 22),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
@@ -5036,9 +3879,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   Text(
                                     '${proposedAlbums.length} Proposed Albums • $totalSongsCount Tracks Organized',
                                     style: TextStyle(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
+                                      color: Theme.of(context).colorScheme.primary,
                                       fontSize: 11.5,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -5048,35 +3889,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             ),
                             // Quick Add Category Button
                             ElevatedButton.icon(
-                              onPressed: () => _promptAddCustomCategory(
-                                sheetContext,
-                                proposedAlbums,
-                                albumSelection,
-                                setSheetState,
-                              ),
+                              onPressed: () => _promptAddCustomCategory(sheetContext, proposedAlbums, albumSelection, setSheetState),
                               icon: const Icon(Icons.add_rounded, size: 16),
-                              label: const Text(
-                                'Add Category',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              label: const Text('Add Category', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary.withValues(alpha: 0.2),
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
+                                backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                                foregroundColor: Theme.of(context).colorScheme.primary,
                                 elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 8,
-                                ),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               ),
                             ),
                           ],
@@ -5091,55 +3912,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             GestureDetector(
                               onTap: () {
                                 setSheetState(() {
-                                  final allSelected = albumSelection.every(
-                                    (b) => b,
-                                  );
-                                  for (
-                                    int i = 0;
-                                    i < albumSelection.length;
-                                    i++
-                                  ) {
+                                  final allSelected = albumSelection.every((b) => b);
+                                  for (int i = 0; i < albumSelection.length; i++) {
                                     albumSelection[i] = !allSelected;
                                   }
                                 });
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surfaceVariant.withValues(
-                                    alpha: 0.4,
-                                  ),
+                                  color: AppColors.surfaceVariant.withValues(alpha: 0.4),
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.1),
-                                  ),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      albumSelection.every((b) => b)
-                                          ? Icons.check_box_rounded
-                                          : Icons
-                                                .indeterminate_check_box_rounded,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
+                                      albumSelection.every((b) => b) ? Icons.check_box_rounded : Icons.indeterminate_check_box_rounded,
+                                      color: Theme.of(context).colorScheme.primary,
                                       size: 16,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      albumSelection.every((b) => b)
-                                          ? 'Deselect All'
-                                          : 'Select All',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      albumSelection.every((b) => b) ? 'Deselect All' : 'Select All',
+                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                   ],
                                 ),
@@ -5151,49 +3948,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                 scrollDirection: Axis.horizontal,
                                 physics: const BouncingScrollPhysics(),
                                 child: Row(
-                                  children: ['All', 'High Match', 'Custom'].map(
-                                    (filterName) {
-                                      final isActive =
-                                          activeFilter == filterName;
-                                      return Padding(
-                                        padding: const EdgeInsets.only(
-                                          right: 6,
+                                  children: ['All', 'High Match', 'Custom'].map((filterName) {
+                                    final isActive = activeFilter == filterName;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: ChoiceChip(
+                                        label: Text(filterName),
+                                        selected: isActive,
+                                        onSelected: (selected) {
+                                          if (selected) {
+                                            setSheetState(() {
+                                              activeFilter = filterName;
+                                            });
+                                          }
+                                        },
+                                        selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                                        backgroundColor: AppColors.surfaceVariant.withValues(alpha: 0.2),
+                                        labelStyle: TextStyle(
+                                          color: isActive ? Colors.white : AppColors.textTertiary,
+                                          fontSize: 11,
+                                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
                                         ),
-                                        child: ChoiceChip(
-                                          label: Text(filterName),
-                                          selected: isActive,
-                                          onSelected: (selected) {
-                                            if (selected) {
-                                              setSheetState(() {
-                                                activeFilter = filterName;
-                                              });
-                                            }
-                                          },
-                                          selectedColor: Theme.of(context)
-                                              .colorScheme
-                                              .primary
-                                              .withValues(alpha: 0.3),
-                                          backgroundColor: AppColors
-                                              .surfaceVariant
-                                              .withValues(alpha: 0.2),
-                                          labelStyle: TextStyle(
-                                            color: isActive
-                                                ? Colors.white
-                                                : AppColors.textTertiary,
-                                            fontSize: 11,
-                                            fontWeight: isActive
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ).toList(),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
                               ),
                             ),
@@ -5212,38 +3991,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
-                                  Icons.filter_alt_off_rounded,
-                                  size: 40,
-                                  color: AppColors.textTertiary.withValues(
-                                    alpha: 0.5,
-                                  ),
-                                ),
+                                Icon(Icons.filter_alt_off_rounded, size: 40, color: AppColors.textTertiary.withValues(alpha: 0.5)),
                                 const SizedBox(height: 8),
-                                const Text(
-                                  'No categories match this filter',
-                                  style: TextStyle(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 13,
-                                  ),
-                                ),
+                                const Text('No categories match this filter', style: TextStyle(color: AppColors.textTertiary, fontSize: 13)),
                               ],
                             ),
                           )
                         : ListView.builder(
                             physics: const BouncingScrollPhysics(),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             itemCount: filteredEntries.length,
                             itemBuilder: (listCtx, index) {
                               final entry = filteredEntries[index];
                               final albumIdx = entry.key;
                               final album = entry.value;
                               final isSelected = albumSelection[albumIdx];
-                              final categoryColor =
-                                  themeColors[albumIdx % themeColors.length];
+                              final categoryColor = themeColors[albumIdx % themeColors.length];
 
                               final albumSongs = album.songIds.map((id) {
                                 return songs.firstWhere(
@@ -5263,38 +4026,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               return _StaggeredListSlideIn(
                                 index: albumIdx,
                                 child: Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    vertical: 6,
-                                  ),
+                                  margin: const EdgeInsets.symmetric(vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: categoryColor.withValues(
-                                      alpha: isSelected ? 0.08 : 0.02,
-                                    ),
+                                    color: categoryColor.withValues(alpha: isSelected ? 0.08 : 0.02),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
                                       color: isSelected
                                           ? categoryColor.withValues(alpha: 0.5)
-                                          : Colors.white.withValues(
-                                              alpha: 0.08,
-                                            ),
+                                          : Colors.white.withValues(alpha: 0.08),
                                       width: isSelected ? 1.2 : 0.8,
                                     ),
                                     boxShadow: isSelected
                                         ? [
                                             BoxShadow(
-                                              color: categoryColor.withValues(
-                                                alpha: 0.1,
-                                              ),
+                                              color: categoryColor.withValues(alpha: 0.1),
                                               blurRadius: 16,
                                               spreadRadius: 1,
-                                            ),
+                                            )
                                           ]
                                         : [],
                                   ),
                                   child: Theme(
-                                    data: Theme.of(context).copyWith(
-                                      dividerColor: Colors.transparent,
-                                    ),
+                                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                                     child: ExpansionTile(
                                       initiallyExpanded: true,
                                       iconColor: categoryColor,
@@ -5305,8 +4058,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         value: isSelected,
                                         onChanged: (val) {
                                           setSheetState(() {
-                                            albumSelection[albumIdx] =
-                                                val ?? false;
+                                            albumSelection[albumIdx] = val ?? false;
                                           });
                                         },
                                       ),
@@ -5314,22 +4066,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                         children: [
                                           Expanded(
                                             child: TextField(
-                                              controller:
-                                                  TextEditingController(
-                                                      text: album.name,
-                                                    )
-                                                    ..selection =
-                                                        TextSelection.fromPosition(
-                                                          TextPosition(
-                                                            offset: album
-                                                                .name
-                                                                .length,
-                                                          ),
-                                                        ),
+                                              controller: TextEditingController(text: album.name)
+                                                ..selection = TextSelection.fromPosition(TextPosition(offset: album.name.length)),
                                               style: TextStyle(
-                                                color: isSelected
-                                                    ? categoryColor
-                                                    : Colors.white,
+                                                color: isSelected ? categoryColor : Colors.white,
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -5337,9 +4077,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                                 border: InputBorder.none,
                                                 isDense: true,
                                                 hintText: 'Category Name',
-                                                hintStyle: TextStyle(
-                                                  color: AppColors.textTertiary,
-                                                ),
+                                                hintStyle: TextStyle(color: AppColors.textTertiary),
                                               ),
                                               onChanged: (val) {
                                                 album.name = val;
@@ -5347,235 +4085,116 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                             ),
                                           ),
                                           Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 3,
-                                            ),
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                             decoration: BoxDecoration(
-                                              color: categoryColor.withValues(
-                                                alpha: 0.2,
-                                              ),
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
+                                              color: categoryColor.withValues(alpha: 0.2),
+                                              borderRadius: BorderRadius.circular(6),
                                             ),
                                             child: Text(
-                                              album.source.isNotEmpty
-                                                  ? album.source
-                                                  : '${albumSongs.length} tracks',
-                                              style: TextStyle(
-                                                color: categoryColor,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
+                                              album.source.isNotEmpty ? album.source : '${albumSongs.length} tracks',
+                                              style: TextStyle(color: categoryColor, fontSize: 10, fontWeight: FontWeight.bold),
                                             ),
                                           ),
                                         ],
                                       ),
                                       subtitle: TextField(
-                                        controller:
-                                            TextEditingController(
-                                                text: album.description,
-                                              )
-                                              ..selection =
-                                                  TextSelection.fromPosition(
-                                                    TextPosition(
-                                                      offset: album
-                                                          .description
-                                                          .length,
-                                                    ),
-                                                  ),
-                                        style: const TextStyle(
-                                          color: AppColors.textTertiary,
-                                          fontSize: 11,
-                                        ),
+                                        controller: TextEditingController(text: album.description)
+                                          ..selection = TextSelection.fromPosition(TextPosition(offset: album.description.length)),
+                                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
                                         decoration: const InputDecoration(
                                           border: InputBorder.none,
                                           isDense: true,
                                           hintText: 'Category Description',
-                                          hintStyle: TextStyle(
-                                            color: AppColors.textTertiary,
-                                          ),
+                                          hintStyle: TextStyle(color: AppColors.textTertiary),
                                         ),
                                         onChanged: (val) {
                                           album.description = val;
                                         },
                                       ),
-                                      childrenPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 14,
-                                            vertical: 6,
-                                          ),
+                                      childrenPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                                       children: [
                                         const Divider(color: Colors.white10),
                                         if (albumSongs.isEmpty)
                                           const Padding(
-                                            padding: EdgeInsets.symmetric(
-                                              vertical: 10,
-                                            ),
-                                            child: Text(
-                                              'No songs in this category (tap Move icon on another song to transfer)',
-                                              style: TextStyle(
-                                                color: AppColors.textTertiary,
-                                                fontSize: 11,
-                                              ),
-                                            ),
+                                            padding: EdgeInsets.symmetric(vertical: 10),
+                                            child: Text('No songs in this category (tap Move icon on another song to transfer)',
+                                                style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
                                           )
                                         else
                                           Column(
                                             children: albumSongs.map((song) {
                                               return Container(
-                                                margin:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 3,
-                                                    ),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 6,
-                                                    ),
+                                                margin: const EdgeInsets.symmetric(vertical: 3),
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                                 decoration: BoxDecoration(
-                                                  color: AppColors
-                                                      .surfaceVariant
-                                                      .withValues(alpha: 0.3),
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
+                                                  color: AppColors.surfaceVariant.withValues(alpha: 0.3),
+                                                  borderRadius: BorderRadius.circular(10),
                                                 ),
                                                 child: Row(
                                                   children: [
-                                                    Icon(
-                                                      Icons.music_note_rounded,
-                                                      color: categoryColor,
-                                                      size: 16,
-                                                    ),
+                                                    Icon(Icons.music_note_rounded, color: categoryColor, size: 16),
                                                     const SizedBox(width: 8),
                                                     Expanded(
                                                       child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
                                                         children: [
                                                           Text(
                                                             song.title,
-                                                            style:
-                                                                const TextStyle(
-                                                                  color: Colors
-                                                                      .white,
-                                                                  fontSize: 12,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
+                                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                                                             maxLines: 1,
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
+                                                            overflow: TextOverflow.ellipsis,
                                                           ),
                                                           Text(
                                                             song.artist,
-                                                            style: const TextStyle(
-                                                              color: AppColors
-                                                                  .textTertiary,
-                                                              fontSize: 10,
-                                                            ),
+                                                            style: const TextStyle(color: AppColors.textTertiary, fontSize: 10),
                                                             maxLines: 1,
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
+                                                            overflow: TextOverflow.ellipsis,
                                                           ),
                                                         ],
                                                       ),
                                                     ),
                                                     // Easy Move Button with Target Picker Popup
                                                     PopupMenuButton<int>(
-                                                      icon: Icon(
-                                                        Icons
-                                                            .swap_horiz_rounded,
-                                                        color: categoryColor,
-                                                        size: 20,
-                                                      ),
-                                                      tooltip:
-                                                          'Move song to another category',
+                                                      icon: Icon(Icons.swap_horiz_rounded, color: categoryColor, size: 20),
+                                                      tooltip: 'Move song to another category',
                                                       color: AppColors.surface,
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              14,
-                                                            ),
-                                                      ),
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                                       onSelected: (targetIdx) {
                                                         setSheetState(() {
-                                                          album.songIds.remove(
-                                                            song.videoId,
-                                                          );
-                                                          proposedAlbums[targetIdx]
-                                                              .songIds
-                                                              .add(
-                                                                song.videoId,
-                                                              );
+                                                          album.songIds.remove(song.videoId);
+                                                          proposedAlbums[targetIdx].songIds.add(song.videoId);
                                                         });
-                                                        ScaffoldMessenger.of(
-                                                          context,
-                                                        ).showSnackBar(
+                                                        ScaffoldMessenger.of(context).showSnackBar(
                                                           SnackBar(
-                                                            content: Text(
-                                                              'Moved "${song.title}" to "${proposedAlbums[targetIdx].name}"',
-                                                            ),
-                                                            duration:
-                                                                const Duration(
-                                                                  seconds: 2,
-                                                                ),
+                                                            content: Text('Moved "${song.title}" to "${proposedAlbums[targetIdx].name}"'),
+                                                            duration: const Duration(seconds: 2),
                                                           ),
                                                         );
                                                       },
                                                       itemBuilder: (popCtx) {
-                                                        return List.generate(proposedAlbums.length, (
-                                                          idx,
-                                                        ) {
-                                                          final targetColor =
-                                                              themeColors[idx %
-                                                                  themeColors
-                                                                      .length];
-                                                          return PopupMenuItem<
-                                                            int
-                                                          >(
+                                                        return List.generate(proposedAlbums.length, (idx) {
+                                                          final targetColor = themeColors[idx % themeColors.length];
+                                                          return PopupMenuItem<int>(
                                                             value: idx,
-                                                            enabled:
-                                                                idx != albumIdx,
+                                                            enabled: idx != albumIdx,
                                                             child: Row(
                                                               children: [
                                                                 Container(
                                                                   width: 8,
                                                                   height: 8,
-                                                                  decoration: BoxDecoration(
-                                                                    color:
-                                                                        targetColor,
-                                                                    shape: BoxShape
-                                                                        .circle,
-                                                                  ),
+                                                                  decoration: BoxDecoration(color: targetColor, shape: BoxShape.circle),
                                                                 ),
-                                                                const SizedBox(
-                                                                  width: 8,
-                                                                ),
+                                                                const SizedBox(width: 8),
                                                                 Expanded(
                                                                   child: Text(
-                                                                    proposedAlbums[idx]
-                                                                        .name,
+                                                                    proposedAlbums[idx].name,
                                                                     style: TextStyle(
-                                                                      color:
-                                                                          idx ==
-                                                                              albumIdx
-                                                                          ? AppColors.textTertiary
-                                                                          : Colors.white,
-                                                                      fontSize:
-                                                                          12,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
+                                                                      color: idx == albumIdx ? AppColors.textTertiary : Colors.white,
+                                                                      fontSize: 12,
+                                                                      fontWeight: FontWeight.bold,
                                                                     ),
                                                                     maxLines: 1,
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
+                                                                    overflow: TextOverflow.ellipsis,
                                                                   ),
                                                                 ),
                                                               ],
@@ -5586,16 +4205,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                                     ),
                                                     // Remove from Category Button
                                                     IconButton(
-                                                      icon: const Icon(
-                                                        Icons.close_rounded,
-                                                        color: Colors.redAccent,
-                                                        size: 16,
-                                                      ),
+                                                      icon: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 16),
                                                       onPressed: () {
                                                         setSheetState(() {
-                                                          album.songIds.remove(
-                                                            song.videoId,
-                                                          );
+                                                          album.songIds.remove(song.videoId);
                                                         });
                                                       },
                                                     ),
@@ -5631,14 +4244,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: Colors.white24),
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
-                            child: const Text(
-                              'Cancel',
-                              style: TextStyle(color: Colors.white70),
-                            ),
+                            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -5648,137 +4256,82 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             onPressed: selectedCount == 0
                                 ? null
                                 : () async {
-                                    _showLoadingDialog(
-                                      context,
-                                      'Organizing tracks into album folders...\nExecuting secure file move...',
-                                    );
+                                    _showLoadingDialog(context, 'Organizing tracks into album folders...\nExecuting secure file move...');
                                     int albumsCreated = 0;
                                     int albumsUpdated = 0;
                                     try {
-                                      for (
-                                        int i = 0;
-                                        i < proposedAlbums.length;
-                                        i++
-                                      ) {
+                                      for (int i = 0; i < proposedAlbums.length; i++) {
                                         if (albumSelection[i]) {
                                           final proposal = proposedAlbums[i];
-                                          if (proposal.name.trim().isEmpty ||
-                                              proposal.songIds.isEmpty) {
-                                            continue;
-                                          }
+                                          if (proposal.name.trim().isEmpty || proposal.songIds.isEmpty) continue;
 
-                                          final albumSongs = proposal.songIds
-                                              .map((id) {
-                                                return songs.firstWhere(
-                                                  (s) => s.videoId == id,
-                                                  orElse: () => Song(
-                                                    id: id,
-                                                    title: 'Unknown Song',
-                                                    artist: 'Unknown Artist',
-                                                    thumbnailUrl: '',
-                                                    highResThumbnailUrl: '',
-                                                    duration: Duration.zero,
-                                                    videoId: id,
-                                                  ),
-                                                );
-                                              })
-                                              .toList();
-
-                                          if (proposal.existingAlbumId !=
-                                              null) {
-                                            final existing = provider.albums
-                                                .firstWhere(
-                                                  (a) =>
-                                                      a.id ==
-                                                      proposal.existingAlbumId,
-                                                );
-                                            final List<Song> merged = List.from(
-                                              existing.songs,
+                                          final albumSongs = proposal.songIds.map((id) {
+                                            return songs.firstWhere(
+                                              (s) => s.videoId == id,
+                                              orElse: () => Song(
+                                                id: id,
+                                                title: 'Unknown Song',
+                                                artist: 'Unknown Artist',
+                                                thumbnailUrl: '',
+                                                highResThumbnailUrl: '',
+                                                duration: Duration.zero,
+                                                videoId: id,
+                                              ),
                                             );
+                                          }).toList();
+
+                                          if (proposal.existingAlbumId != null) {
+                                            final existing = provider.albums.firstWhere((a) => a.id == proposal.existingAlbumId);
+                                            final List<Song> merged = List.from(existing.songs);
                                             for (final s in albumSongs) {
-                                              if (!merged.any(
-                                                (item) =>
-                                                    item.videoId == s.videoId,
-                                              )) {
+                                              if (!merged.any((item) => item.videoId == s.videoId)) {
                                                 merged.add(s);
                                               }
                                             }
-                                            await provider.updateAlbumSongs(
-                                              existing.id,
-                                              merged,
-                                            );
+                                            await provider.updateAlbumSongs(existing.id, merged);
                                             albumsUpdated++;
                                           } else {
-                                            final newAlbum = await provider
-                                                .createAlbum(
-                                                  proposal.name.trim(),
-                                                );
-                                            await provider.updateAlbumSongs(
-                                              newAlbum.id,
-                                              albumSongs,
-                                            );
+                                            final newAlbum = await provider.createAlbum(proposal.name.trim());
+                                            await provider.updateAlbumSongs(newAlbum.id, albumSongs);
                                             albumsCreated++;
                                           }
                                         }
                                       }
                                     } catch (e) {
-                                      debugPrint(
-                                        'Error processing Smart Organizer albums: $e',
-                                      );
+                                      debugPrint('Error processing Smart Organizer albums: $e');
                                     }
 
-                                    if (context.mounted) {
-                                      Navigator.pop(
-                                        context,
-                                      ); // Dismiss loading dialog
-                                    }
-                                    if (sheetContext.mounted) {
-                                      Navigator.pop(
-                                        sheetContext,
-                                      ); // Dismiss sheet
-                                    }
+                                    if (context.mounted) Navigator.pop(context); // Dismiss loading dialog
+                                    if (sheetContext.mounted) Navigator.pop(sheetContext); // Dismiss sheet
                                     if (!context.mounted) return;
 
                                     String msg = '';
-                                    if (albumsCreated > 0 &&
-                                        albumsUpdated > 0) {
-                                      msg =
-                                          'Created $albumsCreated new and updated $albumsUpdated existing albums!';
+                                    if (albumsCreated > 0 && albumsUpdated > 0) {
+                                      msg = 'Created $albumsCreated new and updated $albumsUpdated existing albums!';
                                     } else if (albumsCreated > 0) {
-                                      msg =
-                                          'Successfully created $albumsCreated albums!';
+                                      msg = 'Successfully created $albumsCreated albums!';
                                     } else if (albumsUpdated > 0) {
-                                      msg =
-                                          'Successfully updated $albumsUpdated existing albums!';
+                                      msg = 'Successfully updated $albumsUpdated existing albums!';
                                     } else {
                                       msg = 'No actions performed.';
                                     }
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text(msg),
-                                        backgroundColor: Theme.of(
-                                          context,
-                                        ).colorScheme.primary,
+                                        backgroundColor: Theme.of(context).colorScheme.primary,
                                       ),
                                     );
                                   },
                             icon: const Icon(Icons.check_rounded, size: 18),
                             label: Text(
                               'Apply AI Organization ($selectedCount)',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
+                              backgroundColor: Theme.of(context).colorScheme.primary,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               elevation: 4,
                             ),
                           ),
@@ -5796,12 +4349,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _showMoveSongsToAppFolderDialog(
-    BuildContext context,
-    List<Song> localSongs,
-    PlayerProvider provider,
-  ) {
+      BuildContext context, List<Song> localSongs, PlayerProvider provider) {
     final storageService = StorageLocationService();
-
+    
     // Filter to only get the external ones
     final externalSongs = localSongs.where((s) {
       if (!s.isLocalFile || s.filePath == null) return false;
@@ -5813,13 +4363,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'All Songs in App Folder',
-            style: TextStyle(color: Colors.white),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('All Songs in App Folder', style: TextStyle(color: Colors.white)),
           content: const Text(
             'All scanned local songs are already located inside the app-managed directory.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
@@ -5845,27 +4390,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           builder: (context, setState) {
             return AlertDialog(
               backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              title: const Text(
-                'Move to SonicWave Folder',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Text('Move to SonicWave Folder', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Found ${externalSongs.length} local song(s) outside the app folder. Move them to your app-managed folder?',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 13,
-                    ),
+                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -5893,18 +4426,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       style: const TextStyle(color: Colors.white, fontSize: 13),
                       decoration: InputDecoration(
                         hintText: 'Enter album / folder name...',
-                        hintStyle: const TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 12,
-                        ),
+                        hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                         filled: true,
-                        fillColor: AppColors.surfaceVariant.withValues(
-                          alpha: 0.4,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
+                        fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -5917,58 +4442,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
+                  child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
                 ),
                 TextButton(
                   onPressed: () async {
-                    final albumName = useAlbumFolder
-                        ? controller.text.trim()
-                        : null;
-                    if (useAlbumFolder &&
-                        (albumName == null || albumName.isEmpty)) {
+                    final albumName = useAlbumFolder ? controller.text.trim() : null;
+                    if (useAlbumFolder && (albumName == null || albumName.isEmpty)) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter a folder name'),
-                        ),
+                        const SnackBar(content: Text('Please enter a folder name')),
                       );
                       return;
                     }
                     Navigator.pop(ctx);
-
+                    
                     // Show progress indicator
                     showDialog(
                       context: context,
                       barrierDismissible: false,
-                      builder: (pCtx) =>
-                          const Center(child: CircularProgressIndicator()),
+                      builder: (pCtx) => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
                     );
 
                     final moved = await provider.moveScannedSongsToAppFolder(
                       externalSongs,
                       albumName: albumName,
                     );
-
+                    
                     if (context.mounted) {
                       Navigator.pop(context); // Dismiss progress
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(
-                            'Successfully moved ${moved.length} song(s)',
-                          ),
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
+                          content: Text('Successfully moved ${moved.length} song(s)'),
+                          backgroundColor: Theme.of(context).colorScheme.primary,
                         ),
                       );
                     }
                   },
-                  child: const Text(
-                    'Move Now',
-                    style: TextStyle(color: AppColors.primary),
-                  ),
+                  child: const Text('Move Now', style: TextStyle(color: AppColors.primary)),
                 ),
               ],
             );
@@ -5978,16 +4489,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _startAiCategorizationFlow(
-    BuildContext context,
-    List<Song> songs,
-    PlayerProvider provider,
-  ) async {
+  void _startAiCategorizationFlow(BuildContext context, List<Song> songs, PlayerProvider provider) async {
     final unclassifiedSongs = songs.where((s) {
-      return !provider.albums.any(
-        (album) =>
-            album.songs.any((albumSong) => albumSong.videoId == s.videoId),
-      );
+      return !provider.albums.any((album) => album.songs.any((albumSong) => albumSong.videoId == s.videoId));
     }).toList();
 
     if (unclassifiedSongs.isEmpty) {
@@ -5995,13 +4499,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            'All Songs Categorized',
-            style: TextStyle(color: Colors.white),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('All Songs Categorized', style: TextStyle(color: Colors.white)),
           content: const Text(
             'All scanned local songs are already added to one or more albums!',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
@@ -6017,20 +4516,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return;
     }
 
-    _showLoadingDialog(
-      context,
-      'Scanning MusicBrainz database & analyzing local files to organize albums...',
-    );
+    _showLoadingDialog(context, 'Scanning MusicBrainz database & analyzing local files to organize albums...');
     try {
       final service = AiCategorizationService();
       final result = await service.categorizeSongs(
         unclassifiedSongs,
         provider.albums,
       );
-
+      
       if (!context.mounted) return;
       Navigator.pop(context); // Dismiss loading dialog
-
+      
       if (result.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not categorize local songs.')),
@@ -6042,9 +4538,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     } catch (e) {
       if (!context.mounted) return;
       Navigator.pop(context); // Dismiss loading dialog
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error organizing: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error organizing: $e')),
+      );
     }
   }
 
@@ -6061,7 +4557,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       "Life is one grand sweet song, so start the music.",
       "Without music, life would be a mistake.",
       "Music is the wine that fills the cup of silence.",
-      "One good thing about music, when it hits you, you feel no pain.",
+      "One good thing about music, when it hits you, you feel no pain."
     ];
 
     if (hour < 12) {
@@ -6094,9 +4590,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           SnackBar(
             behavior: SnackBarBehavior.floating,
             backgroundColor: AppColors.surfaceVariant,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             content: Row(
               children: [
                 const Icon(Icons.music_note_rounded, color: AppColors.primary),
@@ -6104,11 +4598,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Expanded(
                   child: Text(
                     '"$randQuote"\n— $quote',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: Colors.white,
-                      height: 1.4,
-                    ),
+                    style: GoogleFonts.inter(fontSize: 13, color: Colors.white, height: 1.4),
                   ),
                 ),
               ],
@@ -6124,33 +4614,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Text(
             greeting,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.textSecondary,
-              letterSpacing: 0.5,
-              fontWeight: FontWeight.bold,
-            ),
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.5,
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(width: 6),
-          Icon(icon, color: iconColor, size: 14),
+          Icon(
+            icon,
+            color: iconColor,
+            size: 14,
+          ),
         ],
       ),
     );
   }
 
   /// Shows a picker dialog with all albums except the current one.
-  Future<UserAlbum?> _showAlbumPickerForMove(
-    BuildContext context,
-    PlayerProvider provider,
-    String excludeAlbumId,
-  ) async {
-    final albums = provider.albums
-        .where((a) => a.id != excludeAlbumId)
-        .toList();
+  Future<UserAlbum?> _showAlbumPickerForMove(BuildContext context, PlayerProvider provider, String excludeAlbumId) async {
+    final albums = provider.albums.where((a) => a.id != excludeAlbumId).toList();
     if (albums.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No other albums available. Create one first.'),
-          ),
+          const SnackBar(content: Text('No other albums available. Create one first.')),
         );
       }
       return null;
@@ -6168,41 +4654,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: [
               const SizedBox(height: 12),
               Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textTertiary.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: AppColors.textTertiary.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
               ),
               const SizedBox(height: 16),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.drive_file_move_rounded,
-                      color: AppColors.primaryLight,
-                      size: 22,
-                    ),
+                    Icon(Icons.drive_file_move_rounded, color: AppColors.primaryLight, size: 22),
                     SizedBox(width: 10),
-                    Text(
-                      'Move to Album',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text('Move to Album', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
               const SizedBox(height: 6),
               const Divider(color: AppColors.divider, height: 1),
               ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.4,
-                ),
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.4),
                 child: ListView.builder(
                   shrinkWrap: true,
                   itemCount: albums.length,
@@ -6211,8 +4680,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     final album = albums[index];
                     return ListTile(
                       leading: Container(
-                        width: 42,
-                        height: 42,
+                        width: 42, height: 42,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
                           gradient: LinearGradient(
@@ -6224,38 +4692,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         child: Center(
                           child: album.isFolderBased
-                              ? Icon(
-                                  Icons.folder_rounded,
-                                  color: Colors.amber.withValues(alpha: 0.9),
-                                  size: 20,
-                                )
-                              : const Icon(
-                                  Icons.album_rounded,
-                                  color: AppColors.primaryLight,
-                                  size: 20,
-                                ),
+                              ? Icon(Icons.folder_rounded, color: Colors.amber.withValues(alpha: 0.9), size: 20)
+                              : const Icon(Icons.album_rounded, color: AppColors.primaryLight, size: 20),
                         ),
                       ),
-                      title: Text(
-                        album.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      title: Text(album.name, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
                       subtitle: Text(
                         '${album.songCount} tracks • ${album.formattedTotalSize}',
-                        style: const TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 11,
-                        ),
+                        style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
                       ),
-                      trailing: Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        color: AppColors.textTertiary.withValues(alpha: 0.5),
-                        size: 14,
-                      ),
+                      trailing: Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textTertiary.withValues(alpha: 0.5), size: 14),
                       onTap: () => Navigator.pop(ctx, album),
                     );
                   },
@@ -6279,36 +4725,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.swap_horiz_rounded,
-              color: AppColors.primaryLight,
-              size: 36,
-            ),
+            const Icon(Icons.swap_horiz_rounded, color: AppColors.primaryLight, size: 36),
             const SizedBox(height: 12),
-            const Text(
-              'Choose Storage Operation',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            const Text('Choose Storage Operation', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             // Make a Copy option card
             _buildMoveOptionCard(
               ctx,
               icon: Icons.copy_rounded,
               title: 'Make a Copy',
-              subtitle:
-                  'Duplicates audio file into target album folder while leaving original file intact.',
+              subtitle: 'Duplicates audio file into target album folder while leaving original file intact.',
               color: Colors.cyanAccent,
-              onTap: () => Navigator.pop(
-                ctx,
-                const _HomeScreenMoveResult(
-                  physicalMove: true,
-                  isCopyMode: true,
-                ),
-              ),
+              onTap: () => Navigator.pop(ctx, const _HomeScreenMoveResult(physicalMove: true, isCopyMode: true)),
             ),
             const SizedBox(height: 10),
             // Permanently Move option card
@@ -6316,16 +4744,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ctx,
               icon: Icons.drive_file_move_rounded,
               title: 'Permanently Move',
-              subtitle:
-                  'Physically transfers original audio file on disk into target album\'s folder.',
+              subtitle: 'Physically transfers original audio file on disk into target album\'s folder.',
               color: AppColors.primary,
-              onTap: () => Navigator.pop(
-                ctx,
-                const _HomeScreenMoveResult(
-                  physicalMove: true,
-                  isCopyMode: false,
-                ),
-              ),
+              onTap: () => Navigator.pop(ctx, const _HomeScreenMoveResult(physicalMove: true, isCopyMode: false)),
             ),
             const SizedBox(height: 10),
             // In-App Bookmark option card
@@ -6333,16 +4754,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ctx,
               icon: Icons.bookmark_rounded,
               title: 'In-App Bookmark',
-              subtitle:
-                  'Reorganize album tags inside app memory only without moving disk files.',
+              subtitle: 'Reorganize album tags inside app memory only without moving disk files.',
               color: AppColors.secondary,
-              onTap: () => Navigator.pop(
-                ctx,
-                const _HomeScreenMoveResult(
-                  physicalMove: false,
-                  isCopyMode: false,
-                ),
-              ),
+              onTap: () => Navigator.pop(ctx, const _HomeScreenMoveResult(physicalMove: false, isCopyMode: false)),
             ),
           ],
         ),
@@ -6350,8 +4764,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildMoveOptionCard(
-    BuildContext context, {
+  Widget _buildMoveOptionCard(BuildContext context, {
     required IconData icon,
     required String title,
     required String subtitle,
@@ -6385,31 +4798,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text(title, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: AppColors.textTertiary,
-                        fontSize: 10,
-                        height: 1.3,
-                      ),
-                    ),
+                    Text(subtitle, style: const TextStyle(color: AppColors.textTertiary, fontSize: 10, height: 1.3)),
                   ],
                 ),
               ),
-              Icon(
-                Icons.arrow_forward_rounded,
-                color: color.withValues(alpha: 0.5),
-                size: 18,
-              ),
+              Icon(Icons.arrow_forward_rounded, color: color.withValues(alpha: 0.5), size: 18),
             ],
           ),
         ),
@@ -6417,13 +4812,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showDeleteSongDialog(
-    BuildContext context,
-    Song song,
-    UserAlbum album,
-    PlayerProvider provider,
-    VoidCallback onDeleted,
-  ) {
+  void _showDeleteSongDialog(BuildContext context, Song song, UserAlbum album, PlayerProvider provider, VoidCallback onDeleted) {
     final isPhysical = album.isFolderBased && song.filePath != null;
     showDialog(
       context: context,
@@ -6441,36 +4830,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 shape: BoxShape.circle,
                 color: Colors.redAccent.withValues(alpha: 0.1),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.redAccent.withValues(alpha: 0.15),
-                    blurRadius: 24,
-                    spreadRadius: 2,
-                  ),
+                  BoxShadow(color: Colors.redAccent.withValues(alpha: 0.15), blurRadius: 24, spreadRadius: 2),
                 ],
               ),
-              child: const Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.redAccent,
-                size: 32,
-              ),
+              child: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 32),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Remove Song?',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            const Text('Remove Song?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text(
               '"${song.title}"',
-              style: const TextStyle(
-                color: AppColors.primaryLight,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(color: AppColors.primaryLight, fontSize: 13, fontWeight: FontWeight.w500),
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -6482,21 +4852,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(ctx),
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(
-                    color: AppColors.textTertiary.withValues(alpha: 0.3),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  side: BorderSide(color: AppColors.textTertiary.withValues(alpha: 0.3)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                  ),
-                ),
+                child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
               ),
             ),
             const SizedBox(height: 8),
@@ -6506,24 +4866,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: ElevatedButton.icon(
                 onPressed: () async {
                   Navigator.pop(ctx);
-                  final updatedSongs = album.songs
-                      .where((s) => s.videoId != song.videoId)
-                      .toList();
+                  final updatedSongs = album.songs.where((s) => s.videoId != song.videoId).toList();
                   await provider.updateAlbumSongs(album.id, updatedSongs);
                   onDeleted();
                 },
                 icon: const Icon(Icons.bookmark_remove_rounded, size: 16),
-                label: const Text(
-                  'Remove from Album',
-                  style: TextStyle(fontSize: 13),
-                ),
+                label: const Text('Remove from Album', style: TextStyle(fontSize: 13)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.amber.withValues(alpha: 0.15),
                   foregroundColor: Colors.amber,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
@@ -6539,17 +4892,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     onDeleted();
                   },
                   icon: const Icon(Icons.delete_forever_rounded, size: 16),
-                  label: const Text(
-                    'Delete Permanently',
-                    style: TextStyle(fontSize: 13),
-                  ),
+                  label: const Text('Delete Permanently', style: TextStyle(fontSize: 13)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.redAccent.withValues(alpha: 0.15),
                     foregroundColor: Colors.redAccent,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
@@ -6605,9 +4953,8 @@ class _LivePulseDotState extends State<_LivePulseDot>
                 height: 6 + 10 * _controller.value,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.success.withValues(
-                    alpha: 0.4 * (1 - _controller.value),
-                  ),
+                  color: AppColors.success
+                      .withValues(alpha: 0.4 * (1 - _controller.value)),
                 ),
               ),
               Container(
@@ -6665,20 +5012,14 @@ class _TrendingCardState extends State<_TrendingCard>
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
-    _entryFade = CurvedAnimation(
-      parent: _entryController,
-      curve: Curves.easeOut,
-    );
-    _entrySlide = Tween<Offset>(begin: const Offset(0.25, 0), end: Offset.zero)
-        .animate(
-          CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic),
-        );
-    Future.delayed(
-      Duration(milliseconds: math.min(widget.index * 70, 500)),
-      () {
-        if (mounted) _entryController.forward();
-      },
-    );
+    _entryFade = CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+    _entrySlide = Tween<Offset>(
+      begin: const Offset(0.25, 0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic));
+    Future.delayed(Duration(milliseconds: math.min(widget.index * 70, 500)), () {
+      if (mounted) _entryController.forward();
+    });
   }
 
   @override
@@ -6746,9 +5087,7 @@ class _TrendingCardState extends State<_TrendingCard>
                       left: 10,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 4,
-                        ),
+                            horizontal: 9, vertical: 4),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [primary, AppColors.secondary],
@@ -6878,18 +5217,16 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
     try {
       final ytService = YouTubeService();
       final archiveService = ArchiveOrgService();
-      final query = widget.title == 'Trending Now'
-          ? 'trending music hits'
-          : widget.title;
-
+      final query = widget.title == 'Trending Now' ? 'trending music hits' : widget.title;
+      
       final ytFuture = ytService.searchSongs(query, maxResults: 25);
       final archiveFuture = archiveService.searchSongs(query, maxResults: 10);
-
+      
       final searchResults = await Future.wait([ytFuture, archiveFuture]);
       final ytResults = searchResults[0];
       final archiveResults = searchResults[1];
       final results = [...ytResults, ...archiveResults];
-
+      
       if (mounted) {
         setState(() {
           final existingIds = _songs.map((s) => s.videoId).toSet();
@@ -6915,25 +5252,20 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
+        decoration: const BoxDecoration(
+          gradient: AppColors.backgroundGradient,
+        ),
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
                       onPressed: () => Navigator.pop(context),
                     ),
                     const SizedBox(width: 8),
@@ -6962,11 +5294,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
                         ),
                       ),
                     IconButton(
-                      icon: const Icon(
-                        Icons.shuffle_rounded,
-                        color: Colors.white70,
-                        size: 22,
-                      ),
+                      icon: const Icon(Icons.shuffle_rounded, color: Colors.white70, size: 22),
                       onPressed: () {
                         if (_songs.isNotEmpty) {
                           final provider = context.read<PlayerProvider>();
@@ -6998,10 +5326,7 @@ class _SectionDetailScreenState extends State<SectionDetailScreen> {
                             song: song,
                             index: index,
                             onTap: () {
-                              context.read<PlayerProvider>().playPlaylist(
-                                _songs,
-                                startIndex: index,
-                              );
+                              context.read<PlayerProvider>().playPlaylist(_songs, startIndex: index);
                             },
                           );
                         },
@@ -7019,7 +5344,10 @@ class _AnimatedPressScale extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
 
-  const _AnimatedPressScale({required this.child, required this.onTap});
+  const _AnimatedPressScale({
+    required this.child,
+    required this.onTap,
+  });
 
   @override
   State<_AnimatedPressScale> createState() => _AnimatedPressScaleState();
@@ -7051,14 +5379,16 @@ class _StaggeredListSlideIn extends StatefulWidget {
   final int index;
   final Widget child;
 
-  const _StaggeredListSlideIn({required this.index, required this.child});
+  const _StaggeredListSlideIn({
+    required this.index,
+    required this.child,
+  });
 
   @override
   State<_StaggeredListSlideIn> createState() => _StaggeredListSlideInState();
 }
 
-class _StaggeredListSlideInState extends State<_StaggeredListSlideIn>
-    with SingleTickerProviderStateMixin {
+class _StaggeredListSlideInState extends State<_StaggeredListSlideIn> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _slideAnimation;
   late Animation<double> _opacityAnimation;
@@ -7070,14 +5400,12 @@ class _StaggeredListSlideInState extends State<_StaggeredListSlideIn>
       vsync: this,
       duration: const Duration(milliseconds: 450),
     );
-    _slideAnimation = Tween<double>(
-      begin: 40.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
-    _opacityAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _slideAnimation = Tween<double>(begin: 40.0, end: 0.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
 
     final delay = Duration(milliseconds: math.min(widget.index * 40, 300));
     Future.delayed(delay, () {
@@ -7100,7 +5428,10 @@ class _StaggeredListSlideInState extends State<_StaggeredListSlideIn>
       builder: (context, child) {
         return Transform.translate(
           offset: Offset(0, _slideAnimation.value),
-          child: Opacity(opacity: _opacityAnimation.value, child: child),
+          child: Opacity(
+            opacity: _opacityAnimation.value,
+            child: child,
+          ),
         );
       },
       child: widget.child,
@@ -7113,7 +5444,10 @@ class _AnimatedEqualizerBars extends StatefulWidget {
   final bool isPlaying;
   final Color color;
 
-  const _AnimatedEqualizerBars({required this.isPlaying, required this.color});
+  const _AnimatedEqualizerBars({
+    required this.isPlaying,
+    required this.color,
+  });
 
   @override
   State<_AnimatedEqualizerBars> createState() => _AnimatedEqualizerBarsState();
@@ -7190,8 +5524,5 @@ class _AnimatedEqualizerBarsState extends State<_AnimatedEqualizerBars>
 class _HomeScreenMoveResult {
   final bool physicalMove;
   final bool isCopyMode;
-  const _HomeScreenMoveResult({
-    required this.physicalMove,
-    required this.isCopyMode,
-  });
+  const _HomeScreenMoveResult({required this.physicalMove, required this.isCopyMode});
 }

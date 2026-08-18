@@ -12,13 +12,12 @@ import 'ytdlp_downloader.dart';
 class _YtDlpLifecycleObserver with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    DiagnosticLogService().log(DiagnosticLogService.appLifecycle, {
-      'state': state.name,
-    });
+    DiagnosticLogService().log(
+      DiagnosticLogService.appLifecycle,
+      {'state': state.name},
+    );
     if (state == AppLifecycleState.resumed) {
-      debugPrint(
-        '[yt-dlp] App resumed from background — checking native process health',
-      );
+      debugPrint('[yt-dlp] App resumed from background — checking native process health');
       YtDlpRuntime.onAppResumed();
     } else if (state == AppLifecycleState.paused) {
       debugPrint('[yt-dlp] App paused/backgrounded');
@@ -49,21 +48,17 @@ class YtDlpRuntime {
     YouTubeService.clearStreamCacheOnResume();
 
     try {
-      final isInit = await YoutubeDLFlutter.instance.isInitialized().timeout(
-        const Duration(seconds: 3),
-      );
+      final isInit = await YoutubeDLFlutter.instance
+          .isInitialized()
+          .timeout(const Duration(seconds: 3));
       if (!isInit) {
-        debugPrint(
-          '[yt-dlp] Native process died in background — force re-initializing',
-        );
+        debugPrint('[yt-dlp] Native process died in background — force re-initializing');
         forceReinitialize();
       } else {
         _ready = true;
       }
     } catch (e) {
-      debugPrint(
-        '[yt-dlp] Native process error on resume ($e) — force re-initializing',
-      );
+      debugPrint('[yt-dlp] Native process error on resume ($e) — force re-initializing');
       forceReinitialize();
     }
   }
@@ -95,10 +90,8 @@ class YtDlpRuntime {
   /// Report that yt-dlp produced a usable result. Resets the failure streak.
   static void markHealthy() {
     if (_consecutiveFailures > 0) {
-      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
-        'detail': 'healthy',
-        'streak_cleared': _consecutiveFailures,
-      });
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime,
+          {'detail': 'healthy', 'streak_cleared': _consecutiveFailures});
     }
     _consecutiveFailures = 0;
   }
@@ -114,14 +107,10 @@ class YtDlpRuntime {
       'threshold': _unhealthyThreshold,
     });
     if (_consecutiveFailures < _unhealthyThreshold) return;
-    debugPrint(
-      '[yt-dlp] $_consecutiveFailures consecutive failures '
-      '— resetting runtime for self-recovery',
-    );
-    DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
-      'detail': 'unhealthy_reset',
-      'consecutive': _consecutiveFailures,
-    });
+    debugPrint('[yt-dlp] $_consecutiveFailures consecutive failures '
+        '— resetting runtime for self-recovery');
+    DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime,
+        {'detail': 'unhealthy_reset', 'consecutive': _consecutiveFailures});
     _consecutiveFailures = 0;
     _inFlight = null;
     unawaited(_recover());
@@ -132,16 +121,12 @@ class YtDlpRuntime {
     try {
       final ok = await ensureInitialized();
       debugPrint('[yt-dlp] Recovery re-initialization: ');
-      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
-        'detail': 'recover',
-        'ok': ok,
-      });
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime,
+          {'detail': 'recover', 'ok': ok});
     } catch (e) {
       debugPrint('[yt-dlp] Recovery re-initialization failed: ');
-      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
-        'detail': 'recover_failed',
-        'error': e.toString(),
-      });
+      DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime,
+          {'detail': 'recover_failed', 'error': e.toString()});
     }
   }
 
@@ -165,8 +150,7 @@ class YtDlpRuntime {
         _ready = true;
         sw.stop();
         DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
-          'detail': 'already_initialized',
-          'elapsed_ms': sw.elapsedMilliseconds,
+          'detail': 'already_initialized', 'elapsed_ms': sw.elapsedMilliseconds,
         });
         _scheduleUpdateCheck();
         return true;
@@ -176,8 +160,7 @@ class YtDlpRuntime {
           .timeout(const Duration(seconds: 25));
       sw.stop();
       debugPrint(
-        '[yt-dlp] Initialization: ${result.success} ${result.errorMessage ?? ""}',
-      );
+          '[yt-dlp] Initialization: ${result.success} ${result.errorMessage ?? ""}');
       DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
         'detail': 'init',
         'ok': result.success,
@@ -196,8 +179,7 @@ class YtDlpRuntime {
       sw.stop();
       debugPrint('[yt-dlp] Initialization failed: $e');
       DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
-        'detail': 'init_exception',
-        'elapsed_ms': sw.elapsedMilliseconds,
+        'detail': 'init_exception', 'elapsed_ms': sw.elapsedMilliseconds,
         'error': e.toString(),
       });
       _inFlight = null;
@@ -238,13 +220,12 @@ class YtDlpRuntime {
 
       debugPrint('[yt-dlp] Checking for binary update...');
       final sw = Stopwatch()..start();
-      final result = await YoutubeDLFlutter.instance.updateYoutubeDL().timeout(
-        const Duration(seconds: 60),
-      );
+      final result = await YoutubeDLFlutter.instance
+          .updateYoutubeDL()
+          .timeout(const Duration(seconds: 60));
       sw.stop();
       debugPrint(
-        '[yt-dlp] Update: ${result.status} ${result.version ?? ""} ${result.errorMessage ?? ""}',
-      );
+          '[yt-dlp] Update: ${result.status} ${result.version ?? ""} ${result.errorMessage ?? ""}');
       DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
         'detail': 'update',
         'status': result.status.toString(),
@@ -257,12 +238,12 @@ class YtDlpRuntime {
       // don't hammer the network on every launch. On hard error we still
       // record it (the throttle applies to errors too — a broken update
       // endpoint shouldn't retry every cold start).
-      await prefs.setInt(_lastUpdateKey, DateTime.now().millisecondsSinceEpoch);
+      await prefs.setInt(
+          _lastUpdateKey, DateTime.now().millisecondsSinceEpoch);
     } catch (e) {
       debugPrint('[yt-dlp] Update check failed: $e');
       DiagnosticLogService().log(DiagnosticLogService.ytdlpRuntime, {
-        'detail': 'update_exception',
-        'error': e.toString(),
+        'detail': 'update_exception', 'error': e.toString(),
       });
     } finally {
       _updateInFlight = null;
