@@ -716,7 +716,7 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   }
 
   /// Build matching HTTP client headers for a stream URL.
-  /// Matches GoogleVideo's expected User-Agent by player client token (c=IOS, c=TV, c=ANDROID_VR, c=WEB).
+  /// Matches GoogleVideo's expected User-Agent by player client token (c=ANDROID, c=IOS, c=TV, c=ANDROID_VR, c=WEB).
   static Map<String, String> _buildStreamHeaders(ResolvedStream resolved) {
     if (resolved.headers != null && resolved.headers!.isNotEmpty) {
       return resolved.headers!;
@@ -726,21 +726,28 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     if (url.contains('googlevideo.com') ||
         resolved.source == 'youtube' ||
         resolved.source == 'youtube_fallback') {
-      if (url.contains('c=ios')) {
+      if (url.contains('c=android_vr')) {
+        return const {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/15.0.0.4.58.291776510 SamsungBrowser/4.0 Chrome/89.0.4389.90 VR Safari/537.36',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+        };
+      } else if (url.contains('c=android') || url.contains('c=android_music') || url.contains('c=android_creator')) {
+        // Official YouTube Android client headers — NO desktop referer, as CDN checks client signature
+        return const {
+          'User-Agent': 'com.google.android.youtube/19.44.38 (Linux; U; Android 14; en_US; Pixel 8 Pro) gzip',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+        };
+      } else if (url.contains('c=ios') || url.contains('c=ios_music')) {
         return const {
           'User-Agent': 'com.google.ios.youtube/19.45.4 (iPhone14,3; U; CPU iOS 18_1 like Mac OS X; en_US)',
           'Accept': '*/*',
           'Accept-Encoding': 'identity',
         };
-      } else if (url.contains('c=tv')) {
+      } else if (url.contains('c=tv') || url.contains('c=tv_embedded')) {
         return const {
           'User-Agent': 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) Cobalt/20.master.0-qa (unlike Gecko) v8/8.8.278.8-bpt',
-          'Accept': '*/*',
-          'Accept-Encoding': 'identity',
-        };
-      } else if (url.contains('c=android_vr')) {
-        return const {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/15.0.0.4.58.291776510 SamsungBrowser/4.0 Chrome/89.0.4389.90 VR Safari/537.36',
           'Accept': '*/*',
           'Accept-Encoding': 'identity',
         };
@@ -752,12 +759,11 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
           'Referer': 'https://www.youtube.com/',
         };
       } else {
-        // Universal clean header for Google Video streams: matches desktop/mobile web with proper identity encoding
+        // Universal clean header for Google Video streams: matches mobile client without forbidden referer
         return const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'com.google.android.youtube/19.44.38 (Linux; U; Android 14; en_US; Pixel 8 Pro) gzip',
           'Accept': '*/*',
           'Accept-Encoding': 'identity',
-          'Referer': 'https://www.youtube.com/',
         };
       }
     }

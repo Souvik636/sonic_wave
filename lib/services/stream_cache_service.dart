@@ -209,6 +209,10 @@ class StreamCacheService {
     return null;
   }
 
+  final Map<String, Future<String>> _inFlightDownloads = {};
+  final Map<String, List<ValueChanged<String>>> _inFlightPlayableListeners = {};
+  final Map<String, String?> _inFlightPlayablePath = {};
+
   /// Download YouTube audio via yt-dlp native binary directly to the stream
   /// cache, bypassing the problematic ExoPlayer-direct-URL path.
   ///
@@ -245,6 +249,45 @@ class StreamCacheService {
       onPlayable?.call(cachedPath);
       return cachedPath;
     }
+
+    // 1b. If already downloading in-flight, join the existing task to prevent race collisions
+    final inFlight = _inFlightDownloads[videoId];
+    if (inFlight != null) {
+      debugPrint('[StreamCache] In-flight cache download already active for $videoId — joining');
+      if (onPlayable != null) {
+        final existingPlayable = _inFlightPlayablePath[videoId];
+        if (existingPlayable != null) {
+          onPlayable(existingPlayable);
+        } else {
+          _inFlightPlayableListeners.putIfAbsent(videoId, () => []).add(onPlayable);
+        }
+      }
+      return inFlight;
+    }
+
+    final future = _executeDownloadToCache(
+      videoId: videoId,
+      quality: quality,
+      onPlayable: onPlayable,
+      onProgress: onProgress,
+    );
+    _inFlightDownloads[videoId] = future;
+    try {
+      return await future;
+    } finally {
+      _inFlightDownloads.remove(videoId);
+      _inFlightPlayableListeners.remove(videoId);
+      _inFlightPlayablePath.remove(videoId);
+    }
+  }
+
+  Future<String> _executeDownloadToCache({
+    required String videoId,
+    required AudioQuality quality,
+    ValueChanged<String>? onPlayable,
+    ValueChanged<double>? onProgress,
+  }) async {
+    final qualityName = quality.name;
 
     // 2. Ensure yt-dlp runtime is ready
     if (!YtDlpRuntime.isReady) {
@@ -324,6 +367,20 @@ class StreamCacheService {
         },
       );
 
+      void notifyPlayable(String path) {
+        _inFlightPlayablePath[videoId] = path;
+        onPlayable?.call(path);
+        final listeners = _inFlightPlayableListeners[videoId];
+        if (listeners != null) {
+          for (final listener in List<ValueChanged<String>>.from(listeners)) {
+            try {
+              listener(path);
+            } catch (_) {}
+          }
+          listeners.clear();
+        }
+      }
+
       // Start a timer to monitor staging directory for file growth.
       // With --no-part, yt-dlp writes directly to the output file, so we can
       // detect playability progressively even during download.
@@ -340,7 +397,7 @@ class StreamCacheService {
               if (len >= _playableThreshold) {
                 playableFired = true;
                 debugPrint('[StreamCache] File playable at ${len ~/ 1024}KB: ${entity.path}');
-                onPlayable?.call(entity.path);
+                notifyPlayable(entity.path);
                 break;
               }
             }
@@ -390,7 +447,7 @@ class StreamCacheService {
 
       // Fire playable if we didn't during download (small files)
       if (!playableFired) {
-        onPlayable?.call(cacheFile.path);
+        notifyPlayable(cacheFile.path);
       }
 
       // Clean up staging
