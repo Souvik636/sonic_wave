@@ -137,18 +137,14 @@ class YtDlpDownloader {
           '--socket-timeout': '10',
           '-R': '3',
           '--retry-sleep': 'linear=1::2',
-          '--fragment-retries': '3',
           '--no-mtime': '',
-          // 2 concurrent fragments speeds up downloads by up to 50% on mobile links
-          '--concurrent-fragments': '2',
-          '--buffersize': '64k',
-          '--http-chunk-size': '10M',
-          // Write cover as sidecar .jpg fallback.
-          '--write-thumbnail': '',
-          '--convert-thumbnails': 'jpg',
           '-S': YouTubeService.ytDlpAudioSorter(quality),
-          // Seal's album tag rule: prefer a real album, else the track title.
           '--parse-metadata': '%(album,title)s:%(meta_album)s',
+          // Multi-client fallback for downloads (resilient against web player blocks):
+          '--extractor-args':
+              'youtube:player_client=ios,tv,mweb,android,web',
+          '--concurrent-fragments': '3',
+          '--buffer-size': '128k',
         },
       );
 

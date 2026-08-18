@@ -1217,6 +1217,15 @@ class _PlayerScreenState extends State<PlayerScreen>
                         vocalMult = 0.8;
                         trebleMult = 1.3;
                         break;
+                      // Extended genre presets — use EQ curve only, no visualizer mods
+                      case SoundEnhancer.electronic:
+                      case SoundEnhancer.rockMetal:
+                      case SoundEnhancer.hipHop:
+                      case SoundEnhancer.pop:
+                      case SoundEnhancer.acoustic:
+                      case SoundEnhancer.jazzBlues:
+                      case SoundEnhancer.nightMode:
+                        break;
                     }
                   }
                   bassMult = bassMult.clamp(0.1, 2.5);
@@ -1270,7 +1279,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  }
+}
 
 class _PlayPauseMainButton extends StatefulWidget {
   final PlayerProvider playerProvider;

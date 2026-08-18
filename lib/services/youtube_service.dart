@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:extractor/extractor.dart';
 import '../models/song.dart';
 import '../providers/settings_provider.dart' show AudioQuality;
+import 'youtube_link_parser.dart';
 import 'ytdlp_runtime.dart';
+import 'encoding_sanitizer.dart';
 
 class YouTubeService {
   final YoutubeExplode _yt = YoutubeExplode();
@@ -617,20 +619,18 @@ class YouTubeService {
                   
                   // Normalize thumbnail URL
                   if (thumb.isNotEmpty) {
-                    thumb = Uri.decodeFull(thumb);
-                    if (thumb.startsWith('//')) {
-                      thumb = 'https:$thumb';
-                    } else if (thumb.startsWith('/')) {
-                      thumb = 'https://$instance$thumb';
-                    }
+                    thumb = EncodingSanitizer.sanitizeThumbnailUrl(thumb, videoId: videoId);
                   } else {
-                    thumb = 'https://img.youtube.com/vi/$videoId/mqdefault.jpg';
+                    thumb = 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
                   }
                   
+                  final cleanTitle = EncodingSanitizer.sanitize(title);
+                  final cleanAuthor = EncodingSanitizer.sanitize(author);
+
                   songs.add(Song(
                     id: videoId,
-                    title: title,
-                    artist: author,
+                    title: cleanTitle.isNotEmpty ? cleanTitle : 'YouTube Video',
+                    artist: cleanAuthor.isNotEmpty ? cleanAuthor : 'YouTube',
                     thumbnailUrl: thumb,
                     highResThumbnailUrl: thumb,
                     duration: Duration(seconds: durationSecs),
@@ -764,6 +764,19 @@ class YouTubeService {
 
   /// Search for songs on YouTube (user initiated search)
   Future<List<Song>> searchSongs(String query, {int maxResults = 20}) async {
+    // 1. Direct YouTube link or video ID detection:
+    final directVideoId = YouTubeLinkParser.extractVideoId(query) ??
+        (RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(query.trim()) ? query.trim() : null);
+
+    if (directVideoId != null) {
+      try {
+        final directSong = await getVideoDetailsResilient(directVideoId);
+        return [directSong];
+      } catch (e) {
+        debugPrint('[YT] Direct link resolution failed for $directVideoId: $e');
+      }
+    }
+
     try {
       final searchResults = await _yt.search.search('$query music');
       final songs = <Song>[];
@@ -838,145 +851,119 @@ class YouTubeService {
       }
     }
 
-    final completer = Completer<String>();
-    bool fastChainDone = false;
-    bool ytDlpStarted = false;
-    bool ytDlpDone = false;
-    Object? fastError;
-
-    void completeWith(String url) {
-      if (!completer.isCompleted) {
-        _evictExpiredCache();
-        _streamCache[cacheKey] = _CachedUrl(url, DateTime.now());
-        completer.complete(url);
-      }
-    }
-
-    void failIfBothExhausted() {
-      if (!completer.isCompleted && fastChainDone && (ytDlpDone || !ytDlpStarted)) {
-        completer.completeError(
-            fastError ?? Exception('Failed to get audio stream from all sources.'));
-      }
-    }
-
-    Future<void> runYtDlp() async {
-      if (ytDlpStarted || completer.isCompleted) return;
-      ytDlpStarted = true;
+    Future<String?> tryExplode(YoutubeApiClient client, Duration timeout) async {
       try {
-        final ytdlpUrl = await getYtDlpStreamUrl(videoId);
-        if (ytdlpUrl != null && ytdlpUrl.startsWith('http')) {
-          debugPrint('[YT] yt-dlp resolved stream successfully for $videoId');
-          completeWith(ytdlpUrl);
-          return;
+        final manifest = await _yt.videos.streamsClient
+            .getManifest(videoId, ytClients: [client])
+            .timeout(timeout);
+        final url = _pickBestStream(manifest);
+        if (url != null) {
+          debugPrint('[YT] Explode client $client succeeded for $videoId');
+          // Promote winning client
+          if (_clientPriority.isNotEmpty && _clientPriority.first != client) {
+            _clientPriority.remove(client);
+            _clientPriority.insert(0, client);
+          }
+          return url;
         }
       } catch (e) {
-        debugPrint('[YT] yt-dlp stream resolution failed for $videoId: $e');
-      } finally {
-        ytDlpDone = true;
+        debugPrint('[YT] Client $client failed for $videoId: $e');
       }
-      // yt-dlp exhausted: if the fast chain has also finished empty, fail.
-      failIfBothExhausted();
+      return null;
     }
 
-    Future<void> runFastChain() async {
+    Future<String?> tryInvidious(Duration timeout) async {
       try {
-        // Explode clients, Invidious and Piped ALL race from the first moment.
-        //
-        // These are independent HTTP endpoints, so running them one stage after
-        // another only stacked their latencies: three dead Explode clients had
-        // to time out in full before Invidious was even asked, and Invidious
-        // before Piped. Since the first playable URL wins and the losers are
-        // discarded, there is nothing to gain by holding the later stages back
-        // — the cost is two extra in-flight requests, the saving is the entire
-        // sequential tail.
-        final List<YoutubeApiClient> clients = List.from(_clientPriority);
-
-        Future<void> tryExplode(YoutubeApiClient client) async {
-          if (completer.isCompleted) return;
-          try {
-            final manifest = await _yt.videos.streamsClient
-                .getManifest(videoId, ytClients: [client])
-                .timeout(const Duration(seconds: 4));
-            if (completer.isCompleted) return;
-            final url = _pickBestStream(manifest);
-            if (url != null) {
-              // completeWith is a no-op once someone has won, so the promotion
-              // has to be gated on the same check — otherwise a client that
-              // merely finished *near* the winner still reordered the list, and
-              // the order stopped reflecting which client actually works.
-              if (completer.isCompleted) return;
-              completeWith(url);
-              // Remember which client answered so the next song starts with it.
-              if (_clientPriority.isNotEmpty && _clientPriority.first != client) {
-                _clientPriority.remove(client);
-                _clientPriority.insert(0, client);
-              }
-            }
-          } catch (e) {
-            debugPrint('[YT] Client $client failed for $videoId: $e');
-          }
-        }
-
-        Future<void> tryInvidious() async {
-          if (completer.isCompleted) return;
-          try {
-            final invidiousUrl = await _fetchInvidiousStreamUrl(
-              videoId,
-              shouldAbort: () => completer.isCompleted,
-            );
-            if (invidiousUrl != null) completeWith(invidiousUrl);
-          } catch (e) {
-            debugPrint('[YT] Invidious stream fallback failed for $videoId: $e');
-          }
-        }
-
-        Future<void> tryPiped() async {
-          if (completer.isCompleted) return;
-          try {
-            final pipedUrl = await _fetchPipedStreamUrl(
-              videoId,
-              shouldAbort: () => completer.isCompleted,
-            );
-            if (pipedUrl != null) completeWith(pipedUrl);
-          } catch (e) {
-            debugPrint('[YT] Piped stream fallback failed for $videoId: $e');
-          }
-        }
-
-        await Future.wait<void>([
-          ...clients.map(tryExplode),
-          tryInvidious(),
-          tryPiped(),
-        ]);
+        return await _fetchInvidiousStreamUrl(videoId).timeout(timeout);
       } catch (e) {
-        fastError = e;
-      } finally {
-        fastChainDone = true;
-        if (!completer.isCompleted) {
-          // yt-dlp is already racing (or finished empty) — settle if both done.
-          failIfBothExhausted();
-        }
+        debugPrint('[YT] Invidious fallback failed for $videoId: $e');
       }
+      return null;
     }
 
-    // Kick off BOTH tracks immediately — no delay. First playable URL wins.
-    runFastChain();
-    runYtDlp();
+    Future<String?> tryPiped(Duration timeout) async {
+      try {
+        return await _fetchPipedStreamUrl(videoId).timeout(timeout);
+      } catch (e) {
+        debugPrint('[YT] Piped fallback failed for $videoId: $e');
+      }
+      return null;
+    }
 
-    // Hard ceiling on the whole resolution. Without it a pathological network
-    // could leave the UI spinning indefinitely; 18s keeps the worst case inside
-    // the 20s start-time budget, and the timeout message is mapped to a
-    // friendly "connection is slow" string by the audio handler.
-    return completer.future.timeout(
-      _resolveDeadline,
-      onTimeout: () => throw TimeoutException(
-          'Stream resolution timed out after ${_resolveDeadline.inSeconds}s',
-          _resolveDeadline),
-    );
+    Future<String?> racePair(List<Future<String?>> tasks) async {
+      final completer = Completer<String?>();
+      int remaining = tasks.length;
+
+      for (final task in tasks) {
+        task.then((result) {
+          if (result != null && !completer.isCompleted) {
+            completer.complete(result);
+          }
+        }).catchError((_) {
+          // Ignore
+        }).whenComplete(() {
+          remaining--;
+          if (remaining == 0 && !completer.isCompleted) {
+            completer.complete(null);
+          }
+        });
+      }
+
+      return completer.future;
+    }
+
+    void saveToCache(String url) {
+      _evictExpiredCache();
+      _streamCache[cacheKey] = _CachedUrl(url, DateTime.now());
+    }
+
+    // ── STAGE 1: Fast Primary Pair (Primary Explode Client + Native yt-dlp) ──
+    final primaryClient = _clientPriority.isNotEmpty
+        ? _clientPriority.first
+        : YoutubeApiClient.android;
+    debugPrint('[YT] Resolution Stage 1: Racing $primaryClient + yt-dlp');
+    
+    final stage1Url = await racePair([
+      tryExplode(primaryClient, const Duration(seconds: 4)),
+      getYtDlpStreamUrl(videoId),
+    ]);
+    if (stage1Url != null) {
+      saveToCache(stage1Url);
+      return stage1Url;
+    }
+
+    // ── STAGE 2: Secondary Pair (Secondary Explode Client + Invidious Proxy) ──
+    final secondaryClient = _clientPriority.length > 1
+        ? _clientPriority[1]
+        : YoutubeApiClient.androidVr;
+    debugPrint('[YT] Resolution Stage 2: Racing $secondaryClient + Invidious');
+
+    final stage2Url = await racePair([
+      tryExplode(secondaryClient, const Duration(seconds: 4)),
+      tryInvidious(const Duration(seconds: 4)),
+    ]);
+    if (stage2Url != null) {
+      saveToCache(stage2Url);
+      return stage2Url;
+    }
+
+    // ── STAGE 3: Final Tertiary Pair (Piped Proxy + Tertiary Explode Client) ──
+    final tertiaryClient = _clientPriority.length > 2
+        ? _clientPriority[2]
+        : YoutubeApiClient.androidSdkless;
+    debugPrint('[YT] Resolution Stage 3: Racing $tertiaryClient + Piped');
+
+    final stage3Url = await racePair([
+      tryExplode(tertiaryClient, const Duration(seconds: 4)),
+      tryPiped(const Duration(seconds: 4)),
+    ]);
+    if (stage3Url != null) {
+      saveToCache(stage3Url);
+      return stage3Url;
+    }
+
+    throw Exception('Failed to get audio stream from all sources.');
   }
-
-  /// Ceiling on a full [getAudioStreamUrl] resolution across every source.
-  static const Duration _resolveDeadline = Duration(seconds: 18);
 
   /// Pick a stream honouring the user's streaming-quality setting.
   String? _pickBestStream(StreamManifest manifest) {
@@ -1029,6 +1016,7 @@ class YouTubeService {
     'tv',
     'ios',
     'android_music,android',
+    'web,mweb',
   ];
 
   /// Seal-style `-S` audio sorter for the user's streaming-quality setting
@@ -1096,12 +1084,6 @@ class YouTubeService {
 
   String _ytDlpAudioSorter() => ytDlpAudioSorter(streamingQuality);
 
-  /// Per-player-client extraction timeout in the yt-dlp race.
-  static const Duration _ytDlpClientTimeout = Duration(seconds: 7);
-
-  /// Ceiling on the whole yt-dlp track, however many clients are in flight.
-  static const Duration _ytDlpOverallTimeout = Duration(seconds: 10);
-
   /// Resolve stream URL specifically using the native yt-dlp binary
   /// (JunkFood02/Seal implementation).
   ///
@@ -1112,129 +1094,83 @@ class YouTubeService {
   /// against different YouTube endpoints — and bounds the whole track at
   /// [_ytDlpOverallTimeout].
   Future<String?> getYtDlpStreamUrl(String videoId) async {
-    // Non-blocking readiness check. On a cold start the binary + FFmpeg unpack
-    // is still running; waiting for it here would put the entire init on the
-    // critical path of the first song. The fast chain (Explode/Invidious/Piped)
-    // resolves song #1 and yt-dlp joins the race from song #2.
+    // Non-blocking readiness check with brief startup grace period
     if (!YtDlpRuntime.isReady) {
-      debugPrint('[YT] yt-dlp not warm yet — skipping it for $videoId');
-      return null;
+      debugPrint('[YT] yt-dlp initializing — waiting briefly for $videoId...');
+      final ok = await YtDlpRuntime.ensureInitialized().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => false,
+      );
+      if (!ok && !YtDlpRuntime.isReady) {
+        debugPrint('[YT] yt-dlp not warm yet — fast chain will handle $videoId');
+        return null;
+      }
     }
 
     final videoUrl = 'https://www.youtube.com/watch?v=$videoId';
-    final clients = List<String>.from(_ytDlpPlayerClients);
-    final completer = Completer<String?>();
-    int pending = clients.length;
 
-    Future<void> attempt(String client) async {
+    Future<String?> extractWithClientChain(String clientChain, Duration timeout) async {
       try {
-        debugPrint('[YT] yt-dlp extract $videoId (player_client=$client)');
+        debugPrint('[YT] yt-dlp fast extract $videoId (clients=$clientChain)');
         final info = await YoutubeDLFlutter.instance
             .getVideoInfoWithOptions(videoUrl, {
               '--no-update': '',
-              // Low-internet optimization: aggressive 5s socket timeout, IPv4 to bypass
-              // carrier dual-stack DNS stalls, and skip SSL cert chain checks.
-              '--socket-timeout': '5',
+              '--socket-timeout': '6',
               '-R': '2',
               '--no-playlist': '',
               '--force-ipv4': '',
               '--no-check-certificates': '',
-              // Audio selection honouring the user's quality setting, but ending
-              // in an unconstrained fallback so ANY container is accepted.
               '-f': ytDlpStreamFormatChain(streamingQuality),
               '-S': _ytDlpAudioSorter(),
-              // Skip HLS/DASH manifest & webpage HTML fetches — direct audio URLs in
-              // the player response are enough for streaming, cutting 2-3 network round-trips.
               '--extractor-args':
-                  'youtube:player_client=$client;skip=hls,dash,translated_subs,webpage',
+                  'youtube:player_client=$clientChain;skip=hls,dash,translated_subs,webpage',
             })
-            .timeout(_ytDlpClientTimeout);
+            .timeout(timeout);
 
-        if (completer.isCompleted) return;
-
-        // With -f, yt-dlp already picked the best format: top-level url.
         String? url = info.url;
         if (url == null || !url.startsWith('http')) {
           url = _pickYtDlpAudioUrl(info.formats);
         }
         if (url != null) {
-          // Only the client that actually WINS the race may publish anything.
-          //
-          // Several clients can pass the isCompleted check above and reach this
-          // point, so this used to be two unsynchronized side effects: each
-          // winner-ish client wrote its own url into _streamCache and promoted
-          // itself to the front of the list. The cached entry could therefore be
-          // client B's url while the caller was handed client A's — meaning the
-          // url left behind for the next 90 minutes was never the one playback
-          // validated. Claiming the completer first makes both effects belong to
-          // exactly one client.
-          if (completer.isCompleted) return;
-          completer.complete(url);
-
-          // Promote the winning player client so the NEXT song starts with it.
-          if (_ytDlpPlayerClients.contains(client) &&
-              _ytDlpPlayerClients.first != client) {
-            _ytDlpPlayerClients.remove(client);
-            _ytDlpPlayerClients.insert(0, client);
-            debugPrint('[YT] Promoted $client to primary yt-dlp player client');
-          }
-
-          debugPrint('[YT] yt-dlp resolved via player_client=$client '
-              'quality=${streamingQuality.name} '
-              'ext=${info.ext ?? "?"} acodec=${info.acodec ?? "?"}');
-          // The runtime demonstrably works — clear any accumulated failure
-          // streak so a few unavailable videos never trip the health check.
+          debugPrint('[YT] yt-dlp resolved stream successfully via $clientChain for $videoId');
           YtDlpRuntime.markHealthy();
           _evictExpiredCache();
           _streamCache[_cacheKey(videoId)] = _CachedUrl(url, DateTime.now());
-          return;
+          return url;
         }
-        debugPrint('[YT] yt-dlp client=$client returned no playable audio');
-      } on TimeoutException {
-        debugPrint('[YT] yt-dlp client=$client timed out');
       } catch (e) {
-        debugPrint('[YT] yt-dlp client=$client failed: $e');
-      } finally {
-        pending--;
-        if (pending == 0 && !completer.isCompleted) {
-          // All clients finished and none produced a url. Same signal as the
-          // overall timeout: nothing distinguishes "runtime is broken" from
-          // "video is unavailable" at this level, which is why the health check
-          // needs a streak rather than a single data point.
-          YtDlpRuntime.markExtractionFailed();
-          completer.complete(null);
-        }
+        debugPrint('[YT] yt-dlp extract failed ($clientChain): $e');
       }
-    }
-
-    for (final client in clients) {
-      attempt(client);
-    }
-
-    try {
-      return await completer.future.timeout(_ytDlpOverallTimeout);
-    } on TimeoutException {
-      debugPrint('[YT] yt-dlp race exceeded ${_ytDlpOverallTimeout.inSeconds}s '
-          'for $videoId');
-      // EVERY client timed out. That is the signature of a sick runtime rather
-      // than an unavailable video, so it counts toward the health check.
-      YtDlpRuntime.markExtractionFailed();
       return null;
     }
+
+    // 1. Primary fast unified chain: iOS (fastest unthrottled) -> TV -> mweb
+    final primaryUrl = await extractWithClientChain(
+      'ios,tv,mweb',
+      const Duration(seconds: 8),
+    );
+    if (primaryUrl != null) return primaryUrl;
+
+    // 2. Secondary fallback chain if primary was blocked: android_vr,web
+    final fallbackUrl = await extractWithClientChain(
+      'android_vr,web',
+      const Duration(seconds: 6),
+    );
+    if (fallbackUrl != null) return fallbackUrl;
+
+    YtDlpRuntime.markExtractionFailed();
+    return null;
   }
 
   /// Pick the best audio-only stream URL from a yt-dlp format list, preferring
   /// audio-only tracks by bitrate, then any track carrying an audio codec.
-  ///
-  /// Deliberately container-agnostic: selection is by the presence of an audio
-  /// codec and by bitrate, never by extension. Opus/WebM, AAC/M4A and a muxed
-  /// MP4 are all acceptable to stream — ExoPlayer decodes them all, and
-  /// rejecting one here would just cost another extraction attempt.
   String? _pickYtDlpAudioUrl(List<VideoFormat?>? formats) {
     if (formats == null || formats.isEmpty) return null;
 
     final audioOnly = formats.where((f) {
       if (f == null) return false;
+      final url = f.url;
+      if (url == null || !url.startsWith('http')) return false;
       final acodec = f.acodec?.toLowerCase();
       final vcodec = f.vcodec?.toLowerCase();
       return acodec != null &&
@@ -1265,6 +1201,8 @@ class YouTubeService {
     } else {
       final anyAudio = formats.where((f) {
         if (f == null) return false;
+        final url = f.url;
+        if (url == null || !url.startsWith('http')) return false;
         final acodec = f.acodec?.toLowerCase();
         return acodec != null && acodec != 'none';
       }).cast<VideoFormat>().toList();
@@ -1273,19 +1211,20 @@ class YouTubeService {
         selected = anyAudio.last;
       }
     }
-    selected ??= formats.whereType<VideoFormat>().isNotEmpty
-        ? formats.whereType<VideoFormat>().last
-        : null;
+    selected ??= formats
+        .whereType<VideoFormat>()
+        .where((f) => f.url != null && f.url!.startsWith('http'))
+        .lastOrNull;
 
     final url = selected?.url;
     if (url != null && url.startsWith('http')) return url;
     return null;
   }
 
-  /// Public fallback method to resolve stream URL, trying yt-dlp first then Invidious/Piped proxies.
+  /// Public fallback method to resolve stream URL, trying yt-dlp first then Explode clients, then Invidious/Piped proxies.
   /// Used when ExoPlayer fails with signature blocks (HTTP 403).
   Future<String?> getFallbackStreamUrl(String videoId) async {
-    // Try yt-dlp stream resolution first
+    // 1. Try yt-dlp with secondary client chain
     try {
       final ytdlpUrl = await getYtDlpStreamUrl(videoId);
       if (ytdlpUrl != null) return ytdlpUrl;
@@ -1293,7 +1232,18 @@ class YouTubeService {
       debugPrint('[YT] Fallback yt-dlp failed for $videoId: $e');
     }
 
-    // Try Invidious as secondary
+    // 2. Try Explode with all client variants
+    for (final client in [YoutubeApiClient.ios, YoutubeApiClient.androidMusic, YoutubeApiClient.androidVr]) {
+      try {
+        final manifest = await _yt.videos.streamsClient
+            .getManifest(videoId, ytClients: [client])
+            .timeout(const Duration(seconds: 3));
+        final url = _pickBestStream(manifest);
+        if (url != null) return url;
+      } catch (_) {}
+    }
+
+    // 3. Try Invidious
     try {
       final invidiousUrl = await _fetchInvidiousStreamUrl(videoId);
       if (invidiousUrl != null) return invidiousUrl;
@@ -1301,7 +1251,7 @@ class YouTubeService {
       debugPrint('[YT] Fallback Invidious failed for $videoId: $e');
     }
 
-    // Try Piped as tertiary
+    // 4. Try Piped
     try {
       final pipedUrl = await _fetchPipedStreamUrl(videoId);
       if (pipedUrl != null) return pipedUrl;
@@ -1324,42 +1274,38 @@ class YouTubeService {
   }
 
   /// Ceiling on the Explode metadata call.
-  ///
-  /// `videos.get` has no internal timeout, so on a stalled mobile socket it can
-  /// hang for the OS-level TCP timeout — minutes — with the shared-link card
-  /// stuck on "Reading video details…" the whole time. Explode is the *fast*
-  /// path here; if it has not answered in six seconds it has lost its purpose
-  /// and yt-dlp should be given the remaining budget.
   static const Duration _metadataExplodeTimeout = Duration(seconds: 6);
 
   /// Ceiling on the whole yt-dlp metadata fallback, across every player client.
   static const Duration _metadataYtDlpDeadline = Duration(seconds: 22);
 
   /// Get video details by ID.
-  ///
-  /// Explode is tried first (one cheap HTTP call), but it is the same client
-  /// stack that already fails outright on device for stream resolution, and a
-  /// shared YouTube link has nothing else to fall back on — a metadata failure
-  /// there kills a download the yt-dlp pipeline could have completed on its
-  /// own. So a failure here drops to yt-dlp, which is the extractor the app
-  /// actually trusts.
-  ///
-  /// Both legs are time-boxed. Unbounded, this was the single worst offender in
-  /// the shared-link flow: an untimed Explode call followed by four yt-dlp
-  /// clients at 20s each, behind a 25s runtime init, could leave the card
-  /// "resolving" for well over a minute before anything was even downloaded.
   Future<Song> getVideoDetails(String videoId) async {
     try {
       final video =
           await _yt.videos.get(videoId).timeout(_metadataExplodeTimeout);
+      final rawTitle = video.title;
+      final rawAuthor = video.author;
+      final cleanTitle = EncodingSanitizer.sanitize(rawTitle);
+      final cleanAuthor = EncodingSanitizer.sanitize(rawAuthor);
+
+      final medThumb = EncodingSanitizer.sanitizeThumbnailUrl(
+        video.thumbnails.mediumResUrl,
+        videoId: video.id.value,
+      );
+      final highThumb = EncodingSanitizer.sanitizeThumbnailUrl(
+        video.thumbnails.standardResUrl.isNotEmpty
+            ? video.thumbnails.standardResUrl
+            : (video.thumbnails.maxResUrl.isNotEmpty ? video.thumbnails.maxResUrl : video.thumbnails.mediumResUrl),
+        videoId: video.id.value,
+      );
+
       return Song(
         id: video.id.value,
-        title: video.title,
-        artist: video.author,
-        thumbnailUrl: video.thumbnails.mediumResUrl,
-        highResThumbnailUrl: video.thumbnails.standardResUrl.isNotEmpty
-            ? video.thumbnails.standardResUrl
-            : video.thumbnails.mediumResUrl,
+        title: cleanTitle.isNotEmpty ? cleanTitle : 'YouTube Video',
+        artist: cleanAuthor.isNotEmpty ? cleanAuthor : 'YouTube',
+        thumbnailUrl: medThumb,
+        highResThumbnailUrl: highThumb.isNotEmpty ? highThumb : medThumb,
         duration: video.duration ?? Duration.zero,
         videoId: video.id.value,
       );
@@ -1368,8 +1314,51 @@ class YouTubeService {
           '— falling back to yt-dlp');
       final viaYtDlp = await getVideoDetailsViaYtDlp(videoId);
       if (viaYtDlp != null) return viaYtDlp;
+
+      final viaInvidious = await _fetchInvidiousVideoDetails(videoId);
+      if (viaInvidious != null) return viaInvidious;
+
       throw Exception('Failed to get video details: $e');
     }
+  }
+
+  /// Fallback metadata from Invidious instance pool
+  Future<Song?> _fetchInvidiousVideoDetails(String videoId) async {
+    _loadWorkingInstances();
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+    for (final instance in _invidiousInstances.take(4)) {
+      if (_isCoolingDown(_instanceCooldown, instance)) continue;
+      try {
+        final uri = Uri.https(instance, '/api/v1/videos/$videoId');
+        final request = await client.getUrl(uri).timeout(const Duration(seconds: 4));
+        final response = await request.close().timeout(const Duration(seconds: 4));
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          final data = json.decode(body);
+          if (data is Map<String, dynamic>) {
+            final title = (data['title'] as String?)?.trim();
+            final author = (data['author'] as String?)?.trim();
+            final lengthSeconds = data['lengthSeconds'] as int? ?? 0;
+            if (title != null && title.isNotEmpty) {
+              client.close();
+              return Song(
+                id: videoId,
+                title: title,
+                artist: (author != null && author.isNotEmpty) ? author : 'YouTube',
+                thumbnailUrl: 'https://i.ytimg.com/vi/$videoId/mqdefault.jpg',
+                highResThumbnailUrl: 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+                duration: Duration(seconds: lengthSeconds),
+                videoId: videoId,
+              );
+            }
+          }
+        }
+      } catch (e) {
+        _instanceCooldown[instance] = DateTime.now();
+      }
+    }
+    client.close();
+    return null;
   }
 
   /// Stand-in metadata for a video whose details could not be read.
@@ -1461,15 +1450,20 @@ class YouTubeService {
             ? info.thumbnail!
             : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
 
+        final cleanTitle = EncodingSanitizer.sanitize(title);
+        final rawAuthor = (info.uploader?.trim().isNotEmpty ?? false)
+            ? info.uploader!.trim()
+            : 'YouTube';
+        final cleanAuthor = EncodingSanitizer.sanitize(rawAuthor);
+        final cleanThumb = EncodingSanitizer.sanitizeThumbnailUrl(thumb, videoId: videoId);
+
         debugPrint('[YT] yt-dlp metadata for $videoId via player_client=$client');
         return Song(
           id: videoId,
-          title: title,
-          artist: (info.uploader?.trim().isNotEmpty ?? false)
-              ? info.uploader!.trim()
-              : 'YouTube',
-          thumbnailUrl: thumb,
-          highResThumbnailUrl: thumb,
+          title: cleanTitle.isNotEmpty ? cleanTitle : 'YouTube Video',
+          artist: cleanAuthor.isNotEmpty ? cleanAuthor : 'YouTube',
+          thumbnailUrl: cleanThumb,
+          highResThumbnailUrl: cleanThumb,
           duration: Duration(seconds: info.duration ?? 0),
           videoId: videoId,
         );
@@ -1493,14 +1487,25 @@ class YouTubeService {
   }
 
   Song _videoToSong(Video video) {
+    final cleanTitle = EncodingSanitizer.sanitize(video.title);
+    final cleanAuthor = EncodingSanitizer.sanitize(video.author);
+    final medThumb = EncodingSanitizer.sanitizeThumbnailUrl(
+      video.thumbnails.mediumResUrl,
+      videoId: video.id.value,
+    );
+    final highThumb = EncodingSanitizer.sanitizeThumbnailUrl(
+      video.thumbnails.standardResUrl.isNotEmpty
+          ? video.thumbnails.standardResUrl
+          : (video.thumbnails.maxResUrl.isNotEmpty ? video.thumbnails.maxResUrl : video.thumbnails.mediumResUrl),
+      videoId: video.id.value,
+    );
+
     return Song(
       id: video.id.value,
-      title: video.title,
-      artist: video.author,
-      thumbnailUrl: video.thumbnails.mediumResUrl,
-      highResThumbnailUrl: video.thumbnails.standardResUrl.isNotEmpty
-          ? video.thumbnails.standardResUrl
-          : video.thumbnails.mediumResUrl,
+      title: cleanTitle.isNotEmpty ? cleanTitle : 'YouTube Video',
+      artist: cleanAuthor.isNotEmpty ? cleanAuthor : 'YouTube',
+      thumbnailUrl: medThumb,
+      highResThumbnailUrl: highThumb.isNotEmpty ? highThumb : medThumb,
       duration: video.duration ?? Duration.zero,
       videoId: video.id.value,
     );

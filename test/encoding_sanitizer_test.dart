@@ -87,4 +87,121 @@ void main() {
       expect(EncodingSanitizer.sanitize(mixed), equals(mixed));
     });
   });
+
+  group('HTML Entity Unescaping Tests', () {
+    test('Unescapes common named HTML entities', () {
+      expect(
+        EncodingSanitizer.sanitize('Rock &amp; Roll &quot;Live&quot;'),
+        equals('Rock & Roll "Live"'),
+      );
+      expect(
+        EncodingSanitizer.sanitize('&lt;Unknown&gt; &apos;Track&apos;'),
+        equals('<Unknown> \'Track\''),
+      );
+      expect(
+        EncodingSanitizer.sanitize('Song &ndash; Artist &mdash; Album &hellip;'),
+        equals('Song – Artist — Album …'),
+      );
+    });
+
+    test('Unescapes decimal and hex HTML entities', () {
+      expect(
+        EncodingSanitizer.sanitize('Don&#39;t Stop Me Now &#039;Queen&#039;'),
+        equals("Don't Stop Me Now 'Queen'"),
+      );
+      expect(
+        EncodingSanitizer.sanitize('Taylor Swift &#x27;1989&#x27;'),
+        equals("Taylor Swift '1989'"),
+      );
+    });
+
+    test('Unescapes double-escaped HTML entities', () {
+      expect(
+        EncodingSanitizer.sanitize('Title &amp;quot;Live&amp;quot; &amp;amp; Acoustic'),
+        equals('Title "Live" & Acoustic'),
+      );
+    });
+  });
+
+  group('Percent / URL Decoding Tests', () {
+    test('Decodes percent-encoded ASCII & UTF-8 characters', () {
+      expect(
+        EncodingSanitizer.sanitize('Hotel%20California%20%28Remastered%29'),
+        equals('Hotel California (Remastered)'),
+      );
+      expect(
+        EncodingSanitizer.sanitize('Caf%C3%A9%20del%20Mar'),
+        equals('Café del Mar'),
+      );
+    });
+
+    test('Safely handles stray percent signs without crashing', () {
+      expect(
+        EncodingSanitizer.sanitize('100% Hits 2024'),
+        equals('100% Hits 2024'),
+      );
+    });
+  });
+
+  group('Latin-1 / UTF-8 Mojibake Repair Tests', () {
+    test('Repairs common double-encoded Latin-1 accented characters', () {
+      expect(
+        EncodingSanitizer.sanitize('CafÃ© del Mar'),
+        equals('Café del Mar'),
+      );
+      expect(
+        EncodingSanitizer.sanitize('SeÃ±orita'),
+        equals('Señorita'),
+      );
+      expect(
+        EncodingSanitizer.sanitize('BeyoncÃ© â€“ Halo'),
+        equals('Beyoncé – Halo'),
+      );
+    });
+  });
+
+  group('Control Characters and Null Byte Stripping', () {
+    test('Strips null bytes and ASCII control characters', () {
+      expect(
+        EncodingSanitizer.sanitize("Track 01\x00\x00\x00"),
+        equals('Track 01'),
+      );
+      expect(
+        EncodingSanitizer.sanitize("Artist\x07 - \x00Title\x1F"),
+        equals('Artist - Title'),
+      );
+    });
+  });
+
+  group('Thumbnail URL Sanitization Tests', () {
+    test('Upgrades HTTP to HTTPS and unescapes slashes', () {
+      expect(
+        EncodingSanitizer.sanitizeThumbnailUrl(r'http:\/\/c.saavncdn.com\/123\/cover_150x150.jpg'),
+        equals('https://c.saavncdn.com/123/cover_500x500.jpg'),
+      );
+    });
+
+    test('Resolves protocol-relative URLs', () {
+      expect(
+        EncodingSanitizer.sanitizeThumbnailUrl('//img.youtube.com/vi/abc/mqdefault.jpg'),
+        equals('https://img.youtube.com/vi/abc/mqdefault.jpg'),
+      );
+    });
+
+    test('Preserves valid Base64 data URIs', () {
+      const dataUri = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD...';
+      expect(
+        EncodingSanitizer.sanitizeThumbnailUrl(dataUri),
+        equals(dataUri),
+      );
+    });
+
+    test('Falls back to YouTube high-res when given videoId and empty thumbnail', () {
+      expect(
+        EncodingSanitizer.sanitizeThumbnailUrl('', videoId: 'dQw4w9WgXcQ'),
+        equals('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'),
+      );
+    });
+  });
 }
+

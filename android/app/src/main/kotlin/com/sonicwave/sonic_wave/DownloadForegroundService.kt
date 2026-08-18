@@ -166,10 +166,8 @@ class DownloadForegroundService : Service() {
                 startForeground(NOTIFICATION_ID, notification)
             }
         } catch (e: Exception) {
-            // A denied POST_NOTIFICATIONS grant, or a background-start
-            // restriction. The download continues in Dart either way, so this
-            // must never take the app down.
-            stopSelf()
+            // A background-start restriction or notification delay: post the notification directly so user still sees progress
+            notify(notification)
         }
     }
 
@@ -207,15 +205,25 @@ class DownloadForegroundService : Service() {
         ).apply {
             description = "Progress for songs being saved for offline playback"
             setShowBadge(false)
+            enableVibration(false)
+            setSound(null, null)
         }
         manager.createNotificationChannel(channel)
     }
 
-    private fun baseBuilder(): NotificationCompat.Builder =
-        NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+    private fun baseBuilder(): NotificationCompat.Builder {
+        val iconRes = try {
+            val appIcon = applicationInfo.icon
+            if (appIcon != 0) appIcon else android.R.drawable.stat_sys_download
+        } catch (_: Exception) {
+            android.R.drawable.stat_sys_download
+        }
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(iconRes)
             .setContentIntent(contentIntent())
             .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+    }
 
     private fun buildProgress(title: String, subtitle: String, percent: Int): Notification {
         val builder = baseBuilder()
@@ -245,7 +253,7 @@ class DownloadForegroundService : Service() {
             .setContentTitle(title)
             .setOngoing(false)
             .setAutoCancel(true)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setOnlyAlertOnce(true)
         if (body.isNotBlank()) builder.setContentText(body)
         return builder.build()
     }

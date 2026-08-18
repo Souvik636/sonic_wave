@@ -121,7 +121,7 @@ void showSongOptionsSheet(BuildContext context, Song song) {
               },
             ),
 
-            // Option: Download Offline
+            // Option 4: Move to Album & Download Actions
             Consumer<PlayerProvider>(
               builder: (context, provider, _) {
                 if (song.isLiveRadio) {
@@ -178,46 +178,65 @@ void showSongOptionsSheet(BuildContext context, Song song) {
                     subtitle: subtitle,
                     onTap: () {},
                   );
-                } else if (isDownloaded) {
-                  return _buildOptionTile(
-                    icon: Icons.delete_outline_rounded,
-                    title: 'Remove Download',
-                    subtitle: 'Delete from app storage',
-                    onTap: () {
-                      Navigator.pop(context);
-                      provider.deleteDownload(song.videoId);
-                    },
-                  );
-                } else if (isLocalFile) {
-                  return _buildOptionTile(
-                    icon: Icons.folder_special_rounded,
-                    title: 'Local Device Audio',
-                    subtitle: 'Stored locally on your device',
-                    onTap: () {
-                      Navigator.pop(context);
-                      AppToast.show(
-                        context,
-                        'This track is stored locally on your device',
-                        type: ToastType.info,
-                        icon: Icons.folder_rounded,
-                      );
-                    },
+                } else if (!isLocalFile && !isDownloaded) {
+                  // Online streaming audio: "Download & Move to Album" + "Download for Offline"
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildOptionTile(
+                        icon: Icons.create_new_folder_rounded,
+                        title: 'Download & Move to Album',
+                        subtitle: 'Save directly into custom or folder album',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showAlbumSelectionSheet(context, song, isDownloadAndMove: true);
+                        },
+                      ),
+                      _buildOptionTile(
+                        icon: Icons.download_for_offline_rounded,
+                        title: 'Download for Offline',
+                        subtitle: 'Save to offline library',
+                        onTap: () {
+                          Navigator.pop(context);
+                          provider.downloadSong(song, context: context);
+                        },
+                      ),
+                    ],
                   );
                 } else {
-                  return _buildOptionTile(
-                    icon: Icons.download_for_offline_rounded,
-                    title: 'Download for Offline',
-                    subtitle: 'Save to local storage',
-                    onTap: () {
-                      Navigator.pop(context);
-                      provider.downloadSong(song, context: context);
-                    },
+                  // Local drive music / already downloaded music: Only "Move to Album" (+ "Remove Download" if downloaded)
+                  final currentAlbum = song.albumFolderName;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildOptionTile(
+                        icon: Icons.drive_file_move_rounded,
+                        title: 'Move to Album',
+                        subtitle: currentAlbum != null && currentAlbum.isNotEmpty
+                            ? 'In: $currentAlbum • Change destination'
+                            : 'Organize into custom or folder album',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showAlbumSelectionSheet(context, song, isDownloadAndMove: false);
+                        },
+                      ),
+                      if (isDownloaded)
+                        _buildOptionTile(
+                          icon: Icons.delete_outline_rounded,
+                          title: 'Remove Download',
+                          subtitle: 'Delete from app storage',
+                          onTap: () {
+                            Navigator.pop(context);
+                            provider.deleteDownload(song.videoId);
+                          },
+                        ),
+                    ],
                   );
                 }
               },
             ),
 
-            // Option 4: Song Details
+            // Option 5: Song Details
             _buildOptionTile(
               icon: Icons.info_outline_rounded,
               title: 'Detailed Info & Metadata',
@@ -625,6 +644,20 @@ String _getSoundEnhancerName(SoundEnhancer enhancer) {
       return 'Vocal';
     case SoundEnhancer.ambient3d:
       return '3D Surround';
+    case SoundEnhancer.electronic:
+      return 'Electronic';
+    case SoundEnhancer.rockMetal:
+      return 'Rock / Metal';
+    case SoundEnhancer.hipHop:
+      return 'Hip-Hop';
+    case SoundEnhancer.pop:
+      return 'Pop';
+    case SoundEnhancer.acoustic:
+      return 'Acoustic';
+    case SoundEnhancer.jazzBlues:
+      return 'Jazz / Blues';
+    case SoundEnhancer.nightMode:
+      return 'Night Mode';
   }
 }
 
@@ -918,4 +951,416 @@ String _formatDuration(Duration duration) {
   final minutes = duration.inMinutes;
   final seconds = duration.inSeconds % 60;
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
+}
+
+/// Dynamic Album Picker sheet allowing the user to select an existing album
+/// or create a new one on-the-fly to download/move the song into.
+void _showAlbumSelectionSheet(
+  BuildContext context,
+  Song song, {
+  required bool isDownloadAndMove,
+}) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: 0.6),
+    isScrollControlled: true,
+    builder: (ctx) {
+      return Consumer<PlayerProvider>(
+        builder: (context, provider, _) {
+          final albums = provider.albums;
+          final primaryColor = Theme.of(context).colorScheme.primary;
+
+          return GlassmorphicCard(
+            borderRadius: 24,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Drag Handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.textTertiary.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          isDownloadAndMove
+                              ? Icons.create_new_folder_rounded
+                              : Icons.drive_file_move_rounded,
+                          color: primaryColor,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isDownloadAndMove
+                                  ? 'Download & Move to Album'
+                                  : 'Move to Album',
+                              style: GoogleFonts.outfit(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              song.title,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const Divider(height: 1, color: AppColors.divider),
+                  const SizedBox(height: 12),
+
+                  // "+ Create New Album" Action Tile
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _showCreateAlbumDialog(
+                          context,
+                          song,
+                          isDownloadAndMove: isDownloadAndMove,
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: primaryColor.withValues(alpha: 0.4),
+                            width: 1.2,
+                          ),
+                          color: primaryColor.withValues(alpha: 0.08),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.add_circle_outline_rounded,
+                              color: primaryColor,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Create New Album',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: primaryColor.withValues(alpha: 0.7),
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Album List
+                  if (albums.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          'No existing albums. Create one above!',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.42,
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: albums.length,
+                        separatorBuilder: (ctx, i) => const SizedBox(height: 6),
+                        itemBuilder: (context, index) {
+                          final album = albums[index];
+                          final isCurrentAlbum =
+                              song.albumFolderName == album.name;
+
+                          return Material(
+                            color: Colors.transparent,
+                            child: ListTile(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              tileColor: isCurrentAlbum
+                                  ? primaryColor.withValues(alpha: 0.1)
+                                  : AppColors.surfaceLight.withValues(
+                                      alpha: 0.5,
+                                    ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              leading: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  width: 44,
+                                  height: 44,
+                                  color: AppColors.surfaceLight,
+                                  child: album.coverImagePath != null &&
+                                          File(album.coverImagePath!).existsSync()
+                                      ? Image.file(
+                                          File(album.coverImagePath!),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Center(
+                                          child: Icon(
+                                            album.isFolderBased
+                                                ? Icons.folder_rounded
+                                                : Icons.album_rounded,
+                                            color: album.isFolderBased
+                                                ? Colors.amberAccent
+                                                : primaryColor,
+                                            size: 22,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              title: Text(
+                                album.name,
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                '${album.songCount} songs • ${album.isFolderBased ? "Folder Album" : "Custom Album"}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                              trailing: isCurrentAlbum
+                                  ? Icon(
+                                      Icons.check_circle_rounded,
+                                      color: primaryColor,
+                                      size: 20,
+                                    )
+                                  : const Icon(
+                                      Icons.arrow_forward_ios_rounded,
+                                      color: AppColors.textTertiary,
+                                      size: 14,
+                                    ),
+                              onTap: () async {
+                                Navigator.pop(ctx);
+                                if (isDownloadAndMove) {
+                                  provider.downloadAndAddToAlbum(
+                                    song,
+                                    album.id,
+                                    context: context,
+                                  );
+                                } else {
+                                  // Local or downloaded file move
+                                  if (album.isFolderBased &&
+                                      song.filePath != null &&
+                                      File(song.filePath!).existsSync()) {
+                                    await provider.moveSongToAnotherAlbumFolder(
+                                      song,
+                                      album.id,
+                                      physicalMove: true,
+                                      isCopyMode: false,
+                                    );
+                                  } else {
+                                    await provider.addSongToAlbum(
+                                      album.id,
+                                      song,
+                                    );
+                                  }
+                                  if (context.mounted) {
+                                    AppToast.show(
+                                      context,
+                                      'Moved "${song.title}" to "${album.name}"',
+                                      type: ToastType.success,
+                                      icon: Icons.album_rounded,
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+void _showCreateAlbumDialog(
+  BuildContext context,
+  Song song, {
+  required bool isDownloadAndMove,
+}) {
+  final textController = TextEditingController();
+  final primaryColor = Theme.of(context).colorScheme.primary;
+
+  showDialog(
+    context: context,
+    builder: (dialogCtx) {
+      return AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(
+              Icons.create_new_folder_rounded,
+              color: primaryColor,
+              size: 24,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'New Album',
+              style: GoogleFonts.outfit(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isDownloadAndMove
+                  ? 'Create an album to download "${song.title}" into:'
+                  : 'Create an album to move "${song.title}" into:',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: textController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+              decoration: InputDecoration(
+                hintText: 'Album name',
+                hintStyle: const TextStyle(color: AppColors.textTertiary),
+                filled: true,
+                fillColor: AppColors.surfaceLight,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textTertiary),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: () async {
+              final name = textController.text.trim();
+              if (name.isEmpty) return;
+              Navigator.pop(dialogCtx);
+              final provider = context.read<PlayerProvider>();
+              final newAlbum = await provider.createAlbum(name);
+              if (!context.mounted) return;
+              if (isDownloadAndMove) {
+                provider.downloadAndAddToAlbum(
+                  song,
+                  newAlbum.id,
+                  context: context,
+                );
+              } else {
+                await provider.addSongToAlbum(newAlbum.id, song);
+                if (context.mounted) {
+                  AppToast.show(
+                    context,
+                    'Moved "${song.title}" to "$name"',
+                    type: ToastType.success,
+                    icon: Icons.album_rounded,
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Create & Move',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
 }

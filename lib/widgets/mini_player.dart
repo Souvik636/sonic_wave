@@ -10,10 +10,12 @@ import '../screens/player_screen.dart';
 import '../screens/aurora_player_screen.dart';
 import 'song_album_art.dart';
 import 'premium_interaction.dart';
+import 'shared_link_download_card.dart';
 import '../theme/app_colors.dart';
 
 /// Premium, interactive MiniPlayer widget with glassmorphism, smooth animations,
-/// reactive audio visualizer waves, and expandable control panel.
+/// reactive audio visualizer waves, expandable control panel, and Samsung One UI
+/// style swipeable multi-card deck supporting shared downloads.
 class MiniPlayer extends StatefulWidget {
   const MiniPlayer({super.key});
 
@@ -21,11 +23,15 @@ class MiniPlayer extends StatefulWidget {
   State<MiniPlayer> createState() => _MiniPlayerState();
 }
 
-class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateMixin {
+class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
+  late AnimationController _deckSwapController;
   bool _isExpanded = false;
   bool _pressed = false;
+  int _activeDeckIndex = 0; // 0 = Now Playing, 1 = Shared Download
+  double _verticalDragOffset = 0.0;
+  SharedDownloadPhase? _lastSeenDownloadPhase;
 
   @override
   void initState() {
@@ -42,11 +48,17 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
       curve: Curves.easeOutCubic,
     ));
     _slideController.forward();
+
+    _deckSwapController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
   }
 
   @override
   void dispose() {
     _slideController.dispose();
+    _deckSwapController.dispose();
     super.dispose();
   }
 
@@ -76,6 +88,15 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
     );
   }
 
+  void _swapDeck() {
+    AppHaptics.selection();
+    _deckSwapController.forward(from: 0.0);
+    setState(() {
+      _activeDeckIndex = 1 - _activeDeckIndex;
+      _verticalDragOffset = 0.0;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -83,24 +104,44 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
     return Consumer<PlayerProvider>(
       builder: (context, playerProvider, _) {
         final song = playerProvider.currentSong ?? playerProvider.loadingSong;
-        if (song == null) return const SizedBox.shrink();
+        final sharedDownload = playerProvider.sharedDownload;
 
-        final isLoading = playerProvider.isBuffering || playerProvider.loadingSong != null;
-        final isPlaying = playerProvider.isPlaying;
-        final isFav = playerProvider.isFavorite(song.videoId);
-
-        // Find next song in queue if available
-        Song? nextSong;
-        if (playerProvider.playlist.isNotEmpty &&
-            playerProvider.currentIndex >= 0 &&
-            playerProvider.currentIndex + 1 < playerProvider.playlist.length) {
-          nextSong = playerProvider.playlist[playerProvider.currentIndex + 1];
+        if (song == null && sharedDownload == null) {
+          return const SizedBox.shrink();
         }
+
+        // Automatically flip to download card when a new download starts/changes
+        if (sharedDownload != null &&
+            sharedDownload.phase != _lastSeenDownloadPhase) {
+          _lastSeenDownloadPhase = sharedDownload.phase;
+          if (sharedDownload.phase == SharedDownloadPhase.resolving ||
+              sharedDownload.phase == SharedDownloadPhase.downloading) {
+            _activeDeckIndex = 1;
+          }
+        }
+        if (sharedDownload == null && _activeDeckIndex == 1) {
+          _activeDeckIndex = 0;
+          _lastSeenDownloadPhase = null;
+        }
+
+        final isDualMode = song != null && sharedDownload != null;
+        final activeIndex = isDualMode ? _activeDeckIndex : (song != null ? 0 : 1);
 
         return SlideTransition(
           position: _slideAnimation,
           child: GestureDetector(
+            onVerticalDragStart: (_) {
+              if (isDualMode) {
+                setState(() => _verticalDragOffset = 0.0);
+              }
+            },
             onVerticalDragUpdate: (details) {
+              if (isDualMode) {
+                setState(() {
+                  _verticalDragOffset += details.primaryDelta!;
+                });
+                return;
+              }
               if (details.primaryDelta! < -6 && !_isExpanded) {
                 setState(() => _isExpanded = true);
                 AppHaptics.selection();
@@ -109,10 +150,20 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                 AppHaptics.selection();
               }
             },
+            onVerticalDragEnd: (details) {
+              if (isDualMode) {
+                final vel = details.primaryVelocity ?? 0;
+                if (_verticalDragOffset.abs() > 20 || vel.abs() > 120) {
+                  _swapDeck();
+                } else {
+                  setState(() => _verticalDragOffset = 0.0);
+                }
+              }
+            },
             onTapDown: (_) => setState(() => _pressed = true),
             onTapUp: (_) => setState(() => _pressed = false),
             onTapCancel: () => setState(() => _pressed = false),
-            onTap: _openFullPlayer,
+            onTap: activeIndex == 0 ? _openFullPlayer : null,
             child: AnimatedScale(
               scale: _pressed ? 0.985 : 1.0,
               duration: const Duration(milliseconds: 120),
@@ -121,93 +172,246 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOutCubic,
                 margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(_isExpanded ? 24 : 20),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.surface.withValues(alpha: 0.90),
-                        borderRadius: BorderRadius.circular(_isExpanded ? 24 : 20),
-                        border: Border.all(
-                          color: isPlaying
-                              ? primaryColor.withValues(alpha: 0.35)
-                              : AppColors.glassBorder,
-                          width: 0.9,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: primaryColor.withValues(alpha: isPlaying ? 0.22 : 0.10),
-                            blurRadius: 28,
-                            spreadRadius: 0,
-                            offset: const Offset(0, -4),
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            blurRadius: 18,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOutCubic,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Top Drag Handle & Progress Bar
-                            Stack(
-                              children: [
-                                // Progress line at top
-                                StreamBuilder<Duration>(
-                                  stream: playerProvider.positionStream,
-                                  builder: (context, snapshot) {
-                                    final pos = snapshot.data ?? playerProvider.position;
-                                    final total = playerProvider.duration;
-                                    final progress = total.inMilliseconds > 0
-                                        ? (pos.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
-                                        : 0.0;
-
-                                    return AnimatedContainer(
-                                      duration: const Duration(milliseconds: 150),
-                                      height: 3.5,
-                                      width: MediaQuery.of(context).size.width * progress,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            primaryColor.withValues(alpha: 0.6),
-                                            primaryColor,
-                                          ],
-                                        ),
-                                        borderRadius: const BorderRadius.only(
-                                          topRight: Radius.circular(2),
-                                          bottomRight: Radius.circular(2),
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: primaryColor.withValues(alpha: 0.7),
-                                            blurRadius: 8,
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-
-                                // Top Drag Pill Indicator
-                                Center(
-                                  child: Container(
-                                    margin: const EdgeInsets.only(top: 6, bottom: 2),
-                                    width: 34,
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.textTertiary.withValues(alpha: 0.45),
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
+                child: isDualMode
+                    ? Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          // Back Peek Card (Samsung Wallet / Nav bar style)
+                          Positioned(
+                            top: -6,
+                            left: 12,
+                            right: 12,
+                            height: 60,
+                            child: GestureDetector(
+                              onTap: _swapDeck,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface.withValues(alpha: 0.60),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: (activeIndex == 0
+                                            ? AppColors.primary
+                                            : primaryColor)
+                                        .withValues(alpha: 0.25),
+                                    width: 0.8,
                                   ),
                                 ),
+                              ),
+                            ),
+                          ),
+                          // Front Active Card with smooth swipe translation
+                          Transform.translate(
+                            offset: Offset(0, _verticalDragOffset.clamp(-30.0, 30.0)),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: (child, animation) {
+                                return SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0, 0.25),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(begin: 0.95, end: 1.0)
+                                          .animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: activeIndex == 0
+                                  ? KeyedSubtree(
+                                      key: const ValueKey('deck_now_playing'),
+                                      child: _buildNowPlayingContent(
+                                        context,
+                                        song,
+                                        playerProvider,
+                                        primaryColor,
+                                        isDualMode: true,
+                                      ),
+                                    )
+                                  : KeyedSubtree(
+                                      key: const ValueKey('deck_shared_download'),
+                                      child: SharedDownloadCardSurface(
+                                        status: sharedDownload,
+                                        isDeckMode: true,
+                                        onToggleDeck: _swapDeck,
+                                        activeIndex: _activeDeckIndex,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : (song != null
+                        ? _buildNowPlayingContent(
+                            context,
+                            song,
+                            playerProvider,
+                            primaryColor,
+                            isDualMode: false,
+                          )
+                        : SharedDownloadCardSurface(
+                            status: sharedDownload!,
+                            isDeckMode: false,
+                          )),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNowPlayingContent(
+    BuildContext context,
+    Song song,
+    PlayerProvider playerProvider,
+    Color primaryColor, {
+    required bool isDualMode,
+  }) {
+    final isLoading = playerProvider.isBuffering || playerProvider.loadingSong != null;
+    final isPlaying = playerProvider.isPlaying;
+    final isFav = playerProvider.isFavorite(song.videoId);
+
+    // Find next song in queue if available
+    Song? nextSong;
+    if (playerProvider.playlist.isNotEmpty &&
+        playerProvider.currentIndex >= 0 &&
+        playerProvider.currentIndex + 1 < playerProvider.playlist.length) {
+      nextSong = playerProvider.playlist[playerProvider.currentIndex + 1];
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_isExpanded ? 24 : 20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface.withValues(alpha: 0.90),
+            borderRadius: BorderRadius.circular(_isExpanded ? 24 : 20),
+            border: Border.all(
+              color: isPlaying
+                  ? primaryColor.withValues(alpha: 0.35)
+                  : AppColors.glassBorder,
+              width: 0.9,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withValues(alpha: isPlaying ? 0.22 : 0.10),
+                blurRadius: 28,
+                spreadRadius: 0,
+                offset: const Offset(0, -4),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Top Drag Handle & Progress Bar
+                Stack(
+                  children: [
+                    // Progress line at top
+                    StreamBuilder<Duration>(
+                      stream: playerProvider.positionStream,
+                      builder: (context, snapshot) {
+                        final pos = snapshot.data ?? playerProvider.position;
+                        final total = playerProvider.duration;
+                        final progress = total.inMilliseconds > 0
+                            ? (pos.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
+                            : 0.0;
+
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          height: 3.5,
+                          width: MediaQuery.of(context).size.width * progress,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                primaryColor.withValues(alpha: 0.6),
+                                primaryColor,
                               ],
                             ),
+                            borderRadius: const BorderRadius.only(
+                              topRight: Radius.circular(2),
+                              bottomRight: Radius.circular(2),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: primaryColor.withValues(alpha: 0.7),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+
+                    // Top Drag Pill Indicator / Deck Switcher
+                    Center(
+                      child: isDualMode
+                          ? GestureDetector(
+                              onTap: () {
+                                setState(() => _activeDeckIndex = 1);
+                                AppHaptics.selection();
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(top: 6, bottom: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: _activeDeckIndex == 0 ? 16 : 5,
+                                      height: 3.5,
+                                      decoration: BoxDecoration(
+                                        color: _activeDeckIndex == 0
+                                            ? primaryColor
+                                            : Colors.white24,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      width: _activeDeckIndex == 1 ? 16 : 5,
+                                      height: 3.5,
+                                      decoration: BoxDecoration(
+                                        color: _activeDeckIndex == 1
+                                            ? primaryColor
+                                            : Colors.white24,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : Container(
+                              margin: const EdgeInsets.only(top: 6, bottom: 2),
+                              width: 34,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: AppColors.textTertiary.withValues(alpha: 0.45),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
 
                             // Main Header Row (Compact & Expanded Header)
                             Padding(
@@ -659,23 +863,17 @@ class _MiniPlayerState extends State<MiniPlayer> with SingleTickerProviderStateM
                                           ),
                                         ),
                                       ],
-                                    ],
-                                  ),
+                                  ],
                                 ),
                               ),
-                            ],
+                            ),
                           ],
-                        ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
+              );
   }
 
   Widget _buildCloseButton(PlayerProvider playerProvider) {

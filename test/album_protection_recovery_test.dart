@@ -76,4 +76,32 @@ void main() {
     expect(provider.albums.first.songs.length, equals(2));
     expect(provider.albums.first.songs.any((s) => s.videoId == 's1'), isTrue);
   });
+
+  test('deleteAlbumWithProtection moveToRecovery moves songs to Recovery album', () async {
+    final song1 = const Song(
+      id: 's_rec_1', videoId: 's_rec_1', title: 'Song in Deleted Album', artist: 'Artist',
+      thumbnailUrl: '', highResThumbnailUrl: '', duration: Duration(minutes: 3),
+    );
+
+    final albumToDelete = UserAlbum(id: 'alb_del', name: 'Old Album', songs: [song1]);
+
+    SharedPreferences.setMockInitialValues({
+      'user_albums': json.encode([albumToDelete.toJson()]),
+    });
+
+    final provider = PlayerProvider(MockAudioHandler());
+    await Future.delayed(const Duration(milliseconds: 50));
+
+    expect(provider.albums.length, equals(1));
+    expect(provider.albums.first.name, equals('Old Album'));
+
+    await provider.deleteAlbumWithProtection('alb_del', moveToRecovery: true);
+
+    // Old album is deleted and Recovery album is created with the song
+    expect(provider.albums.any((a) => a.id == 'alb_del'), isFalse);
+    final recoveryAlbum = provider.albums.firstWhere((a) => a.id == 'recovery_vault' || a.name == 'Recovery');
+    expect(recoveryAlbum.songs.length, equals(1));
+    expect(recoveryAlbum.songs.first.videoId, equals('s_rec_1'));
+    expect(recoveryAlbum.songs.first.albumFolderName, equals('Recovery'));
+  });
 }

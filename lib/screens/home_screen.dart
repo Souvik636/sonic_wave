@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../models/song.dart';
 import '../models/album.dart';
+import '../models/duplicate_group.dart';
 import '../providers/home_provider.dart';
 import '../providers/player_provider.dart';
 import '../theme/app_colors.dart';
@@ -43,6 +44,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentNavIndex = 0;
   String _albumSearchQuery = '';
   String _albumSortType = 'name'; // 'name', 'size', 'date', 'songs'
+  String _localSearchQuery = '';
+  String _localSortType = 'default'; // 'default', 'title', 'artist', 'duration', 'size'
+  bool _localShowDuplicatesOnly = false;
+  final Set<String> _selectedDuplicateSongIds = {};
+  String _localFormatFilter = 'all'; // 'all', 'mp3', 'm4a', 'flac', 'wav', 'aac', 'ogg'
+  final TextEditingController _localSearchController = TextEditingController();
   late AnimationController _fadeController;
 
   String _formatDate(DateTime dt) {
@@ -102,6 +109,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _localSearchController.dispose();
     _fadeController.dispose();
     super.dispose();
   }
@@ -209,7 +217,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 bottom: 62,
                 child: Consumer<PlayerProvider>(
                   builder: (context, playerProvider, _) {
-                    if (!playerProvider.hasCurrentSong) {
+                    if (!playerProvider.hasCurrentSong &&
+                        playerProvider.sharedDownload == null) {
                       return const SizedBox.shrink();
                     }
                     return const MiniPlayer();
@@ -1219,9 +1228,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               }
             }
             // Fallback: Currently playing song if inside this album
-            if (targetSongId == null && provider.currentSong != null) {
-              if (filteredSongs.any((s) => s.videoId == provider.currentSong!.videoId)) {
-                targetSongId = provider.currentSong!.videoId;
+            final currentSong = provider.currentSong;
+            if (targetSongId == null && currentSong != null) {
+              if (filteredSongs.any((s) => s.videoId == currentSong.videoId)) {
+                targetSongId = currentSong.videoId;
               }
             }
 
@@ -1428,22 +1438,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Edit & Delete actions
+                  // Edit, Rename & Delete actions
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () => _showManageAlbumSongsDialog(context, currentAlbum, provider, () {
-                            setSheetState(() {});
-                          }),
-                          icon: const Icon(Icons.edit_rounded, size: 16),
-                          label: const Text('Manage Songs'),
-                          style: TextButton.styleFrom(foregroundColor: AppColors.primaryLight),
-                        ),
-                        if (currentAlbum.isCustom) ...[
-                          const SizedBox(width: 10),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => _showRenameAlbumDialog(context, currentAlbum, provider, () {
+                              setSheetState(() {});
+                            }),
+                            icon: const Icon(Icons.edit_note_rounded, size: 16),
+                            label: const Text('Rename'),
+                            style: TextButton.styleFrom(foregroundColor: Colors.white70),
+                          ),
+                          const SizedBox(width: 6),
+                          TextButton.icon(
+                            onPressed: () => _showManageAlbumSongsDialog(context, currentAlbum, provider, () {
+                              setSheetState(() {});
+                            }),
+                            icon: const Icon(Icons.playlist_add_rounded, size: 16),
+                            label: const Text('Manage Songs'),
+                            style: TextButton.styleFrom(foregroundColor: AppColors.primaryLight),
+                          ),
+                          const SizedBox(width: 6),
                           TextButton.icon(
                             onPressed: () {
                               _confirmDeleteAlbumWithProtection(context, currentAlbum, provider);
@@ -1453,7 +1474,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
                           ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
                   const Divider(height: 20, color: AppColors.divider),
@@ -1740,12 +1761,109 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  void _showRenameAlbumDialog(BuildContext context, UserAlbum album, PlayerProvider provider, VoidCallback onRenamed) {
+    final controller = TextEditingController(text: album.name);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Rename Album', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter a new name for this collection:',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Album name...',
+                hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 13),
+                filled: true,
+                fillColor: AppColors.surfaceVariant.withValues(alpha: 0.5),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty && newName != album.name) {
+                final messenger = ScaffoldMessenger.of(context);
+                final themePrimary = Theme.of(context).colorScheme.primary;
+                await provider.renameAlbum(album.id, newName);
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Album renamed to "$newName"'),
+                      backgroundColor: themePrimary,
+                    ),
+                  );
+                }
+                onRenamed();
+              }
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmDeleteAlbumWithProtection(BuildContext context, UserAlbum album, PlayerProvider provider) {
     final otherAlbums = provider.albums.where((a) => a.id != album.id).toList();
 
+    // If album is empty, show explicit confirmation dialog
     if (album.songs.isEmpty) {
-      provider.deleteAlbum(album.id);
-      Navigator.pop(context);
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Delete Album?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: Text(
+            'Are you sure you want to delete the empty album "${album.name}"?',
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await provider.deleteAlbum(album.id);
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
       return;
     }
 
@@ -1763,7 +1881,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Delete "${album.name}"?',
+                  'Protected: "${album.name}"',
                   style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                 ),
               ),
@@ -1774,13 +1892,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'This album contains ${album.songs.length} song(s). Please choose how to handle these tracks:',
-                style: GoogleFonts.inter(color: AppColors.textSecondary, fontSize: 13),
+                'This album contains ${album.songs.length} song(s). To protect your music, albums containing songs cannot be deleted directly.',
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 13, height: 1.4),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               if (otherAlbums.isNotEmpty) ...[
                 Text(
-                  'Move Songs to Another Album (Recommended):',
+                  'Option 1: Move Songs to Another Album (Recommended)',
                   style: GoogleFonts.inter(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
@@ -1825,7 +1943,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Choosing "Move to Recovery" preserves tracks in a hidden recovery folder with a RECOVERY badge tag.',
+                        'Option 2: "Move to Recovery" safely archives audio files in a protected backup folder before deletion.',
                         style: GoogleFonts.inter(color: Colors.amber.shade200, fontSize: 11),
                       ),
                     ),
@@ -1851,7 +1969,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     album.id,
                     targetAlbumId: selectedTargetAlbumId,
                   );
-                  if (context.mounted) Navigator.pop(context);
+                  if (context.mounted) {
+                    AppToast.show(
+                      context,
+                      'Moved ${album.songs.length} song(s) to selected album',
+                      type: ToastType.success,
+                      icon: Icons.drive_file_move_rounded,
+                    );
+                    Navigator.pop(context);
+                  }
                 },
                 icon: const Icon(Icons.drive_file_move_rounded, size: 16, color: Colors.white),
                 label: const Text('Move to Album', style: TextStyle(color: Colors.white)),
@@ -1867,10 +1993,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   album.id,
                   moveToRecovery: true,
                 );
-                if (context.mounted) Navigator.pop(context);
+                if (context.mounted) {
+                  AppToast.show(
+                    context,
+                    'Moved ${album.songs.length} song(s) to Recovery Vault & deleted "${album.name}"',
+                    type: ToastType.success,
+                    icon: Icons.restore_from_trash_rounded,
+                  );
+                  Navigator.pop(context);
+                }
               },
               icon: const Icon(Icons.restore_from_trash_rounded, size: 16, color: Colors.white),
-              label: const Text('Move to Recovery', style: TextStyle(color: Colors.white)),
+              label: const Text('Move to Recovery & Delete', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -2352,222 +2486,1157 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  List<DuplicateGroup> _getDuplicateGroups(List<Song> songs) {
+    final Map<String, List<Song>> groups = {};
+
+    String clean(String str) {
+      return str
+          .toLowerCase()
+          .replaceAll(RegExp(r'\((official|lyrics|video|audio|clean|remastered|explicit|visualizer|hq|hd|320kbps)[^)]*\)', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\[(official|lyrics|video|audio|clean|remastered|explicit|visualizer|hq|hd|320kbps)[^\]]*\]', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\b(ft\.|feat\.|featuring)\b.*$', caseSensitive: false), '')
+          .replaceAll(RegExp(r'[^a-z0-9]'), '')
+          .trim();
+    }
+
+    // 1. Group by cleanTitle + cleanArtist
+    for (final song in songs) {
+      final t = clean(song.title);
+      final a = clean(song.artist);
+      if (t.isNotEmpty) {
+        final key = '$t|$a';
+        groups.putIfAbsent(key, () => []).add(song);
+      }
+    }
+
+    // 2. Merge groups that have identical cleanTitle and duration within +-3 seconds
+    final List<List<Song>> rawGroupLists = groups.values.where((list) => list.length >= 2).toList();
+    
+    // Also check single songs to see if they match any other song by title + duration
+    final singleSongs = groups.values.where((list) => list.length == 1).map((l) => l.first).toList();
+    final List<bool> merged = List.filled(singleSongs.length, false);
+
+    for (int i = 0; i < singleSongs.length; i++) {
+      if (merged[i]) continue;
+      final sA = singleSongs[i];
+      final tA = clean(sA.title);
+      if (tA.isEmpty) continue;
+
+      final List<Song> newGroup = [sA];
+      for (int j = i + 1; j < singleSongs.length; j++) {
+        if (merged[j]) continue;
+        final sB = singleSongs[j];
+        final tB = clean(sB.title);
+        if (tA == tB) {
+          final diff = (sA.duration.inSeconds - sB.duration.inSeconds).abs();
+          if (diff <= 3) {
+            newGroup.add(sB);
+            merged[j] = true;
+          }
+        }
+      }
+      if (newGroup.length >= 2) {
+        merged[i] = true;
+        rawGroupLists.add(newGroup);
+      }
+    }
+
+    final List<DuplicateGroup> duplicateGroups = [];
+    for (final songList in rawGroupLists) {
+      final uniqueSongs = <String, Song>{};
+      for (final s in songList) {
+        uniqueSongs[s.videoId] = s;
+      }
+      if (uniqueSongs.length >= 2) {
+        final first = uniqueSongs.values.first;
+        duplicateGroups.add(DuplicateGroup(
+          key: first.videoId,
+          displayTitle: first.title,
+          displayArtist: first.artist,
+          songs: uniqueSongs.values.toList(),
+        ));
+      }
+    }
+
+    return duplicateGroups;
+  }
+
+  Set<String> _getDuplicateSongIds(List<Song> songs) {
+    final groups = _getDuplicateGroups(songs);
+    final Set<String> ids = {};
+    for (final g in groups) {
+      for (final s in g.songs) {
+        ids.add(s.videoId);
+      }
+    }
+    return ids;
+  }
+
+  void _confirmDeleteSingleSong(BuildContext context, Song song, PlayerProvider playerProvider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Delete Audio File?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Are you sure you want to permanently delete this copy from your storage device?',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(song.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Text(song.filePath ?? song.videoId, style: const TextStyle(color: AppColors.textTertiary, fontSize: 10, fontFamily: 'monospace'), maxLines: 2, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              final themePrimary = Theme.of(context).colorScheme.primary;
+              final ok = await playerProvider.deleteSongPermanently(song);
+              setState(() {
+                _selectedDuplicateSongIds.remove(song.videoId);
+              });
+              if (mounted) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(ok ? 'Deleted "${song.title}" from storage' : 'Failed to delete file'),
+                    backgroundColor: ok ? themePrimary : Colors.redAccent,
+                  ),
+                );
+              }
+            },
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteSelectedDuplicates(BuildContext context, List<Song> allSongs, PlayerProvider playerProvider) {
+    final toDelete = allSongs.where((s) => _selectedDuplicateSongIds.contains(s.videoId)).toList();
+    if (toDelete.isEmpty) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete ${toDelete.length} Duplicate Files?', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will permanently delete the ${toDelete.length} selected duplicate files from physical storage to free up disk space.',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                'The recommended/highest-quality master copies will be preserved safely.',
+                style: TextStyle(color: Colors.amber.shade200, fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              final themePrimary = Theme.of(context).colorScheme.primary;
+              final count = await playerProvider.deleteMultipleSongsPermanently(toDelete);
+              setState(() {
+                _selectedDuplicateSongIds.clear();
+              });
+              if (mounted) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('$count duplicate file(s) permanently deleted'),
+                    backgroundColor: themePrimary,
+                  ),
+                );
+              }
+            },
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDuplicateResolutionHeader(List<DuplicateGroup> duplicateGroups, List<Song> allLocalSongs, PlayerProvider playerProvider) {
+    final redundantCount = duplicateGroups.fold<int>(0, (sum, g) => sum + (g.songs.length - 1));
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.35), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_fix_high_rounded, color: Colors.amber, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'Duplicate Cleaner (${duplicateGroups.length} Groups • $redundantCount Redundant)',
+                style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'SonicWave grouped duplicate files together. The master / highest quality copy is marked in green, and extra copies are marked in amber. Select files below to delete.',
+            style: TextStyle(color: Colors.amber.shade100, fontSize: 11, height: 1.35),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    for (final g in duplicateGroups) {
+                      final rec = g.recommendedToKeep;
+                      for (final s in g.songs) {
+                        if (s.videoId != rec.videoId) {
+                          _selectedDuplicateSongIds.add(s.videoId);
+                        }
+                      }
+                    }
+                  });
+                },
+                icon: const Icon(Icons.checklist_rounded, size: 14),
+                label: Text('Select All Redundant ($redundantCount)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber.shade800,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_selectedDuplicateSongIds.isNotEmpty)
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedDuplicateSongIds.clear();
+                    });
+                  },
+                  child: const Text('Clear Selection', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDuplicateGroupCard(DuplicateGroup group, PlayerProvider playerProvider, int groupIndex) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final recommended = group.recommendedToKeep;
+
+    final allRedundantInGroupSelected = group.songs
+        .where((s) => s.videoId != recommended.videoId)
+        .every((s) => _selectedDuplicateSongIds.contains(s.videoId));
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.amber.withValues(alpha: 0.35),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Group Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.12),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(17)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.copy_rounded, color: Colors.amber, size: 14),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        group.displayTitle,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        '${group.displayArtist} • ${group.songs.length} copies found',
+                        style: TextStyle(color: Colors.amber.shade200, fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      if (allRedundantInGroupSelected) {
+                        for (final s in group.songs) {
+                          if (s.videoId != recommended.videoId) {
+                            _selectedDuplicateSongIds.remove(s.videoId);
+                          }
+                        }
+                      } else {
+                        for (final s in group.songs) {
+                          if (s.videoId != recommended.videoId) {
+                            _selectedDuplicateSongIds.add(s.videoId);
+                          }
+                        }
+                      }
+                    });
+                  },
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    backgroundColor: allRedundantInGroupSelected ? Colors.amber.withValues(alpha: 0.3) : Colors.transparent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Text(
+                    allRedundantInGroupSelected ? 'Deselect' : 'Select Redundant',
+                    style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // List of song copies inside this group
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              children: group.songs.map((song) {
+                final isRecommended = song.videoId == recommended.videoId;
+                final isSelected = _selectedDuplicateSongIds.contains(song.videoId);
+                final ext = (song.filePath ?? song.videoId).split('.').last.toUpperCase();
+
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? Colors.red.withValues(alpha: 0.15)
+                        : (isRecommended
+                            ? Colors.green.withValues(alpha: 0.08)
+                            : AppColors.surfaceVariant.withValues(alpha: 0.2)),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected
+                          ? Colors.redAccent.withValues(alpha: 0.6)
+                          : (isRecommended
+                              ? Colors.green.withValues(alpha: 0.4)
+                              : Colors.white.withValues(alpha: 0.05)),
+                      width: isSelected || isRecommended ? 1.2 : 0.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      // Checkbox for selection
+                      SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: Checkbox(
+                          value: isSelected,
+                          activeColor: Colors.redAccent,
+                          checkColor: Colors.white,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                _selectedDuplicateSongIds.add(song.videoId);
+                              } else {
+                                _selectedDuplicateSongIds.remove(song.videoId);
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Song Thumbnail
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: SongAlbumArt(song: song, width: 38, height: 38),
+                      ),
+                      const SizedBox(width: 8),
+                      // Details
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    song.title,
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: isRecommended
+                                        ? Colors.green.withValues(alpha: 0.2)
+                                        : Colors.amber.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: isRecommended ? Colors.green : Colors.amber,
+                                      width: 0.6,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    isRecommended ? 'KEEP' : 'DUP',
+                                    style: TextStyle(
+                                      color: isRecommended ? Colors.greenAccent : Colors.amber,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            // Path
+                            Row(
+                              children: [
+                                const Icon(Icons.folder_outlined, size: 10, color: AppColors.textTertiary),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    song.filePath ?? song.videoId,
+                                    style: const TextStyle(color: AppColors.textTertiary, fontSize: 9, fontFamily: 'monospace'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            // Specs (Format, Size, Duration)
+                            Wrap(
+                              spacing: 5,
+                              runSpacing: 2,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+                                  decoration: BoxDecoration(
+                                    color: primaryColor.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(ext, style: TextStyle(color: primaryColor, fontSize: 7.5, fontWeight: FontWeight.bold)),
+                                ),
+                                if (song.formattedFileSize.isNotEmpty)
+                                  Text(song.formattedFileSize, style: const TextStyle(color: AppColors.textSecondary, fontSize: 8.5, fontWeight: FontWeight.w500)),
+                                Text('•  ${song.formattedDuration}', style: const TextStyle(color: AppColors.textTertiary, fontSize: 8.5)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Actions: Play Preview & Delete Single Copy
+                      IconButton(
+                        icon: const Icon(Icons.play_circle_outline_rounded, color: Colors.white70, size: 18),
+                        tooltip: 'Preview Track',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          playerProvider.playPlaylist([song], startIndex: 0);
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 17),
+                        tooltip: 'Delete This Copy',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          _confirmDeleteSingleSong(context, song, playerProvider);
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDuplicateBottomBar(List<Song> allLocalSongs, PlayerProvider playerProvider) {
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 80,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E38),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.6),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_selectedDuplicateSongIds.length} duplicate file(s) selected',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Ready to delete permanently',
+                    style: TextStyle(color: AppColors.textTertiary, fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+              onPressed: () => _confirmDeleteSelectedDuplicates(context, allLocalSongs, playerProvider),
+              icon: const Icon(Icons.delete_forever_rounded, size: 16),
+              label: const Text('Delete Selected', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildLocalTab() {
     return Consumer<PlayerProvider>(
       builder: (context, playerProvider, _) {
-        final localSongs = playerProvider.localSongsMerged;
+        final allLocalSongs = playerProvider.localSongsMerged;
         final primaryColor = Theme.of(context).colorScheme.primary;
-        final hasExternal = localSongs.any((s) => s.isLocalFile && s.filePath != null && !StorageLocationService().isFileInAppFolderSync(s.filePath!));
+        final duplicateGroups = _getDuplicateGroups(allLocalSongs);
+        final duplicateIds = _getDuplicateSongIds(allLocalSongs);
 
-        return CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 12),
-            ),
+        // 1. Filter by Search Query
+        List<Song> processedSongs = allLocalSongs.where((s) {
+          if (_localSearchQuery.isEmpty) return true;
+          final q = _localSearchQuery.toLowerCase();
+          return s.title.toLowerCase().contains(q) ||
+              s.artist.toLowerCase().contains(q) ||
+              (s.filePath ?? '').toLowerCase().contains(q);
+        }).toList();
 
-            // Premium Glass Header & Quick Actions Bar
-            SliverToBoxAdapter(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.glassBorder, width: 0.8),
+        // 2. Filter by Format
+        if (_localFormatFilter != 'all') {
+          processedSongs = processedSongs.where((s) {
+            final ext = (s.filePath ?? s.videoId).split('.').last.toLowerCase();
+            return ext == _localFormatFilter;
+          }).toList();
+        }
+
+        // 3. Filter by Duplicates
+        if (_localShowDuplicatesOnly) {
+          processedSongs = processedSongs.where((s) => duplicateIds.contains(s.videoId)).toList();
+        }
+
+        // 4. Sort
+        if (_localSortType == 'title') {
+          processedSongs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        } else if (_localSortType == 'artist') {
+          processedSongs.sort((a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()));
+        } else if (_localSortType == 'duration') {
+          processedSongs.sort((a, b) => b.duration.compareTo(a.duration));
+        } else if (_localSortType == 'size') {
+          processedSongs.sort((a, b) => b.fileSizeInBytes.compareTo(a.fileSizeInBytes));
+        }
+
+        final formats = ['all', 'mp3', 'm4a', 'flac', 'wav', 'aac', 'ogg', 'opus'];
+
+        final filteredDuplicateGroups = duplicateGroups.where((g) {
+          if (_localSearchQuery.isEmpty) return true;
+          final q = _localSearchQuery.toLowerCase();
+          return g.displayTitle.toLowerCase().contains(q) ||
+              g.displayArtist.toLowerCase().contains(q) ||
+              g.songs.any((s) => (s.filePath ?? '').toLowerCase().contains(q));
+        }).toList();
+
+        return Stack(
+          children: [
+            CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 10),
                 ),
-                child: Column(
-                  children: [
-                    Row(
+
+                // Premium Glass Header & Quick Actions Bar
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.glassBorder, width: 0.8),
+                    ),
+                    child: Column(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: primaryColor.withValues(alpha: 0.15),
-                            border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 1),
-                          ),
-                          child: Icon(Icons.folder_special_rounded, color: primaryColor, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Local Music & Downloads',
-                                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: primaryColor.withValues(alpha: 0.15),
+                                border: Border.all(color: primaryColor.withValues(alpha: 0.3), width: 1),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${localSongs.length} track(s) indexed',
-                                style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                              child: Icon(Icons.folder_special_rounded, color: primaryColor, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Local Music & Downloads',
+                                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${allLocalSongs.length} track(s) indexed • ${duplicateGroups.length} duplicate group(s)',
+                                    style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${allLocalSongs.length}',
+                                style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            // Scan Button
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () => playerProvider.scanLocalSongs(),
+                                icon: playerProvider.isScanningLocal
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      )
+                                    : const Icon(Icons.refresh_rounded, size: 16),
+                                label: Text(playerProvider.isScanningLocal ? 'Scanning...' : 'Scan Storage'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.surfaceVariant,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                ),
+                              ),
+                            ),
+                            if (allLocalSongs.isNotEmpty) ...[
+                              const SizedBox(width: 10),
+                              // AI Organize Button
+                              Expanded(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        primaryColor,
+                                        Colors.purpleAccent,
+                                      ],
+                                    ),
+                                  ),
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => _startAiCategorizationFlow(context, allLocalSongs, playerProvider),
+                                    icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: Colors.white),
+                                    label: const Text('AI Organize', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${localSongs.length}',
-                            style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      child: Row(
-                        children: [
-                          // Scan Button
-                          ElevatedButton.icon(
-                            onPressed: () => playerProvider.scanLocalSongs(),
-                            icon: playerProvider.isScanningLocal
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Icon(Icons.refresh_rounded, size: 16),
-                            label: Text(playerProvider.isScanningLocal ? 'Scanning...' : 'Scan Storage'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.surfaceVariant,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            ),
-                          ),
-                          if (localSongs.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            // AI Organize Button
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    primaryColor,
-                                    Colors.purpleAccent,
-                                  ],
-                                ),
-                              ),
-                              child: ElevatedButton.icon(
-                                onPressed: () => _startAiCategorizationFlow(context, localSongs, playerProvider),
-                                icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: Colors.white),
-                                label: const Text('AI Organize', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  shadowColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                ),
-                              ),
-                            ),
                           ],
-                          if (hasExternal) ...[
-                            const SizedBox(width: 8),
-                            // Move to App Folder Button
-                            OutlinedButton.icon(
-                              onPressed: () => _showMoveSongsToAppFolderDialog(context, localSongs, playerProvider),
-                              icon: const Icon(Icons.drive_file_move_rounded, size: 16, color: AppColors.primaryLight),
-                              label: const Text('Move to sonicWave', style: TextStyle(color: AppColors.primaryLight, fontWeight: FontWeight.w600)),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: AppColors.primaryLight.withValues(alpha: 0.4)),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            if (localSongs.isEmpty)
-              SliverFillRemaining(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 30),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.surfaceVariant.withValues(alpha: 0.4),
-                            border: Border.all(color: AppColors.glassBorder, width: 1),
-                          ),
-                          child: Icon(
-                            Icons.library_music_rounded,
-                            size: 56,
-                            color: primaryColor.withValues(alpha: 0.6),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'No Local Music Found',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Scanned local audio files and offline downloads will appear here.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AppColors.textTertiary, fontSize: 13, height: 1.4),
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () => playerProvider.scanLocalSongs(),
-                          icon: const Icon(Icons.search_rounded, size: 18),
-                          label: const Text('Scan Storage Now'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              )
-            else
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final localSong = localSongs[index];
-                    return _StaggeredListSlideIn(
-                      index: index < 15 ? index : 15,
-                      child: SongTile(
-                        song: localSong,
-                        index: index,
-                        sourceTag: localSong.id.startsWith('local_') ? 'local' : 'downloaded',
-                        onTap: () {
-                          playerProvider.playPlaylist(localSongs, startIndex: index);
+
+                if (allLocalSongs.isNotEmpty) ...[
+                  // Search Bar
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                      child: TextField(
+                        controller: _localSearchController,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Search title, artist, or file path...',
+                          hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 18),
+                          suffixIcon: _localSearchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.close_rounded, color: AppColors.textTertiary, size: 16),
+                                  onPressed: () {
+                                    setState(() {
+                                      _localSearchController.clear();
+                                      _localSearchQuery = '';
+                                    });
+                                  },
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: AppColors.glassBorder.withValues(alpha: 0.15)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: AppColors.glassBorder.withValues(alpha: 0.15)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: primaryColor, width: 1.2),
+                          ),
+                        ),
+                        onChanged: (val) {
+                          setState(() {
+                            _localSearchQuery = val.trim();
+                          });
                         },
                       ),
-                    );
-                  },
-                  childCount: localSongs.length,
+                    ),
+                  ),
+
+                  // Filter & Sort Pills Bar
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                      child: Row(
+                        children: [
+                          // Filter chips scroll list
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              child: Row(
+                                children: [
+                                  // Duplicates Filter Pill
+                                  if (duplicateGroups.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: FilterChip(
+                                        selected: _localShowDuplicatesOnly,
+                                        label: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.copy_rounded,
+                                              size: 13,
+                                              color: _localShowDuplicatesOnly ? Colors.white : Colors.amber,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Duplicates (${duplicateGroups.length} Groups)',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: _localShowDuplicatesOnly ? Colors.white : Colors.amber.shade200,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        backgroundColor: Colors.amber.withValues(alpha: 0.12),
+                                        selectedColor: Colors.amber.shade800,
+                                        side: BorderSide(
+                                          color: _localShowDuplicatesOnly ? Colors.amber : Colors.amber.withValues(alpha: 0.4),
+                                          width: 1,
+                                        ),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        onSelected: (val) {
+                                          setState(() {
+                                            _localShowDuplicatesOnly = val;
+                                          });
+                                        },
+                                      ),
+                                    ),
+
+                                  // Format chips
+                                  ...formats.map((fmt) {
+                                    final isSelected = _localFormatFilter == fmt;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: ChoiceChip(
+                                        label: Text(
+                                          fmt.toUpperCase(),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                                          ),
+                                        ),
+                                        selected: isSelected,
+                                        selectedColor: primaryColor,
+                                        backgroundColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                                        side: BorderSide(
+                                          color: isSelected ? primaryColor : AppColors.glassBorder.withValues(alpha: 0.1),
+                                          width: 1,
+                                        ),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        onSelected: (sel) {
+                                          setState(() {
+                                            _localFormatFilter = fmt;
+                                          });
+                                        },
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+
+                          // Sort menu button
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.glassBorder.withValues(alpha: 0.2)),
+                            ),
+                            child: PopupMenuButton<String>(
+                              icon: const Icon(Icons.sort_rounded, color: Colors.white, size: 18),
+                              tooltip: 'Sort Songs',
+                              color: AppColors.surface,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              onSelected: (val) {
+                                setState(() {
+                                  _localSortType = val;
+                                });
+                              },
+                              itemBuilder: (ctx) => [
+                                const PopupMenuItem(
+                                  value: 'default',
+                                  child: Text('Default Order', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'title',
+                                  child: Text('Sort by Title (A-Z)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'artist',
+                                  child: Text('Sort by Artist (A-Z)', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'duration',
+                                  child: Text('Sort by Duration', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'size',
+                                  child: Text('Sort by File Size', style: TextStyle(color: Colors.white, fontSize: 13)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Duplicates notification banner if duplicates found but not filtered
+                  if (duplicateGroups.isNotEmpty && !_localShowDuplicatesOnly)
+                    SliverToBoxAdapter(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${duplicateGroups.length} duplicate song groups found in local storage.',
+                                style: TextStyle(color: Colors.amber.shade200, fontSize: 11),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _localShowDuplicatesOnly = true;
+                                });
+                              },
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text(
+                                'Resolve',
+                                style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+
+                if (allLocalSongs.isEmpty)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 30),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.surfaceVariant.withValues(alpha: 0.4),
+                                border: Border.all(color: AppColors.glassBorder, width: 1),
+                              ),
+                              child: Icon(
+                                Icons.library_music_rounded,
+                                size: 56,
+                                color: primaryColor.withValues(alpha: 0.6),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'No Local Music Found',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Scanned local audio files and offline downloads will appear here.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: AppColors.textTertiary, fontSize: 13, height: 1.4),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: () => playerProvider.scanLocalSongs(),
+                              icon: const Icon(Icons.search_rounded, size: 18),
+                              label: const Text('Scan Storage Now'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryColor,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else if (_localShowDuplicatesOnly) ...[
+                  // Specialized Duplicate Groups View
+                  SliverToBoxAdapter(
+                    child: _buildDuplicateResolutionHeader(duplicateGroups, allLocalSongs, playerProvider),
+                  ),
+                  if (filteredDuplicateGroups.isEmpty)
+                    const SliverFillRemaining(
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(30),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.check_circle_outline_rounded, size: 48, color: Colors.greenAccent),
+                              SizedBox(height: 12),
+                              Text(
+                                'No duplicate tracks found',
+                                style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final group = filteredDuplicateGroups[index];
+                          return _buildDuplicateGroupCard(group, playerProvider, index);
+                        },
+                        childCount: filteredDuplicateGroups.length,
+                      ),
+                    ),
+                ] else if (processedSongs.isEmpty)
+                  const SliverFillRemaining(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(30),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off_rounded, size: 48, color: AppColors.textTertiary),
+                            SizedBox(height: 12),
+                            Text(
+                              'No matching local songs found',
+                              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Try adjusting your search query or format filter',
+                              style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final localSong = processedSongs[index];
+                        final isDup = duplicateIds.contains(localSong.videoId);
+                        return _StaggeredListSlideIn(
+                          index: index < 15 ? index : 15,
+                          child: SongTile(
+                            song: localSong,
+                            index: index,
+                            sourceTag: isDup
+                                ? 'duplicate'
+                                : (localSong.id.startsWith('local_') ? 'local' : 'downloaded'),
+                            onTap: () {
+                              playerProvider.playPlaylist(processedSongs, startIndex: index);
+                            },
+                          ),
+                        );
+                      },
+                      childCount: processedSongs.length,
+                    ),
+                  ),
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 140),
                 ),
-              ),
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 140),
+              ],
             ),
+            if (_selectedDuplicateSongIds.isNotEmpty)
+              _buildDuplicateBottomBar(allLocalSongs, playerProvider),
           ],
         );
       },
@@ -2611,7 +3680,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: _buildFolderOnboardingBanner(context, playerProvider, settingsProvider),
               ),
             SliverToBoxAdapter(
-              child: _buildAlbumFilterBar(),
+              child: _buildAlbumFilterBar(playerProvider),
             ),
             _buildAlbumsGrid(playerProvider, filteredAlbums, highlightQuery: _albumSearchQuery),
             const SliverToBoxAdapter(
@@ -2623,7 +3692,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildAlbumFilterBar() {
+  Widget _buildAlbumFilterBar(PlayerProvider playerProvider) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Row(
@@ -2637,9 +3706,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 });
               },
               decoration: InputDecoration(
-                hintText: 'Search albums...',
+                hintText: 'Search albums or songs...',
                 hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
                 prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textTertiary, size: 18),
+                suffixIcon: _albumSearchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, color: AppColors.textTertiary, size: 16),
+                        onPressed: () {
+                          setState(() {
+                            _albumSearchQuery = '';
+                          });
+                        },
+                      )
+                    : null,
                 filled: true,
                 fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2650,11 +3729,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
+          // Sync Storage Button
           Container(
             decoration: BoxDecoration(
               color: AppColors.surfaceVariant.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.glassBorder.withValues(alpha: 0.15)),
+            ),
+            child: IconButton(
+              icon: playerProvider.isSyncingAlbums
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.sync_rounded, color: Colors.white, size: 20),
+              tooltip: 'Sync Albums with Storage',
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final themePrimary = Theme.of(context).colorScheme.primary;
+                final count = await playerProvider.syncAlbumsWithStorage();
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Storage synchronized: $count album(s) verified'),
+                      backgroundColor: themePrimary,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceVariant.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.glassBorder.withValues(alpha: 0.15)),
             ),
             child: PopupMenuButton<String>(
               icon: const Icon(Icons.sort_rounded, color: Colors.white),
@@ -4080,146 +5193,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showMoveSongsToAppFolderDialog(
-      BuildContext context, List<Song> localSongs, PlayerProvider provider) {
-    final storageService = StorageLocationService();
-    
-    // Filter to only get the external ones
-    final externalSongs = localSongs.where((s) {
-      if (!s.isLocalFile || s.filePath == null) return false;
-      return !storageService.isFileInAppFolderSync(s.filePath!);
-    }).toList();
 
-    if (externalSongs.isEmpty) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('All Songs in App Folder', style: TextStyle(color: Colors.white)),
-          content: const Text(
-            'All scanned local songs are already located inside the app-managed directory.',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    final controller = TextEditingController();
-    bool useAlbumFolder = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor: AppColors.surface,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-              title: const Text('Move to SonicWave Folder', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Found ${externalSongs.length} local song(s) outside the app folder. Move them to your app-managed folder?',
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: useAlbumFolder,
-                        onChanged: (val) {
-                          setState(() {
-                            useAlbumFolder = val ?? false;
-                          });
-                        },
-                      ),
-                      const Expanded(
-                        child: Text(
-                          'Organize into a subfolder (Album)',
-                          style: TextStyle(color: Colors.white, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (useAlbumFolder) ...[
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: controller,
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Enter album / folder name...',
-                        hintStyle: const TextStyle(color: AppColors.textTertiary, fontSize: 12),
-                        filled: true,
-                        fillColor: AppColors.surfaceVariant.withValues(alpha: 0.4),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    final albumName = useAlbumFolder ? controller.text.trim() : null;
-                    if (useAlbumFolder && (albumName == null || albumName.isEmpty)) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter a folder name')),
-                      );
-                      return;
-                    }
-                    Navigator.pop(ctx);
-                    
-                    // Show progress indicator
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (pCtx) => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    );
-
-                    final moved = await provider.moveScannedSongsToAppFolder(
-                      externalSongs,
-                      albumName: albumName,
-                    );
-                    
-                    if (context.mounted) {
-                      Navigator.pop(context); // Dismiss progress
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Successfully moved ${moved.length} song(s)'),
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('Move Now', style: TextStyle(color: AppColors.primary)),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
 
   void _startAiCategorizationFlow(BuildContext context, List<Song> songs, PlayerProvider provider) async {
     final unclassifiedSongs = songs.where((s) {
@@ -4546,6 +5520,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _showDeleteSongDialog(BuildContext context, Song song, UserAlbum album, PlayerProvider provider, VoidCallback onDeleted) {
     final isPhysical = album.isFolderBased && song.filePath != null;
+    final hasFile = song.filePath != null && song.filePath!.isNotEmpty;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -4613,6 +5588,42 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
+            // Move to Recovery — available for songs with physical files
+            if (hasFile || isPhysical) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final ok = await provider.moveSongToRecovery(
+                      song,
+                      sourceAlbumId: album.id,
+                    );
+                    if (context.mounted) {
+                      AppToast.show(
+                        context,
+                        ok
+                            ? 'Moved "${song.title}" to Recovery Vault'
+                            : 'Failed to move song to Recovery',
+                        type: ok ? ToastType.success : ToastType.error,
+                        icon: ok ? Icons.restore_from_trash_rounded : Icons.error_outline,
+                      );
+                    }
+                    onDeleted();
+                  },
+                  icon: const Icon(Icons.restore_from_trash_rounded, size: 16),
+                  label: const Text('Move to Recovery', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber.shade900.withValues(alpha: 0.2),
+                    foregroundColor: Colors.amber.shade300,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
             if (isPhysical) ...[
               const SizedBox(height: 8),
               SizedBox(

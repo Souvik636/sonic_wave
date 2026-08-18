@@ -203,7 +203,10 @@ class SongTile extends StatelessWidget {
                                   String tagText = 'YT';
                                   Color bgColor = Colors.redAccent.withValues(alpha: 0.6);
 
-                                  if (isNew) {
+                                  if (rawTag == 'duplicate' || rawTag == 'dup') {
+                                    tagText = 'DUP';
+                                    bgColor = Colors.amber.shade800;
+                                  } else if (isNew) {
                                     tagText = 'NEW';
                                     bgColor = Colors.deepOrange;
                                   } else if (isDownloaded) {

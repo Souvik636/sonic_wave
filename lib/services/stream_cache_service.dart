@@ -3,6 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:extractor/extractor.dart';
+import '../providers/settings_provider.dart' show AudioQuality;
+import 'youtube_service.dart';
+import 'ytdlp_runtime.dart';
 
 /// On-disk cache for audio that has been streamed.
 ///
@@ -174,6 +178,238 @@ class StreamCacheService {
       _writtenSinceTrim = 0;
     } catch (e) {
       debugPrint('[StreamCache] Clear failed: $e');
+    }
+  }
+
+  /// Minimum bytes before we consider a partially-downloaded file playable.
+  /// ExoPlayer needs a few hundred KB of AAC/Opus header + audio data before it
+  /// can initialize the codec and start outputting audio.
+  static const int _playableThreshold = 256 * 1024; // 256 KB
+
+  /// Check if a playable cache file exists for [songId] at [quality].
+  Future<bool> hasCache(String songId, String quality) async {
+    try {
+      final file = await fileFor(songId, quality);
+      if (await file.exists()) {
+        final len = await file.length();
+        return len > 1024; // Needs to be a real file, not an empty stub
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /// Get the cached file path if it exists and is playable, else null.
+  Future<String?> getCachedFile(String songId, String quality) async {
+    try {
+      final file = await fileFor(songId, quality);
+      if (await file.exists() && (await file.length()) > 1024) {
+        return file.path;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Download YouTube audio via yt-dlp native binary directly to the stream
+  /// cache, bypassing the problematic ExoPlayer-direct-URL path.
+  ///
+  /// yt-dlp handles its own HTTP session context (User-Agent, cookies, PO
+  /// tokens, client signatures) — which is exactly why downloads always succeed
+  /// while ExoPlayer streaming fails. This method reuses that same mechanism
+  /// for streaming playback: download to cache file, play from cache file.
+  ///
+  /// [onPlayable] fires once the file has grown past [_playableThreshold] bytes,
+  /// giving the caller a path it can begin `AudioSource.file()` playback from
+  /// while the download continues in the background.
+  ///
+  /// Returns the path to the completed cache file.
+  ///
+  /// **Performance-critical design choices:**
+  /// - NO `extractAudio`/`audioFormat`: these force FFmpeg remux AFTER download,
+  ///   meaning the playable file doesn't exist until download+remux both complete.
+  ///   ExoPlayer natively decodes Opus/WebM and AAC/M4A, so raw stream bytes are fine.
+  /// - `--no-part`: writes directly to the output file (no `.part` → rename dance),
+  ///   enabling progressive file monitoring for early playback.
+  /// - Single `ios` client: fastest unthrottled YouTube client. Multiple clients
+  ///   add extraction round-trips that delay first bytes.
+  Future<String> downloadToCache({
+    required String videoId,
+    required AudioQuality quality,
+    ValueChanged<String>? onPlayable,
+    ValueChanged<double>? onProgress,
+  }) async {
+    // 1. Check if already cached
+    final qualityName = quality.name;
+    final cachedPath = await getCachedFile(videoId, qualityName);
+    if (cachedPath != null) {
+      debugPrint('[StreamCache] Cache hit for $videoId — skipping download');
+      onPlayable?.call(cachedPath);
+      return cachedPath;
+    }
+
+    // 2. Ensure yt-dlp runtime is ready
+    if (!YtDlpRuntime.isReady) {
+      final ok = await YtDlpRuntime.ensureInitialized().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => false,
+      );
+      if (!ok && !YtDlpRuntime.isReady) {
+        throw Exception('yt-dlp runtime unavailable for stream cache download');
+      }
+    }
+
+    // 3. Set up staging directory and target cache file
+    final cacheFile = await fileFor(videoId, qualityName);
+    final stagingDir = await getTemporaryDirectory();
+    final stagingPath =
+        '${stagingDir.path}${Platform.pathSeparator}stream_dl_$videoId';
+    final stagingDirObj = Directory(stagingPath);
+    if (await stagingDirObj.exists()) {
+      await stagingDirObj.delete(recursive: true);
+    }
+    await stagingDirObj.create(recursive: true);
+
+    // 4. Monitor file growth and fire onPlayable when buffered enough
+    bool playableFired = false;
+    Timer? monitorTimer;
+    final processId = 'stream_$videoId';
+
+    // Listen for yt-dlp progress updates
+    StreamSubscription<DownloadProgress>? progressSub;
+    if (onProgress != null || onPlayable != null) {
+      progressSub = YoutubeDLFlutter.instance.onProgress.listen((event) {
+        if (event.processId != processId) return;
+        if (event.progress < 0) {
+          onProgress?.call(0.05);
+        } else {
+          final fraction = event.progressFraction.clamp(0.0, 1.0);
+          onProgress?.call(fraction);
+        }
+      });
+    }
+
+    try {
+      debugPrint('[StreamCache] Starting yt-dlp cache download for $videoId');
+
+      // KEY: No extractAudio, no audioFormat → yt-dlp writes raw audio bytes
+      // directly without FFmpeg remux. ExoPlayer decodes Opus/WebM and AAC/M4A
+      // natively, so the container doesn't matter for streaming.
+      final request = DownloadRequest(
+        url: 'https://www.youtube.com/watch?v=$videoId',
+        outputPath: stagingPath,
+        outputTemplate: '$videoId.%(ext)s',
+        processId: processId,
+        noPlaylist: true,
+        // NO extractAudio — skip FFmpeg remux entirely for instant playability
+        extractAudio: false,
+        embedThumbnail: false,
+        embedMetadata: false,
+        format: YouTubeService.ytDlpStreamFormatChain(quality),
+        customOptions: {
+          '--no-update': '',
+          '--force-ipv4': '',
+          '--no-check-certificates': '',
+          '--socket-timeout': '6',
+          '-R': '2',
+          '-S': YouTubeService.ytDlpAudioSorter(quality),
+          // Start with ios (fastest unthrottled client), with fallbacks for resilience:
+          '--extractor-args':
+              'youtube:player_client=ios,tv,mweb,android,web;skip=hls,dash,translated_subs,webpage',
+          // Write directly to output file, not .part → enables progressive monitoring
+          '--no-part': '',
+          // Skip unnecessary side-files
+          '--no-write-info-json': '',
+          '--no-write-thumbnail': '',
+          // Buffer size for download speed
+          '--buffer-size': '256k',
+        },
+      );
+
+      // Start a timer to monitor staging directory for file growth.
+      // With --no-part, yt-dlp writes directly to the output file, so we can
+      // detect playability progressively even during download.
+      monitorTimer = Timer.periodic(const Duration(milliseconds: 400), (_) async {
+        if (playableFired) return;
+        try {
+          final entities = await stagingDirObj.list().toList();
+          for (final entity in entities) {
+            if (entity is File &&
+                entity.path.contains(videoId) &&
+                !entity.path.endsWith('.ytdl') &&
+                !entity.path.endsWith('.json')) {
+              final len = await entity.length();
+              if (len >= _playableThreshold) {
+                playableFired = true;
+                debugPrint('[StreamCache] File playable at ${len ~/ 1024}KB: ${entity.path}');
+                onPlayable?.call(entity.path);
+                break;
+              }
+            }
+          }
+        } catch (_) {}
+      });
+
+      final result = await YoutubeDLFlutter.instance.download(request);
+
+      monitorTimer.cancel();
+      monitorTimer = null;
+
+      if (result.status != OperationStatus.success) {
+        throw Exception(result.errorMessage ?? 'yt-dlp stream cache download failed');
+      }
+
+      // 5. Find the produced file and move to cache
+      String? producedPath;
+      try {
+        final entities = await stagingDirObj.list().toList();
+        for (final entity in entities) {
+          if (entity is File &&
+              entity.path.contains(videoId) &&
+              !entity.path.endsWith('.ytdl') &&
+              !entity.path.endsWith('.json')) {
+            producedPath = entity.path;
+            break;
+          }
+        }
+      } catch (_) {}
+
+      if (producedPath == null) {
+        throw Exception('yt-dlp cache download produced no audio file');
+      }
+
+      // Move to the stream cache location
+      final produced = File(producedPath);
+      if (await cacheFile.exists()) {
+        await cacheFile.delete();
+      }
+      await produced.copy(cacheFile.path);
+
+      final fileSize = await cacheFile.length();
+      noteWrite(fileSize);
+
+      debugPrint('[StreamCache] Cached $videoId: ${fileSize ~/ 1024}KB → ${cacheFile.path}');
+
+      // Fire playable if we didn't during download (small files)
+      if (!playableFired) {
+        onPlayable?.call(cacheFile.path);
+      }
+
+      // Clean up staging
+      try {
+        await stagingDirObj.delete(recursive: true);
+      } catch (_) {}
+
+      YtDlpRuntime.markHealthy();
+      return cacheFile.path;
+    } catch (e) {
+      monitorTimer?.cancel();
+      debugPrint('[StreamCache] Cache download failed for $videoId: $e');
+      // Clean up on failure
+      try {
+        await stagingDirObj.delete(recursive: true);
+      } catch (_) {}
+      rethrow;
+    } finally {
+      await progressSub?.cancel();
     }
   }
 }

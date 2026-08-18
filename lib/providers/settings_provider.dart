@@ -21,6 +21,9 @@ enum ThemeAccent {
   sapphire,
   sakura,
   lava,
+  arctic,
+  crimson,
+  amethyst,
 
   /// Material You — follows the device wallpaper's dynamic color (Android 12+).
   /// Falls back to purple when the platform provides no dynamic palette.
@@ -33,11 +36,20 @@ enum SoundEnhancer {
   trebleBoost,
   vocal,
   ambient3d,
+  // Extended genre presets (indices 5–11)
+  electronic,
+  rockMetal,
+  hipHop,
+  pop,
+  acoustic,
+  jazzBlues,
+  nightMode,
 }
 
 class SettingsProvider extends ChangeNotifier {
   static const String _qualityKey = 'settings_audio_quality';
   static const String _accentKey = 'settings_theme_accent';
+  static const String _autoRotateThemeKey = 'settings_auto_rotate_theme';
   static const String _fadeKey = 'settings_visualizer_speed';
   static const String _bgPlaybackKey = 'settings_bg_playback';
   static const String _enhancerKey = 'settings_sound_enhancer';
@@ -50,9 +62,11 @@ class SettingsProvider extends ChangeNotifier {
   static const String _showVisualizerKey = 'settings_show_visualizer';
   static const String _playerStyleKey = 'settings_player_style';
   static const String _crossfadeKey = 'settings_crossfade_seconds';
+  static const String _customPresetsKey = 'settings_custom_eq_presets_v1';
 
   AudioQuality _audioQuality = AudioQuality.high;
   ThemeAccent _themeAccent = ThemeAccent.purple;
+  bool _autoRotateThemeOnLaunch = false;
   SoundEnhancer _soundEnhancer = SoundEnhancer.none;
   double _visualizerSpeed = 1.0;
   bool _enableBackgroundPlayback = true;
@@ -67,6 +81,9 @@ class SettingsProvider extends ChangeNotifier {
   bool _showVisualizer = true;
   String _playerStyle = 'classic'; // 'classic' or 'aurora'
   int _crossfadeSeconds = 0; // 0 = off; global fade-in/out between tracks
+
+  /// Named custom EQ presets saved by the user: { name → [5 gain values] }
+  Map<String, List<double>> _customPresets = {};
 
   /// Device wallpaper seed color (Material You), injected at app start from
   /// DynamicColorPlugin. Null on Android < 12 / unsupported platforms.
@@ -83,6 +100,7 @@ class SettingsProvider extends ChangeNotifier {
   // Getters
   AudioQuality get audioQuality => _audioQuality;
   ThemeAccent get themeAccent => _themeAccent;
+  bool get autoRotateThemeOnLaunch => _autoRotateThemeOnLaunch;
   SoundEnhancer get soundEnhancer => _soundEnhancer;
   double get visualizerSpeed => _visualizerSpeed;
   bool get enableBackgroundPlayback => _enableBackgroundPlayback;
@@ -96,6 +114,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get showVisualizer => _showVisualizer;
   String get playerStyle => _playerStyle;
   int get crossfadeSeconds => _crossfadeSeconds;
+  Map<String, List<double>> get customPresets => Map.unmodifiable(_customPresets);
   bool get isInitialized => _isInitialized;
   StorageType get storageType => _storageType;
   StorageLocationService get storageService => _storageService;
@@ -126,6 +145,12 @@ class SettingsProvider extends ChangeNotifier {
         return const Color(0xFFFF80AB); // Sakura — soft blossom
       case ThemeAccent.lava:
         return const Color(0xFFFF4B2B); // Inferno — molten red-orange
+      case ThemeAccent.arctic:
+        return const Color(0xFF00F2FE); // Arctic — electric cyan ice
+      case ThemeAccent.crimson:
+        return const Color(0xFFFF1358); // Ruby — cyber neon crimson
+      case ThemeAccent.amethyst:
+        return const Color(0xFF9933FF); // Amethyst — deep velvet violet
       case ThemeAccent.system:
         // Material You wallpaper color; purple fallback pre-Android 12.
         return systemDynamicColor ?? const Color(0xFF7C5CFF);
@@ -162,6 +187,15 @@ class SettingsProvider extends ChangeNotifier {
         break;
       case ThemeAccent.lava:
         endColor = const Color(0xFFFFAB40); // molten → ember
+        break;
+      case ThemeAccent.arctic:
+        endColor = const Color(0xFF4FACFE); // electric cyan → sky blue
+        break;
+      case ThemeAccent.crimson:
+        endColor = const Color(0xFFFF5B79); // neon crimson → hot pink
+        break;
+      case ThemeAccent.amethyst:
+        endColor = const Color(0xFFD946EF); // velvet violet → fuchsia glow
         break;
       case ThemeAccent.system:
         // Blend toward a lighter tint of the wallpaper-derived accent.
@@ -247,10 +281,48 @@ class SettingsProvider extends ChangeNotifier {
         _themeAccent = ThemeAccent.values[accentIdx];
       }
 
-      // Load sound enhancer
+      // Load auto-rotate theme on startup
+      _autoRotateThemeOnLaunch = prefs.getBool(_autoRotateThemeKey) ?? false;
+      if (_autoRotateThemeOnLaunch && _themeAccent != ThemeAccent.system) {
+        final manualAccents = [
+          ThemeAccent.purple,
+          ThemeAccent.cyan,
+          ThemeAccent.pink,
+          ThemeAccent.orange,
+          ThemeAccent.emerald,
+          ThemeAccent.amber,
+          ThemeAccent.sapphire,
+          ThemeAccent.sakura,
+          ThemeAccent.lava,
+          ThemeAccent.arctic,
+          ThemeAccent.crimson,
+          ThemeAccent.amethyst,
+        ];
+        final currentIdx = manualAccents.indexOf(_themeAccent);
+        final nextIdx = currentIdx >= 0
+            ? (currentIdx + 1) % manualAccents.length
+            : 0;
+        _themeAccent = manualAccents[nextIdx];
+        await prefs.setInt(_accentKey, _themeAccent.index);
+      }
+
+      // Load sound enhancer (clamp to valid range to guard against removed values)
       final enhancerIdx = prefs.getInt(_enhancerKey);
-      if (enhancerIdx != null) {
+      if (enhancerIdx != null && enhancerIdx < SoundEnhancer.values.length) {
         _soundEnhancer = SoundEnhancer.values[enhancerIdx];
+      }
+
+      // Load user-saved custom presets
+      final presetsJson = prefs.getString(_customPresetsKey);
+      if (presetsJson != null) {
+        try {
+          final raw = json.decode(presetsJson) as Map<String, dynamic>;
+          _customPresets = raw.map(
+            (k, v) => MapEntry(k, (v as List).map((g) => (g as num).toDouble()).toList()),
+          );
+        } catch (_) {
+          _customPresets = {};
+        }
       }
 
       // Load visualizer speed
@@ -333,6 +405,13 @@ class SettingsProvider extends ChangeNotifier {
           _previousAccent == ThemeAccent.system ? ThemeAccent.purple : _previousAccent;
       await setThemeAccent(restore);
     }
+  }
+
+  Future<void> setAutoRotateThemeOnLaunch(bool value) async {
+    _autoRotateThemeOnLaunch = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_autoRotateThemeKey, value);
   }
 
   Future<void> setSoundEnhancer(SoundEnhancer enhancer) async {
@@ -419,6 +498,23 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_crossfadeKey, _crossfadeSeconds);
+  }
+
+  /// Save the current custom EQ gains under [name]. Overwrites silently if
+  /// the name already exists.
+  Future<void> saveCustomPreset(String name, List<double> gains) async {
+    _customPresets[name] = List.from(gains);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_customPresetsKey, json.encode(_customPresets));
+  }
+
+  /// Delete a saved custom preset by name.
+  Future<void> deleteCustomPreset(String name) async {
+    _customPresets.remove(name);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_customPresetsKey, json.encode(_customPresets));
   }
 
 

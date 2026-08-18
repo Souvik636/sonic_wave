@@ -57,7 +57,7 @@ class YtDlpRuntime {
   /// Three, not one: a single failure is far more likely to be a private or
   /// region-locked video, or one bad player client, than a sick runtime. Three
   /// in a row with no success in between is a pattern.
-  static const int _unhealthyThreshold = 3;
+  static const int _unhealthyThreshold = 6;
 
   /// Report that yt-dlp produced a usable result. Resets the failure streak.
   static void markHealthy() {

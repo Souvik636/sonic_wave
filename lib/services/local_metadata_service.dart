@@ -166,13 +166,21 @@ class LocalMetadataService {
     final cleanTitle = meta.title != null ? EncodingSanitizer.sanitize(meta.title!) : null;
     final cleanArtist = meta.artist != null ? EncodingSanitizer.sanitize(meta.artist!) : null;
 
+    final resolvedTitle = (cleanTitle != null && cleanTitle.trim().isNotEmpty && !EncodingSanitizer.hasMojibakeCjk(cleanTitle))
+        ? cleanTitle.trim()
+        : ((song.title.trim().isEmpty || song.title == song.filePath || song.title == 'Unknown Track' || song.title.endsWith('.mp3') || song.title.endsWith('.m4a') || song.title.endsWith('.flac'))
+            ? cleanTitleFromFilename(song.filePath ?? song.videoId)
+            : song.title);
+
+    final resolvedArtist = (cleanArtist != null && cleanArtist.trim().isNotEmpty && !EncodingSanitizer.hasMojibakeCjk(cleanArtist))
+        ? cleanArtist.trim()
+        : ((song.artist.trim().isEmpty || song.artist == 'Unknown Artist' || song.artist == '<unknown>')
+            ? cleanArtistFromFilename(song.filePath ?? song.videoId)
+            : song.artist);
+
     return song.copyWith(
-      title: (cleanTitle != null && cleanTitle.trim().isNotEmpty && !EncodingSanitizer.hasMojibakeCjk(cleanTitle))
-          ? cleanTitle.trim()
-          : song.title,
-      artist: (cleanArtist != null && cleanArtist.trim().isNotEmpty && !EncodingSanitizer.hasMojibakeCjk(cleanArtist))
-          ? cleanArtist.trim()
-          : song.artist,
+      title: resolvedTitle,
+      artist: resolvedArtist,
       duration: meta.durationMs > 0
           ? Duration(milliseconds: meta.durationMs)
           : song.duration,
@@ -199,32 +207,43 @@ class LocalMetadataService {
         sizeBytes = stat.size;
         mtimeMs = stat.modified.millisecondsSinceEpoch;
 
-        final meta = readMetadata(file, getImage: true);
-        title = meta.title != null ? EncodingSanitizer.sanitize(meta.title!) : null;
-        artist = meta.artist != null ? EncodingSanitizer.sanitize(meta.artist!) : null;
-        durationMs = meta.duration?.inMilliseconds ?? 0;
+        AudioMetadata? meta;
+        try {
+          meta = readMetadata(file, getImage: true);
+        } catch (_) {
+          // Encrypted, container-wrapped, or unrecognized audio format
+        }
+
+        if (meta != null) {
+          title = meta.title != null ? EncodingSanitizer.sanitize(meta.title!) : null;
+          artist = meta.artist != null ? EncodingSanitizer.sanitize(meta.artist!) : null;
+          durationMs = meta.duration?.inMilliseconds ?? 0;
+        }
 
         Uint8List? rawImageBytes;
         String imageExt = 'jpg';
 
-        if (meta.pictures.isNotEmpty) {
+        final metaInstance = meta;
+        if (metaInstance != null && metaInstance.pictures.isNotEmpty) {
           // Prefer the front cover when typed, else the first picture.
-          final pic = meta.pictures.firstWhere(
+          final pic = metaInstance.pictures.firstWhere(
             (p) => p.pictureType == PictureType.coverFront,
-            orElse: () => meta.pictures.first,
+            orElse: () => metaInstance.pictures.first,
           );
           if (pic.bytes.isNotEmpty) {
             rawImageBytes = Uint8List.fromList(pic.bytes);
-            imageExt = pic.mimetype.contains('png') ? 'png' : 'jpg';
+            imageExt = pic.mimetype.contains('png')
+                ? 'png'
+                : (pic.mimetype.contains('webp') ? 'webp' : 'jpg');
           }
         }
 
-        // Universal fallback artwork extraction for FLAC, OGG, WAV, AAC, M4A, etc.
+        // Universal fallback artwork extraction for FLAC, OGG, WAV, AAC, M4A, MP3, etc.
         if (rawImageBytes == null || rawImageBytes.isEmpty) {
           final fallbackImg = _extractEmbeddedImageFallback(file);
           if (fallbackImg != null) {
             rawImageBytes = fallbackImg.bytes;
-            imageExt = fallbackImg.isPng ? 'png' : 'jpg';
+            imageExt = fallbackImg.isPng ? 'png' : (fallbackImg.isWebp ? 'webp' : 'jpg');
           }
         }
 
@@ -274,8 +293,7 @@ class LocalMetadataService {
           } catch (_) {}
         }
       } catch (_) {
-        // Unsupported/corrupt file — record a negative entry so we don't
-        // re-parse it on every scan (size/mtime still guard staleness).
+        // Corrupt file or inaccessible file
       }
       out.add(_CachedMeta(
         title: title,
@@ -289,59 +307,227 @@ class LocalMetadataService {
     return out;
   }
 
-  /// Universal binary header scanner for embedded JPEG/PNG image streams.
-  /// Handles container formats where metadata parser fails to detect artwork.
+  /// Clean encoded or raw filenames into clean track titles
+  static String cleanTitleFromFilename(String filenameOrPath) {
+    String name = filenameOrPath.split(Platform.pathSeparator).last;
+    name = name.split('/').last;
+    if (name.contains('?')) name = name.split('?').first;
+    final dotIndex = name.lastIndexOf('.');
+    if (dotIndex > 0) {
+      name = name.substring(0, dotIndex);
+    }
+    name = EncodingSanitizer.sanitize(name);
+    name = name.replaceAll(RegExp(r'[_+]'), ' ');
+    name = name.replaceFirst(RegExp(r'^\s*(\d{1,3}[.\-_\s]+\s*)+'), '');
+    name = name.replaceAll(
+        RegExp(r'\s*(\[|\()(?:\s*(?:official\s*(?:video|audio|music\s*video|hd|lyric\s*video)?|lyrics?|320\s*kbps|1080p|720p|4k|remastered|hq|audio|video)\s*)(\]|\))',
+            caseSensitive: false),
+        '');
+    if (name.contains(' - ')) {
+      final parts = name.split(' - ');
+      if (parts.length >= 2 && parts.last.trim().isNotEmpty) {
+        name = parts.sublist(1).join(' - ');
+      }
+    }
+    name = name.trim();
+    return name.isNotEmpty ? name : 'Unknown Track';
+  }
+
+  /// Extract artist from encoded filename if formatted like "Artist - Title"
+  static String cleanArtistFromFilename(String filenameOrPath) {
+    String name = filenameOrPath.split(Platform.pathSeparator).last;
+    name = name.split('/').last;
+    if (name.contains('?')) name = name.split('?').first;
+    final dotIndex = name.lastIndexOf('.');
+    if (dotIndex > 0) {
+      name = name.substring(0, dotIndex);
+    }
+    name = EncodingSanitizer.sanitize(name);
+    name = name.replaceAll(RegExp(r'[_+]'), ' ');
+    name = name.replaceFirst(RegExp(r'^\s*(\d{1,3}[.\-_\s]+\s*)+'), '');
+    if (name.contains(' - ')) {
+      final parts = name.split(' - ');
+      if (parts.first.trim().isNotEmpty) {
+        return parts.first.trim();
+      }
+    }
+    return 'Local Artist';
+  }
+
+  /// Universal binary scanner for embedded JPEG/PNG/WebP image streams in M4A/MP4, FLAC, OGG, WAV, MP3.
+  /// Handles encrypted/container formats and Vorbis base64 comments where metadata parser misses artwork.
   static _ExtractedImage? _extractEmbeddedImageFallback(File file) {
     try {
       final stat = file.statSync();
       if (stat.size < 1024) return null;
-      // Read first 1MB or full file size if smaller
-      final readLen = stat.size > 1024 * 1024 ? 1024 * 1024 : stat.size;
-      final raf = file.openSync(mode: FileMode.read);
-      final bytes = raf.readSync(readLen);
-      raf.closeSync();
 
-      // PNG magic numbers: 0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A
-      for (int i = 0; i < bytes.length - 8; i++) {
-        if (bytes[i] == 0x89 &&
-            bytes[i + 1] == 0x50 &&
-            bytes[i + 2] == 0x4E &&
-            bytes[i + 3] == 0x47 &&
-            bytes[i + 4] == 0x0D &&
-            bytes[i + 5] == 0x0A &&
-            bytes[i + 6] == 0x1A &&
-            bytes[i + 7] == 0x0A) {
-          // Find PNG end chunk (IEND: 0x49 0x45 0x4E 0x44 0xAE 0x42 0x60 0x82)
-          int end = -1;
-          for (int j = i + 8; j < bytes.length - 8; j++) {
-            if (bytes[j] == 0x49 &&
-                bytes[j + 1] == 0x45 &&
-                bytes[j + 2] == 0x4E &&
-                bytes[j + 3] == 0x44) {
-              end = j + 8;
-              break;
+      final raf = file.openSync(mode: FileMode.read);
+      
+      // 1. Read first 4MB (or whole file)
+      final headLen = stat.size > 4 * 1024 * 1024 ? 4 * 1024 * 1024 : stat.size;
+      final headBytes = raf.readSync(headLen);
+
+      _ExtractedImage? img = _findImageInBytes(headBytes);
+      if (img != null) {
+        raf.closeSync();
+        return img;
+      }
+
+      // 2. Check for base64 image in header (FLAC / OGG METADATA_BLOCK_PICTURE)
+      img = _findBase64ImageInBytes(headBytes);
+      if (img != null) {
+        raf.closeSync();
+        return img;
+      }
+
+      // 3. If file is large (>4MB), check tail (last 512KB) for APE/ID3v1/appended tags
+      if (stat.size > 4 * 1024 * 1024) {
+        final tailLen = 512 * 1024;
+        raf.setPositionSync(stat.size - tailLen);
+        final tailBytes = raf.readSync(tailLen);
+        img = _findImageInBytes(tailBytes) ?? _findBase64ImageInBytes(tailBytes);
+      }
+
+      raf.closeSync();
+      return img;
+    } catch (_) {}
+    return null;
+  }
+
+  static _ExtractedImage? _findImageInBytes(Uint8List bytes) {
+    // 1. MP4 'covr' atom detection
+    for (int i = 0; i < bytes.length - 16; i++) {
+      if (bytes[i] == 0x63 && bytes[i + 1] == 0x6F && bytes[i + 2] == 0x76 && bytes[i + 3] == 0x72) {
+        for (int j = i + 4; j < i + 24 && j < bytes.length - 8; j++) {
+          if (bytes[j] == 0x64 && bytes[j + 1] == 0x61 && bytes[j + 2] == 0x74 && bytes[j + 3] == 0x61) {
+            final dataStart = j + 12;
+            if (dataStart < bytes.length) {
+              final subSlice = Uint8List.sublistView(bytes, dataStart);
+              final subImg = _findDirectImage(subSlice);
+              if (subImg != null) return subImg;
             }
-          }
-          if (end != -1 && end > i) {
-            final pngData = Uint8List.sublistView(bytes, i, end);
-            return _ExtractedImage(pngData, isPng: true);
           }
         }
       }
+    }
 
-      // JPEG magic numbers: SOI 0xFF 0xD8 0xFF ... EOI 0xFF 0xD9
-      for (int i = 0; i < bytes.length - 4; i++) {
-        if (bytes[i] == 0xFF && bytes[i + 1] == 0xD8 && bytes[i + 2] == 0xFF) {
-          int end = -1;
-          for (int j = i + 3; j < bytes.length - 2; j++) {
-            if (bytes[j] == 0xFF && bytes[j + 1] == 0xD9) {
-              end = j + 2;
-              break;
+    // 2. ID3v2 APIC / PIC frame detection
+    for (int i = 0; i < bytes.length - 10; i++) {
+      if ((bytes[i] == 0x41 && bytes[i + 1] == 0x50 && bytes[i + 2] == 0x49 && bytes[i + 3] == 0x43) ||
+          (bytes[i] == 0x50 && bytes[i + 1] == 0x49 && bytes[i + 2] == 0x43)) {
+        final searchOffset = bytes[i] == 0x41 ? i + 10 : i + 6;
+        if (searchOffset < bytes.length) {
+          final scanLimit = searchOffset + 512 < bytes.length ? searchOffset + 512 : bytes.length;
+          final headerSlice = Uint8List.sublistView(bytes, searchOffset, scanLimit);
+          final subImg = _findDirectImage(headerSlice);
+          if (subImg != null) {
+            final firstByte = subImg.bytes.first;
+            final imgRelIdx = headerSlice.indexOf(firstByte);
+            if (imgRelIdx >= 0) {
+              final fullSlice = Uint8List.sublistView(bytes, searchOffset + imgRelIdx);
+              final directFull = _findDirectImage(fullSlice);
+              if (directFull != null) return directFull;
             }
           }
-          if (end != -1 && (end - i) >= 2048) {
-            final jpgData = Uint8List.sublistView(bytes, i, end);
-            return _ExtractedImage(jpgData, isPng: false);
+        }
+      }
+    }
+
+    return _findDirectImage(bytes);
+  }
+
+  static _ExtractedImage? _findDirectImage(Uint8List bytes) {
+    // PNG magic numbers: 0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A
+    for (int i = 0; i < bytes.length - 8; i++) {
+      if (bytes[i] == 0x89 &&
+          bytes[i + 1] == 0x50 &&
+          bytes[i + 2] == 0x4E &&
+          bytes[i + 3] == 0x47 &&
+          bytes[i + 4] == 0x0D &&
+          bytes[i + 5] == 0x0A &&
+          bytes[i + 6] == 0x1A &&
+          bytes[i + 7] == 0x0A) {
+        int end = -1;
+        for (int j = i + 8; j < bytes.length - 8; j++) {
+          if (bytes[j] == 0x49 &&
+              bytes[j + 1] == 0x45 &&
+              bytes[j + 2] == 0x4E &&
+              bytes[j + 3] == 0x44) {
+            end = j + 8;
+            break;
+          }
+        }
+        if (end != -1 && end > i && (end - i) >= 512) {
+          final pngData = Uint8List.sublistView(bytes, i, end);
+          return _ExtractedImage(pngData, isPng: true);
+        }
+      }
+    }
+
+    // JPEG magic numbers: SOI 0xFF 0xD8 0xFF ... EOI 0xFF 0xD9
+    for (int i = 0; i < bytes.length - 4; i++) {
+      if (bytes[i] == 0xFF && bytes[i + 1] == 0xD8 && bytes[i + 2] == 0xFF) {
+        // Find last EOI within reasonable boundary (up to 4MB)
+        int lastEoi = -1;
+        final searchLimit = (i + 4 * 1024 * 1024 < bytes.length) ? i + 4 * 1024 * 1024 : bytes.length;
+        for (int j = i + 3; j < searchLimit - 1; j++) {
+          if (bytes[j] == 0xFF && bytes[j + 1] == 0xD9) {
+            lastEoi = j + 2;
+          }
+        }
+        if (lastEoi != -1 && (lastEoi - i) >= 1024) {
+          final jpgData = Uint8List.sublistView(bytes, i, lastEoi);
+          return _ExtractedImage(jpgData, isPng: false);
+        }
+      }
+    }
+    // WebP magic numbers: "RIFF" .... "WEBP"
+    for (int i = 0; i < bytes.length - 12; i++) {
+      if (bytes[i] == 0x52 &&
+          bytes[i + 1] == 0x49 &&
+          bytes[i + 2] == 0x46 &&
+          bytes[i + 3] == 0x46 &&
+          bytes[i + 8] == 0x57 &&
+          bytes[i + 9] == 0x45 &&
+          bytes[i + 10] == 0x42 &&
+          bytes[i + 11] == 0x50) {
+        final len = bytes[i + 4] |
+            (bytes[i + 5] << 8) |
+            (bytes[i + 6] << 16) |
+            (bytes[i + 7] << 24);
+        final totalLen = len + 8;
+        if (totalLen >= 12 && i + totalLen <= bytes.length) {
+          final webpData = Uint8List.sublistView(bytes, i, i + totalLen);
+          return _ExtractedImage(webpData, isWebp: true);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  static _ExtractedImage? _findBase64ImageInBytes(Uint8List bytes) {
+    try {
+      final asciiStr = String.fromCharCodes(bytes.where((b) => b >= 32 && b <= 126));
+      // Base64 JPEG header starts with '/9j/'
+      final jpgIndex = asciiStr.indexOf('/9j/');
+      if (jpgIndex != -1) {
+        final rawB64 = asciiStr.substring(jpgIndex).split(RegExp(r'[^A-Za-z0-9+/=]')).first;
+        if (rawB64.length > 512) {
+          final decoded = base64Decode(base64.normalize(rawB64));
+          if (decoded.length >= 1024) {
+            return _ExtractedImage(decoded, isPng: false);
+          }
+        }
+      }
+      // Base64 PNG header starts with 'iVBORw0KGgo'
+      final pngIndex = asciiStr.indexOf('iVBORw0KGgo');
+      if (pngIndex != -1) {
+        final rawB64 = asciiStr.substring(pngIndex).split(RegExp(r'[^A-Za-z0-9+/=]')).first;
+        if (rawB64.length > 512) {
+          final decoded = base64Decode(base64.normalize(rawB64));
+          if (decoded.length >= 512) {
+            return _ExtractedImage(decoded, isPng: true);
           }
         }
       }
@@ -353,7 +539,8 @@ class LocalMetadataService {
 class _ExtractedImage {
   final Uint8List bytes;
   final bool isPng;
-  const _ExtractedImage(this.bytes, {required this.isPng});
+  final bool isWebp;
+  const _ExtractedImage(this.bytes, {this.isPng = false, this.isWebp = false});
 }
 
 class _CachedMeta {

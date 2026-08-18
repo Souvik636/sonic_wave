@@ -1,6 +1,6 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1111,6 +1111,15 @@ class PlayerProvider extends ChangeNotifier {
             pitchMultiplier = 0.97;
           }
           break;
+        // Extended genre presets — EQ-only profiles, no pitch/speed simulation needed
+        case SoundEnhancer.electronic:
+        case SoundEnhancer.rockMetal:
+        case SoundEnhancer.hipHop:
+        case SoundEnhancer.pop:
+        case SoundEnhancer.acoustic:
+        case SoundEnhancer.jazzBlues:
+        case SoundEnhancer.nightMode:
+          break;
       }
 
       _audioHandler.setSpeedAndPitch(speedMultiplier * _playbackSpeed, pitchMultiplier);
@@ -1506,16 +1515,39 @@ class PlayerProvider extends ChangeNotifier {
       AppToast.show(context, 'Downloading "${song.title}"...', type: ToastType.info);
     }
 
+    final isSharedLinkDownload = _sharedDownload?.videoId == song.videoId;
+    if (!isSharedLinkDownload) {
+      unawaited(DownloadNotificationService.start(
+        videoId: song.videoId,
+        title: song.title,
+        subtitle: song.artist,
+      ));
+    }
+
     try {
       await DownloadService().downloadSong(song, (progress) {
         _downloadProgress[song.videoId] = progress;
         onProgress?.call(progress);
+        if (!isSharedLinkDownload) {
+          unawaited(DownloadNotificationService.update(
+            videoId: song.videoId,
+            progress: progress,
+            title: song.title,
+            subtitle: song.artist,
+          ));
+        }
         notifyListeners();
       }, onStateChanged: () {
         notifyListeners();
       }, quality: _audioQuality);
       _downloadProgress.remove(song.videoId);
       await loadDownloads();
+      if (!isSharedLinkDownload) {
+        unawaited(DownloadNotificationService.complete(
+          videoId: song.videoId,
+          title: song.title,
+        ));
+      }
       if (context != null && context.mounted) {
         AppToast.show(context, 'Downloaded "${song.title}" for offline playback!', type: ToastType.success);
       }
@@ -1523,9 +1555,93 @@ class PlayerProvider extends ChangeNotifier {
       _downloadProgress.remove(song.videoId);
       notifyListeners();
       debugPrint('Error downloading song in provider: $e');
+      if (!isSharedLinkDownload) {
+        unawaited(DownloadNotificationService.fail(
+          videoId: song.videoId,
+          title: song.title,
+          reason: e.toString().replaceAll('Exception:', '').trim(),
+        ));
+      }
       if (context != null && context.mounted) {
         final errText = e.toString().replaceAll('Exception:', '').trim();
         AppToast.show(context, 'Failed to download "${song.title}": $errText', type: ToastType.warning);
+      }
+    }
+  }
+
+  /// Download [song] into offline storage and automatically add/move it into [albumId].
+  Future<void> downloadAndAddToAlbum(
+    Song song,
+    String albumId, {
+    BuildContext? context,
+  }) async {
+    final albumIdx = _albums.indexWhere((a) => a.id == albumId);
+    if (albumIdx < 0) {
+      if (context != null && context.mounted) {
+        AppToast.show(context, 'Selected album not found', type: ToastType.warning);
+      }
+      return;
+    }
+    final albumName = _albums[albumIdx].name;
+
+    if (_downloadProgress.containsKey(song.videoId)) {
+      if (context != null && context.mounted) {
+        AppToast.show(context, '"${song.title}" is already downloading', type: ToastType.info);
+      }
+      return;
+    }
+
+    _downloadProgress[song.videoId] = 0.01;
+    notifyListeners();
+
+    if (context != null && context.mounted) {
+      AppToast.show(
+        context,
+        'Downloading "${song.title}" into "$albumName"...',
+        type: ToastType.download,
+      );
+    }
+
+    try {
+      await DownloadService().downloadSong(song, (progress) {
+        _downloadProgress[song.videoId] = progress;
+        notifyListeners();
+      }, onStateChanged: () {
+        notifyListeners();
+      }, quality: _audioQuality);
+
+      _downloadProgress.remove(song.videoId);
+      await loadDownloads();
+
+      // Find the downloaded song instance with its local filePath
+      final downloaded = _downloadedSongs.firstWhere(
+        (s) => s.videoId == song.videoId,
+        orElse: () => song,
+      );
+
+      await addSongToAlbum(albumId, downloaded);
+      await _saveAlbums();
+      notifyListeners();
+
+      if (context != null && context.mounted) {
+        AppToast.show(
+          context,
+          'Downloaded & added "${song.title}" to album "$albumName"!',
+          type: ToastType.success,
+          icon: Icons.album_rounded,
+        );
+      }
+    } catch (e) {
+      _downloadProgress.remove(song.videoId);
+      notifyListeners();
+      debugPrint('Error downloading song to album: $e');
+      if (context != null && context.mounted) {
+        final errText = e.toString().replaceAll('Exception:', '').trim();
+        AppToast.show(
+          context,
+          'Failed to download "${song.title}": $errText',
+          type: ToastType.warning,
+        );
       }
     }
   }
@@ -1711,7 +1827,7 @@ class PlayerProvider extends ChangeNotifier {
     }
 
     final newAlbum = UserAlbum(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: 'alb_${DateTime.now().microsecondsSinceEpoch}_${_albums.length + 1}',
       name: name,
       songs: [],
       isCustom: isCustom,
@@ -1722,6 +1838,252 @@ class PlayerProvider extends ChangeNotifier {
     notifyListeners();
     await _saveAlbums();
     return newAlbum;
+  }
+
+  Future<bool> renameAlbum(String albumId, String newName) async {
+    final idx = _albums.indexWhere((a) => a.id == albumId);
+    if (idx < 0 || newName.trim().isEmpty) return false;
+    final cleanName = newName.trim();
+    final album = _albums[idx];
+    if (album.name == cleanName) return true;
+
+    String? newFolderPath = album.folderPath;
+    List<Song> updatedSongs = List<Song>.from(album.songs);
+
+    if (album.isFolderBased && album.folderPath != null) {
+      final oldDir = Directory(album.folderPath!);
+      if (await oldDir.exists()) {
+        try {
+          final parentDir = oldDir.parent;
+          var safeName = cleanName.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_').trim();
+          safeName = safeName.replaceAll(RegExp(r'^\.+'), '').trim();
+          if (safeName.isEmpty) safeName = 'Album';
+          final newDir = Directory('${parentDir.path}${Platform.pathSeparator}$safeName');
+          if (!await newDir.exists()) {
+            await oldDir.rename(newDir.path);
+            newFolderPath = newDir.path;
+            // Update all filePaths and albumFolderName for songs in this album
+            updatedSongs = album.songs.map((s) {
+              final oldPath = s.filePath ?? s.videoId;
+              final fileName = oldPath.split(Platform.pathSeparator).last;
+              final newPath = '${newDir.path}${Platform.pathSeparator}$fileName';
+              return s.copyWith(
+                filePath: newPath,
+                albumFolderName: cleanName,
+              );
+            }).toList();
+          }
+        } catch (e) {
+          debugPrint('Error renaming physical album folder: $e');
+        }
+      }
+    } else {
+      updatedSongs = album.songs.map((s) => s.copyWith(albumFolderName: cleanName)).toList();
+    }
+
+    _albums[idx] = album.copyWith(
+      name: cleanName,
+      folderPath: newFolderPath,
+      songs: updatedSongs,
+      lastUpdated: DateTime.now(),
+    );
+
+    notifyListeners();
+    await _saveAlbums();
+    return true;
+  }
+
+  bool _isSyncingAlbums = false;
+  bool get isSyncingAlbums => _isSyncingAlbums;
+
+  /// Synchronize albums with actual storage directories and files.
+  /// Reflected when the user adds, renames, moves, or deletes files/folders in a file manager.
+  Future<int> syncAlbumsWithStorage() async {
+    if (_isSyncingAlbums) return 0;
+    _isSyncingAlbums = true;
+    notifyListeners();
+
+    int updatedCount = 0;
+    try {
+      final storageService = StorageLocationService();
+      await storageService.initialize();
+
+      // 1. Scan folder albums in storage
+      final folderAlbumInfos = await storageService.scanFolderAlbums();
+      final Map<String, FolderAlbumInfo> folderPathToInfo = {
+        for (final f in folderAlbumInfos) f.folderPath.replaceAll('\\', '/').toLowerCase(): f
+      };
+      final Map<String, FolderAlbumInfo> folderNameToInfo = {
+        for (final f in folderAlbumInfos) f.folderName.toLowerCase(): f
+      };
+
+      final List<UserAlbum> syncedAlbums = [];
+
+      for (final album in _albums) {
+        if (album.isFolderBased) {
+          final normPath = album.folderPath?.replaceAll('\\', '/').toLowerCase();
+          FolderAlbumInfo? matchingInfo = normPath != null ? folderPathToInfo[normPath] : null;
+          matchingInfo ??= folderNameToInfo[album.name.toLowerCase()];
+
+          if (matchingInfo != null) {
+            // Folder exists on disk! Reconcile audio files
+            final diskFiles = matchingInfo.audioFilePaths.toSet();
+            final existingSongsMap = {for (final s in album.songs) (s.filePath ?? s.videoId): s};
+
+            final List<Song> updatedSongs = [];
+
+            // Retain existing songs whose file still exists on disk
+            for (final s in album.songs) {
+              final path = s.filePath ?? s.videoId;
+              if (diskFiles.contains(path) && File(path).existsSync()) {
+                updatedSongs.add(s.copyWith(albumFolderName: matchingInfo.folderName));
+              }
+            }
+
+            // Detect and enrich new songs on disk not yet in the album
+            final List<Song> newDiskSongs = [];
+            for (final filePath in diskFiles) {
+              if (!existingSongsMap.containsKey(filePath)) {
+                final filename = filePath.split(Platform.pathSeparator).last;
+                final nameWithoutExt = filename.contains('.')
+                    ? filename.substring(0, filename.lastIndexOf('.'))
+                    : filename;
+                String title = nameWithoutExt;
+                String artist = 'Local Audio';
+                if (nameWithoutExt.contains(' - ')) {
+                  final parts = nameWithoutExt.split(' - ');
+                  artist = parts[0].trim();
+                  title = parts.sublist(1).join(' - ').trim();
+                } else if (nameWithoutExt.contains('-')) {
+                  final parts = nameWithoutExt.split('-');
+                  artist = parts[0].trim();
+                  title = parts.sublist(1).join('-').trim();
+                }
+
+                newDiskSongs.add(Song(
+                  id: filePath,
+                  title: title,
+                  artist: artist,
+                  thumbnailUrl: '',
+                  highResThumbnailUrl: '',
+                  duration: const Duration(minutes: 3),
+                  videoId: filePath,
+                  filePath: filePath,
+                  albumFolderName: matchingInfo.folderName,
+                ));
+              }
+            }
+
+            if (newDiskSongs.isNotEmpty) {
+              final enrichedNew = await LocalMetadataService().enrichSongs(newDiskSongs);
+              updatedSongs.addAll(enrichedNew);
+            }
+
+            // Check if folder name on disk changed
+            final actualName = matchingInfo.folderName;
+
+            syncedAlbums.add(album.copyWith(
+              name: actualName,
+              folderPath: matchingInfo.folderPath,
+              songs: updatedSongs,
+              lastUpdated: DateTime.now(),
+            ));
+            updatedCount++;
+
+            // Remove from map so we know it's handled
+            folderPathToInfo.remove(matchingInfo.folderPath.replaceAll('\\', '/').toLowerCase());
+            folderNameToInfo.remove(matchingInfo.folderName.toLowerCase());
+          } else {
+            // Folder no longer exists on disk!
+            // If it had real files that are gone, skip it (deleted manually by user)
+            // But if user made it custom, keep only songs whose files still exist
+            final remainingSongs = album.songs.where((s) {
+              final path = s.filePath ?? (s.isLocalFile ? s.videoId : null);
+              return path == null || File(path).existsSync();
+            }).toList();
+
+            if (album.isCustom && remainingSongs.isNotEmpty) {
+              syncedAlbums.add(album.copyWith(
+                songs: remainingSongs,
+                isFolderBased: false,
+                lastUpdated: DateTime.now(),
+              ));
+              updatedCount++;
+            }
+          }
+        } else {
+          // Custom virtual album: prune songs whose local files were deleted manually from disk
+          final validSongs = album.songs.where((s) {
+            if (s.isLocalFile) {
+              final path = s.filePath ?? s.videoId;
+              return path.isNotEmpty && File(path).existsSync();
+            }
+            return true;
+          }).toList();
+
+          syncedAlbums.add(album.copyWith(
+            songs: validSongs,
+            lastUpdated: validSongs.length != album.songs.length ? DateTime.now() : album.lastUpdated,
+          ));
+          if (validSongs.length != album.songs.length) updatedCount++;
+        }
+      }
+
+      // Add any newly discovered folders on disk that weren't in _albums
+      for (final newFolderInfo in folderPathToInfo.values) {
+        final folderSongs = newFolderInfo.audioFilePaths.map((audioPath) {
+          final filename = audioPath.split(Platform.pathSeparator).last;
+          final nameWithoutExt = filename.contains('.')
+              ? filename.substring(0, filename.lastIndexOf('.'))
+              : filename;
+          String title = nameWithoutExt;
+          String artist = 'Local Audio';
+          if (nameWithoutExt.contains(' - ')) {
+            final parts = nameWithoutExt.split(' - ');
+            artist = parts[0].trim();
+            title = parts.sublist(1).join(' - ').trim();
+          } else if (nameWithoutExt.contains('-')) {
+            final parts = nameWithoutExt.split('-');
+            artist = parts[0].trim();
+            title = parts.sublist(1).join('-').trim();
+          }
+          return Song(
+            id: audioPath,
+            title: title,
+            artist: artist,
+            thumbnailUrl: '',
+            highResThumbnailUrl: '',
+            duration: const Duration(minutes: 3),
+            videoId: audioPath,
+            filePath: audioPath,
+            albumFolderName: newFolderInfo.folderName,
+          );
+        }).toList();
+
+        final enriched = await LocalMetadataService().enrichSongs(folderSongs);
+
+        syncedAlbums.add(UserAlbum(
+          id: 'folder_${newFolderInfo.folderName.hashCode.abs()}',
+          name: newFolderInfo.folderName,
+          songs: enriched,
+          isCustom: false,
+          folderPath: newFolderInfo.folderPath,
+          isFolderBased: true,
+          lastUpdated: DateTime.now(),
+        ));
+        updatedCount++;
+      }
+
+      _albums.clear();
+      _albums.addAll(syncedAlbums);
+      await _saveAlbums();
+    } catch (e) {
+      debugPrint('Error in syncAlbumsWithStorage: $e');
+    } finally {
+      _isSyncingAlbums = false;
+      notifyListeners();
+    }
+    return updatedCount;
   }
 
   Future<void> deleteAlbumWithProtection(
@@ -1741,26 +2103,82 @@ class PlayerProvider extends ChangeNotifier {
         final updatedSongs = List<Song>.from(targetAlbum.songs);
         for (final song in album.songs) {
           if (!updatedSongs.any((s) => s.videoId == song.videoId)) {
-            updatedSongs.add(song);
+            updatedSongs.add(song.copyWith(albumFolderName: targetAlbum.name));
           }
         }
-        _albums[targetIdx] = targetAlbum.copyWith(songs: updatedSongs);
+        _albums[targetIdx] = targetAlbum.copyWith(
+          songs: updatedSongs,
+          lastUpdated: DateTime.now(),
+        );
       }
     } else if (moveToRecovery) {
-      // Option B: "Do anyway" — move physical files into hidden recovery backup folder
+      // Option B: "Move to Recovery" — safely archive physical files & register songs in the Recovery Vault
       try {
         final docsDir = await getApplicationDocumentsDirectory();
-        final recoveryDir = Directory('${docsDir.path}${Platform.pathSeparator}sonicwave${Platform.pathSeparator}.recovery');
+        final recoveryDir = Directory('${docsDir.path}${Platform.pathSeparator}sonicwave${Platform.pathSeparator}Recovery');
         if (!await recoveryDir.exists()) {
           await recoveryDir.create(recursive: true);
         }
 
+        final List<Song> recoveredSongs = [];
+        final storageService = StorageLocationService();
+        await storageService.initialize();
+
         for (final song in album.songs) {
+          String? newPath = song.filePath;
           final srcPath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
           if (srcPath != null && srcPath.isNotEmpty && File(srcPath).existsSync()) {
             try {
-              await StorageLocationService().moveFile(srcPath, recoveryDir);
-            } catch (_) {}
+              final moved = await storageService.moveFile(srcPath, recoveryDir);
+              if (moved != null) {
+                newPath = moved;
+              }
+            } catch (e) {
+              debugPrint('Error moving physical file to recovery: $e');
+            }
+          }
+
+          final recoveredSong = song.copyWith(
+            filePath: newPath,
+            albumFolderName: 'Recovery',
+          );
+          recoveredSongs.add(recoveredSong);
+        }
+
+        // Find or create "Recovery" album in _albums so user can see, play, and restore them
+        final recIdx = _albums.indexWhere((a) => a.id == 'recovery_vault' || a.name.toLowerCase() == 'recovery');
+        if (recIdx >= 0) {
+          final existingRec = _albums[recIdx];
+          final combined = List<Song>.from(existingRec.songs);
+          for (final song in recoveredSongs) {
+            if (!combined.any((s) => s.videoId == song.videoId)) {
+              combined.add(song);
+            }
+          }
+          _albums[recIdx] = existingRec.copyWith(
+            songs: combined,
+            lastUpdated: DateTime.now(),
+          );
+        } else {
+          final newRecoveryAlbum = UserAlbum(
+            id: 'recovery_vault',
+            name: 'Recovery',
+            songs: recoveredSongs,
+            isCustom: true,
+            folderPath: recoveryDir.path,
+            isFolderBased: false,
+            lastUpdated: DateTime.now(),
+          );
+          _albums.add(newRecoveryAlbum);
+        }
+
+        // Keep _localDeviceSongs in sync so recovered songs appear in local library with RECOVERY badge
+        for (final song in recoveredSongs) {
+          final lIdx = _localDeviceSongs.indexWhere((s) => s.videoId == song.videoId);
+          if (lIdx >= 0) {
+            _localDeviceSongs[lIdx] = song;
+          } else {
+            _localDeviceSongs.add(song);
           }
         }
       } catch (e) {
@@ -1781,7 +2199,7 @@ class PlayerProvider extends ChangeNotifier {
       } catch (_) {}
     }
 
-    _albums.removeAt(idx);
+    _albums.removeWhere((a) => a.id == id);
     notifyListeners();
     await _saveAlbums();
   }
@@ -2000,13 +2418,15 @@ class PlayerProvider extends ChangeNotifier {
             albumFolderName: targetAlbum.name,
           );
 
-    // 1. Remove the old song reference from its previous folder album if any (only on move)
-    if (!isCopyMode && song.albumFolderName != null) {
-      final oldAlbumIdx = _albums.indexWhere((a) => a.name == song.albumFolderName);
-      if (oldAlbumIdx >= 0) {
-        final oldAlbum = _albums[oldAlbumIdx];
-        final updatedOldSongs = oldAlbum.songs.where((s) => s.videoId != song.videoId).toList();
-        _albums[oldAlbumIdx] = oldAlbum.copyWith(songs: updatedOldSongs, lastUpdated: DateTime.now());
+    // 1. Remove the old song reference from its previous album if any (only on move)
+    if (!isCopyMode) {
+      for (int i = 0; i < _albums.length; i++) {
+        if (_albums[i].id != targetAlbumId) {
+          if (_albums[i].songs.any((s) => s.videoId == song.videoId)) {
+            final updatedOldSongs = _albums[i].songs.where((s) => s.videoId != song.videoId).toList();
+            _albums[i] = _albums[i].copyWith(songs: updatedOldSongs, lastUpdated: DateTime.now());
+          }
+        }
       }
     }
 
@@ -2479,24 +2899,150 @@ class PlayerProvider extends ChangeNotifier {
     return isInAppFolder ? DeleteType.permanent : DeleteType.memoryOnly;
   }
 
-  /// Permanently delete a song — removes the physical file from disk AND metadata.
-  ///
-  /// Only use when the file is inside the app-managed folder.
-  Future<void> deleteSongPermanently(Song song) async {
-    // Delete the physical file
-    final filePath = song.filePath ?? song.videoId;
+  /// Permanently delete a song — removes the physical file from disk AND all metadata stores.
+  Future<bool> deleteSongPermanently(Song song) async {
     try {
-      final file = File(filePath);
-      if (await file.exists()) {
-        await file.delete();
+      // Delete the physical file
+      final filePath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
+      if (filePath != null && filePath.isNotEmpty) {
+        final file = File(filePath);
+        if (await file.exists()) {
+          try {
+            await file.delete();
+          } catch (e) {
+            debugPrint('Error deleting physical file: $e');
+          }
+        }
       }
-    } catch (e) {
-      debugPrint('Error deleting physical file: $e');
-    }
 
-    // Remove from all metadata stores
-    await _removeSongFromAllStores(song.videoId);
-    await loadDownloads();
+      // Remove from local device cache
+      _localDeviceSongs.removeWhere((s) => s.videoId == song.videoId || (s.filePath != null && s.filePath == song.filePath));
+      await _saveLocalDeviceSongs();
+
+      // Remove from all metadata stores (downloads, favorites, albums, history)
+      await _removeSongFromAllStores(song.videoId);
+      await loadDownloads();
+
+      // If playing this song, stop
+      if (currentSong?.videoId == song.videoId) {
+        await stop();
+      }
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error in deleteSongPermanently: $e');
+      return false;
+    }
+  }
+
+  /// Move a single song to the Recovery Vault — archive the physical file and
+  /// register it in the Recovery album so it can be restored later.
+  ///
+  /// If [sourceAlbumId] is provided, the song is also removed from that album.
+  Future<bool> moveSongToRecovery(Song song, {String? sourceAlbumId}) async {
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final recoveryDir = Directory(
+          '${docsDir.path}${Platform.pathSeparator}sonicwave${Platform.pathSeparator}Recovery');
+      if (!await recoveryDir.exists()) {
+        await recoveryDir.create(recursive: true);
+      }
+
+      // Move the physical file to the Recovery directory
+      String? newPath = song.filePath;
+      final srcPath =
+          song.filePath ?? (song.isLocalFile ? song.videoId : null);
+      if (srcPath != null &&
+          srcPath.isNotEmpty &&
+          File(srcPath).existsSync()) {
+        try {
+          final storageService = StorageLocationService();
+          await storageService.initialize();
+          final moved =
+              await storageService.moveFile(srcPath, recoveryDir);
+          if (moved != null) {
+            newPath = moved;
+          }
+        } catch (e) {
+          debugPrint('Error moving physical file to recovery: $e');
+        }
+      }
+
+      final recoveredSong = song.copyWith(
+        filePath: newPath,
+        albumFolderName: 'Recovery',
+      );
+
+      // Find or create "Recovery" album
+      final recIdx = _albums.indexWhere(
+          (a) => a.id == 'recovery_vault' || a.name.toLowerCase() == 'recovery');
+      if (recIdx >= 0) {
+        final existingRec = _albums[recIdx];
+        final combined = List<Song>.from(existingRec.songs);
+        if (!combined.any((s) => s.videoId == song.videoId)) {
+          combined.add(recoveredSong);
+        }
+        _albums[recIdx] = existingRec.copyWith(
+          songs: combined,
+          lastUpdated: DateTime.now(),
+        );
+      } else {
+        _albums.add(UserAlbum(
+          id: 'recovery_vault',
+          name: 'Recovery',
+          songs: [recoveredSong],
+          isCustom: true,
+          folderPath: recoveryDir.path,
+          isFolderBased: false,
+          lastUpdated: DateTime.now(),
+        ));
+      }
+
+      // Remove from the source album if specified
+      if (sourceAlbumId != null) {
+        final srcIdx = _albums.indexWhere((a) => a.id == sourceAlbumId);
+        if (srcIdx >= 0) {
+          final updatedSongs = _albums[srcIdx]
+              .songs
+              .where((s) => s.videoId != song.videoId)
+              .toList();
+          _albums[srcIdx] = _albums[srcIdx].copyWith(
+            songs: updatedSongs,
+            lastUpdated: DateTime.now(),
+          );
+        }
+      }
+
+      // Remove from downloads registry (file is now in Recovery, not downloads)
+      await DownloadService().deleteSong(song.videoId);
+
+      // Update local device songs to show RECOVERY badge
+      final lIdx =
+          _localDeviceSongs.indexWhere((s) => s.videoId == song.videoId);
+      if (lIdx >= 0) {
+        _localDeviceSongs[lIdx] = recoveredSong;
+      } else {
+        _localDeviceSongs.add(recoveredSong);
+      }
+
+      await _saveAlbums();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error moving song to recovery: $e');
+      return false;
+    }
+  }
+
+  /// Permanently delete multiple songs from storage
+  Future<int> deleteMultipleSongsPermanently(List<Song> songs) async {
+    int deletedCount = 0;
+    for (final song in songs) {
+      final ok = await deleteSongPermanently(song);
+      if (ok) deletedCount++;
+    }
+    return deletedCount;
   }
 
   /// Remove a song from memory only — the physical file stays on disk.

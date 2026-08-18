@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../providers/settings_provider.dart';
 import '../providers/player_provider.dart';
 import '../theme/app_colors.dart';
@@ -10,6 +9,7 @@ import '../widgets/premium_interaction.dart';
 import '../services/storage_location_service.dart';
 import '../services/updater/github_release_client.dart';
 import '../widgets/updater/update_dialog.dart';
+import '../widgets/storage_diagnostics_card.dart';
 import '../widgets/app_toast.dart';
 import '../constants/app_version.dart';
 import 'sound_studio_screen.dart';
@@ -259,6 +259,9 @@ class SettingsScreen extends StatelessWidget {
     (accent: ThemeAccent.sapphire, name: 'Ocean', a: Color(0xFF448AFF), b: Color(0xFF18FFFF)),
     (accent: ThemeAccent.sakura, name: 'Sakura', a: Color(0xFFFF80AB), b: Color(0xFFEA80FC)),
     (accent: ThemeAccent.lava, name: 'Inferno', a: Color(0xFFFF4B2B), b: Color(0xFFFFAB40)),
+    (accent: ThemeAccent.arctic, name: 'Arctic', a: Color(0xFF00F2FE), b: Color(0xFF4FACFE)),
+    (accent: ThemeAccent.crimson, name: 'Ruby', a: Color(0xFFFF1358), b: Color(0xFFFF5B79)),
+    (accent: ThemeAccent.amethyst, name: 'Amethyst', a: Color(0xFF9933FF), b: Color(0xFFD946EF)),
   ];
 
   Widget _buildThemeSelector(BuildContext context) {
@@ -396,6 +399,55 @@ class SettingsScreen extends StatelessWidget {
                     }).toList(),
                   ),
                 ),
+              ),
+              const SizedBox(height: 18),
+              const Divider(height: 1, color: AppColors.divider),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: settings.accentColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.shuffle_rounded,
+                        color: settings.accentColor, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Auto-Rotate Theme on Launch',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontSize: 14),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Surprises you with a fresh color theme every time the app opens',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: settings.autoRotateThemeOnLaunch,
+                    onChanged: settings.useMaterialYou
+                        ? null
+                        : (val) {
+                            AppHaptics.selection();
+                            settings.setAutoRotateThemeOnLaunch(val);
+                          },
+                    activeThumbColor: settings.accentColor,
+                  ),
+                ],
               ),
             ],
           ),
@@ -918,6 +970,27 @@ class SettingsScreen extends StatelessWidget {
                     case SoundEnhancer.ambient3d:
                       label = '3D Surround';
                       break;
+                    case SoundEnhancer.electronic:
+                      label = 'Electronic';
+                      break;
+                    case SoundEnhancer.rockMetal:
+                      label = 'Rock / Metal';
+                      break;
+                    case SoundEnhancer.hipHop:
+                      label = 'Hip-Hop';
+                      break;
+                    case SoundEnhancer.pop:
+                      label = 'Pop';
+                      break;
+                    case SoundEnhancer.acoustic:
+                      label = 'Acoustic';
+                      break;
+                    case SoundEnhancer.jazzBlues:
+                      label = 'Jazz / Blues';
+                      break;
+                    case SoundEnhancer.nightMode:
+                      label = 'Night Mode';
+                      break;
                   }
 
                   return ChoiceChip(
@@ -1214,134 +1287,7 @@ class SettingsScreen extends StatelessWidget {
   // ══════════════════════════════════════════════════════════════════════
 
   Widget _buildStorageCard(BuildContext context) {
-    return GlassmorphicCard(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.cleaning_services_rounded, color: AppColors.textSecondary, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Clear Image Cache',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Removes all cached cover art images from disk',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              OutlinedButton(
-                onPressed: () async {
-                  imageCache.clear();
-                  imageCache.clearLiveImages();
-                  try {
-                    await DefaultCacheManager().emptyCache();
-                  } catch (e) {
-                    debugPrint('Error clearing disk cache: $e');
-                  }
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Cover art cache cleared successfully'),
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                },
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-                child: Text(
-                  'Clear',
-                  style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-          const Divider(height: 24, color: AppColors.divider),
-          Row(
-            children: [
-              const Icon(Icons.history_rounded, color: AppColors.textSecondary, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Clear History',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Resets recently played history in your library',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              ),
-              OutlinedButton(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (dialogCtx) => AlertDialog(
-                      backgroundColor: AppColors.surface,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      title: const Text('Wipe Playback History?', style: TextStyle(color: Colors.white)),
-                      content: const Text(
-                        'This will clear all recently played tracks from your Library screen. This cannot be undone.',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogCtx),
-                          child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-                        ),
-                        TextButton(
-                          onPressed: () async {
-                            await context.read<PlayerProvider>().clearHistory();
-                            if (context.mounted) {
-                              Navigator.pop(dialogCtx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: const Text('Playback history cleared successfully'),
-                                  backgroundColor: Theme.of(context).colorScheme.primary,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
-                          },
-                          child: const Text('Confirm', style: TextStyle(color: Colors.redAccent)),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.redAccent, width: 1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                ),
-                child: const Text(
-                  'Wipe',
-                  style: TextStyle(color: Colors.redAccent, fontSize: 13),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+    return const StorageDiagnosticsCard();
   }
 
   Widget _buildStorageLocationCard(BuildContext context) {
@@ -1360,8 +1306,8 @@ class SettingsScreen extends StatelessWidget {
         };
         final storageDescriptions = {
           StorageType.appInternal: 'Files hidden in app data (default)',
-          StorageType.deviceInternal: 'Visible in /sonicWave/ folder',
-          StorageType.sdCard: 'Save to external SD card',
+          StorageType.deviceInternal: 'Visible in /sonicWave/ folder on device',
+          StorageType.sdCard: 'Save to external SD card / removable storage',
         };
 
         return GlassmorphicCard(
@@ -1387,7 +1333,7 @@ class SettingsScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Where downloaded files are saved',
+                          'Where downloaded files and albums are stored',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
@@ -1536,7 +1482,7 @@ class SettingsScreen extends StatelessWidget {
         if (context.mounted) {
           AppToast.show(
             context,
-            'No SD card detected on this device',
+            'No external SD card detected on this device',
             type: ToastType.warning,
           );
         }
@@ -1546,36 +1492,37 @@ class SettingsScreen extends StatelessWidget {
       sdPath = sdVolumes.first.path.replaceAll('/${StorageLocationService.appFolderName}', '');
     }
 
-    if (context.mounted) {
-      AppToast.show(context, 'Migrating files & albums to new storage location...', type: ToastType.info);
-    }
-
-    final success = await player.migrateDownloadedFiles(oldType, type, sdCardPath: sdPath);
-    await settings.setStorageType(type, sdCardPath: sdPath);
-
+    // 1. Request permission FIRST if non-internal
     if (type != StorageType.appInternal) {
-      final granted = await settings.storageService.requestStoragePermission();
-      if (!granted && context.mounted) {
-        AppToast.show(
-          context,
-          'Storage permission required. Please grant in app settings.',
-          type: ToastType.warning,
-        );
-        await player.migrateDownloadedFiles(type, StorageType.appInternal);
-        await settings.setStorageType(StorageType.appInternal);
+      final granted = await settings.storageService.requestStoragePermission(targetType: type);
+      if (!granted) {
+        if (context.mounted) {
+          AppToast.show(
+            context,
+            'Storage permission ("All files access") is required for ${type == StorageType.sdCard ? "SD Card" : "Device Storage"}.',
+            type: ToastType.warning,
+          );
+        }
         return;
       }
     }
 
     if (context.mounted) {
+      AppToast.show(context, 'Moving music files & albums to new storage location...', type: ToastType.info);
+    }
+
+    final success = await player.migrateDownloadedFiles(oldType, type, sdCardPath: sdPath);
+    await settings.setStorageType(type, sdCardPath: sdPath);
+
+    if (context.mounted) {
       final label = type == StorageType.appInternal
           ? 'App Internal'
           : type == StorageType.deviceInternal
-              ? 'Device Storage'
+              ? 'Device Storage (/sonicWave/)'
               : 'SD Card';
       AppToast.show(
         context,
-        success ? 'All files & albums moved to $label!' : 'Storage location changed to $label',
+        success ? 'Music library successfully transferred to $label!' : 'Storage location changed to $label',
         type: success ? ToastType.success : ToastType.info,
       );
     }

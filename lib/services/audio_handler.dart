@@ -10,6 +10,7 @@ import 'youtube_service.dart';
 import 'download_service.dart';
 import 'stream_cache_service.dart';
 import 'stream_resolver_service.dart';
+import 'audio_format_sniffer.dart';
 
 class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHandler {
   late final AudioPlayer _player;
@@ -634,59 +635,50 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       YouTubeService.invalidateStreamUrl(song.videoId);
 
       if (resolved.source == 'jiosaavn') {
-        // JioSaavn failed → try YouTube primary
+        // JioSaavn failed → try YouTube (via full resolve which now uses cache-first)
         if (_playGeneration != thisGeneration) return;
         try {
-          final ytUrl = await _youtubeService.getAudioStreamUrl(song.videoId);
-          if (_playGeneration != thisGeneration) return;
-          await _loadResolvedSource(ResolvedStream(ytUrl, source: 'youtube', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song, thisGeneration);
-          return;
+          final ytResolved = await StreamResolverService().resolve(
+            Song(
+              id: song.id,
+              title: song.title,
+              artist: song.artist,
+              thumbnailUrl: song.thumbnailUrl,
+              highResThumbnailUrl: song.highResThumbnailUrl,
+              duration: song.duration,
+              videoId: song.videoId, // stripped of jiosaavn_ prefix context
+            ),
+          );
+          if (ytResolved != null && _playGeneration == thisGeneration) {
+            await _loadResolvedSource(ytResolved, song, thisGeneration);
+            return;
+          }
         } catch (ytError) {
-          debugPrint('[AudioHandler] YouTube primary also failed: $ytError');
+          debugPrint('[AudioHandler] YouTube fallback for JioSaavn also failed: $ytError');
           YouTubeService.invalidateStreamUrl(song.videoId);
         }
       }
 
-      // YouTube primary failed (or JioSaavn→YouTube failed) → try proxy fallback
+      // Primary failed → try forceRefresh resolution (bypasses all caches)
       if (_playGeneration != thisGeneration) return;
+      debugPrint('[AudioHandler] Primary source failed. Retrying with forceRefresh...');
       try {
-        final fallbackUrl = await _youtubeService.getFallbackStreamUrl(song.videoId);
-        if (fallbackUrl == null) {
-          throw Exception('No proxy stream available');
+        final retryResolved = await StreamResolverService()
+            .resolve(song, forceRefresh: true);
+        if (retryResolved != null && _playGeneration == thisGeneration) {
+          await _loadResolvedSource(retryResolved, song, thisGeneration);
+          return;
         }
-        if (_playGeneration != thisGeneration) return;
-        await _loadResolvedSource(ResolvedStream(fallbackUrl, source: 'youtube_fallback', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song, thisGeneration);
-        return;
-      } catch (fbError) {
-        debugPrint('[AudioHandler] Proxy fallback also failed: $fbError');
-        // getFallbackStreamUrl caches whatever yt-dlp hands it, so a failure
-        // here leaves another poisoned entry to clear before the final retry.
-        YouTubeService.invalidateStreamUrl(song.videoId);
+      } catch (retryError) {
+        debugPrint('[AudioHandler] ForceRefresh retry failed: $retryError');
       }
 
-      // All fallbacks exhausted — retry once with extended timeouts for slow connections
-      if (_playGeneration != thisGeneration) return;
-      debugPrint('[AudioHandler] All primary sources failed. Retrying with extended timeout...');
-      try {
-        // forceRefresh is what makes this a real retry. The URL that just
-        // failed to load is very likely still in the 90-minute cache, so
-        // without the bypass this step re-fetched the same dead link and could
-        // only reproduce the same failure more slowly.
-        final retryUrl = await _youtubeService
-            .getAudioStreamUrl(song.videoId, forceRefresh: true)
-            .timeout(const Duration(seconds: 12));
-        if (_playGeneration != thisGeneration) return;
-        await _loadResolvedSource(ResolvedStream(retryUrl, source: 'youtube', headers: const {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}), song, thisGeneration);
-        return;
-      } catch (retryError) {
-        debugPrint('[AudioHandler] Extended retry failed: $retryError');
-        // Leave nothing behind. The user's next tap on this song should start
-        // from a clean resolution, not inherit whatever this attempt cached.
-        YouTubeService.invalidateStreamUrl(song.videoId);
-        throw Exception(
-          'Unable to play this song. Your internet connection may be too slow or the song is temporarily unavailable. Please try again later.'
-        );
-      }
+      // Leave nothing behind. The user's next tap on this song should start
+      // from a clean resolution, not inherit whatever this attempt cached.
+      YouTubeService.invalidateStreamUrl(song.videoId);
+      throw Exception(
+        'Unable to play this song. Your internet connection may be too slow or the song is temporarily unavailable. Please try again later.'
+      );
     }
   }
 
@@ -723,9 +715,63 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     return 'Something went wrong. Please try again.';
   }
 
+  /// Build matching HTTP client headers for a stream URL.
+  /// Matches GoogleVideo's expected User-Agent by player client token (c=IOS, c=TV, c=ANDROID_VR, c=WEB).
+  static Map<String, String> _buildStreamHeaders(ResolvedStream resolved) {
+    if (resolved.headers != null && resolved.headers!.isNotEmpty) {
+      return resolved.headers!;
+    }
+
+    final url = resolved.url.toLowerCase();
+    if (url.contains('googlevideo.com') ||
+        resolved.source == 'youtube' ||
+        resolved.source == 'youtube_fallback') {
+      if (url.contains('c=ios')) {
+        return const {
+          'User-Agent': 'com.google.ios.youtube/19.45.4 (iPhone14,3; U; CPU iOS 18_1 like Mac OS X; en_US)',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+        };
+      } else if (url.contains('c=tv')) {
+        return const {
+          'User-Agent': 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) Cobalt/20.master.0-qa (unlike Gecko) v8/8.8.278.8-bpt',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+        };
+      } else if (url.contains('c=android_vr')) {
+        return const {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Quest 2) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/15.0.0.4.58.291776510 SamsungBrowser/4.0 Chrome/89.0.4389.90 VR Safari/537.36',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+        };
+      } else if (url.contains('c=web') || url.contains('c=mweb')) {
+        return const {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+          'Referer': 'https://www.youtube.com/',
+        };
+      } else {
+        // Universal clean header for Google Video streams: matches desktop/mobile web with proper identity encoding
+        return const {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': '*/*',
+          'Accept-Encoding': 'identity',
+          'Referer': 'https://www.youtube.com/',
+        };
+      }
+    }
+
+    return const {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+    };
+  }
+
   Future<void> _loadResolvedSource(
       ResolvedStream resolved, Song song, int thisGeneration) async {
     final isLocal = song.isLocalFile || song.filePath != null || resolved.source == 'local';
+
     final defaultAlbum = isLocal
         ? 'Local Storage'
         : (resolved.source == 'radio'
@@ -734,7 +780,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
                 ? 'Jamendo'
                 : (resolved.source == 'jiosaavn'
                     ? 'JioSaavn'
-                    : (resolved.source == 'archive' ? 'Archive' : 'YouTube'))));
+                    : (resolved.source == 'archive'
+                        ? 'Archive'
+                        : 'YouTube')))); // youtube, youtube_cached, youtube_proxy all show as YouTube
 
     final mediaItem = MediaItem(
       id: song.videoId,
@@ -751,10 +799,7 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
     await _withPlayerLock(thisGeneration, () async {
       if (resolved.isLive) {
-        final headers = resolved.headers ?? const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': '*/*',
-        };
+        final headers = _buildStreamHeaders(resolved);
         await _player.setAudioSource(
           AudioSource.uri(
             Uri.parse(resolved.url),
@@ -768,16 +813,15 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         final filePath = resolved.url.startsWith('file://')
             ? Uri.parse(resolved.url).toFilePath()
             : resolved.url;
-        debugPrint('[AudioHandler] Playing local audio file: $filePath');
+        final rawFile = File(filePath);
+        final playableFile = await AudioFormatSniffer().getPlayableFile(rawFile);
+        debugPrint('[AudioHandler] Playing local audio file: ${playableFile.path}');
         await _player.setAudioSource(
-          AudioSource.file(filePath, tag: mediaItem),
+          AudioSource.file(playableFile.path, tag: mediaItem),
         );
       } else {
         debugPrint('[AudioHandler] Playing HTTP stream URL: ${resolved.url}');
-        final headers = resolved.headers ?? const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': '*/*',
-        };
+        final headers = _buildStreamHeaders(resolved);
         await _player.setAudioSource(
           await _cachingSourceFor(resolved, song, mediaItem, headers),
         );
@@ -785,26 +829,8 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     });
   }
 
-  /// Build the audio source for a streamed song, caching it to disk on the way
-  /// through when that is safe.
-  ///
-  /// A plain `AudioSource.uri` re-downloads the entire song every time it is
-  /// played, so replaying a track — or scrubbing back into one — costs the full
-  /// transfer again, on mobile data, and stalls if the connection has since got
-  /// worse. just_audio's caching source serves the player and writes the bytes
-  /// to disk simultaneously, so the second play is a local file read.
-  ///
-  /// Cached only when the source is one whose bytes are stable and worth
-  /// keeping: skipped for live radio (no end, and caching a broadcast is
-  /// meaningless) and for anything without a usable id to key on. The cache
-  /// file is keyed by videoId + quality rather than by URL — see
-  /// [StreamCacheService] for why the default naming cannot work here.
-  ///
-  /// `LockCachingAudioSource` is marked experimental upstream. It has been in
-  /// just_audio for years and is what every caching client in this space uses,
-  /// and the catch below means the worst case of it changing under us is that
-  /// a song streams uncached — so the annotation is acknowledged rather than
-  /// avoided.
+  /// Build the audio source for a streamed song, serving from disk if previously cached
+  /// or streaming natively via ExoPlayer's high-performance DefaultHttpDataSource.
   Future<AudioSource> _cachingSourceFor(
     ResolvedStream resolved,
     Song song,
@@ -814,46 +840,27 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     final cacheable = !resolved.isLive &&
         song.videoId.isNotEmpty &&
         resolved.url.startsWith('http');
-    if (!cacheable) {
-      return AudioSource.uri(Uri.parse(resolved.url),
-          headers: headers, tag: mediaItem);
-    }
-
-    try {
-      final cache = StreamCacheService();
-      final file = await cache.fileFor(
-          song.videoId, YouTubeService.streamingQuality.name);
-      final alreadyCached = await file.exists();
-      if (alreadyCached) {
-        // Play the file directly. Handing a cached LockCachingAudioSource back
-        // works too, but going straight to the file skips its HTTP setup
-        // entirely — and means a fully cached song plays with no network at all.
-        debugPrint('[AudioHandler] Stream cache hit: ${song.title}');
-        return AudioSource.file(file.path, tag: mediaItem);
+    if (cacheable) {
+      try {
+        final cache = StreamCacheService();
+        final file = await cache.fileFor(
+            song.videoId, YouTubeService.streamingQuality.name);
+        final alreadyCached = await file.exists();
+        if (alreadyCached && (await file.length()) > 1024) {
+          debugPrint('[AudioHandler] Stream cache hit: ${song.title}');
+          return AudioSource.file(file.path, tag: mediaItem);
+        }
+      } catch (e) {
+        debugPrint('[AudioHandler] Stream cache probe error: $e');
       }
-
-      cache.noteWrite(_estimatedSize(song));
-      // ignore: experimental_member_use
-      return LockCachingAudioSource(
-        Uri.parse(resolved.url),
-        headers: headers,
-        cacheFile: file,
-        tag: mediaItem,
-      );
-    } catch (e) {
-      // Caching is an optimisation, never a reason a song fails to play.
-      debugPrint('[AudioHandler] Stream cache unavailable, streaming direct: $e');
-      return AudioSource.uri(Uri.parse(resolved.url),
-          headers: headers, tag: mediaItem);
     }
-  }
 
-  /// Rough byte size of [song], used only to decide when the cache is due a
-  /// trim. ~48 KB/s is a fair average across the bitrates served here; a song
-  /// with no known duration is assumed to be an ordinary ~4-minute track.
-  static int _estimatedSize(Song song) {
-    final seconds = song.duration.inSeconds;
-    return (seconds > 0 ? seconds : 240) * 48 * 1024;
+    // Direct native streaming via ExoPlayer's DefaultHttpDataSource
+    return AudioSource.uri(
+      Uri.parse(resolved.url),
+      headers: headers,
+      tag: mediaItem,
+    );
   }
 
   /// Prefetch the next 2 songs' stream URLs so skipping is instant
@@ -1276,12 +1283,21 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
       // Professional acoustic profiles mapping to 5 standard bands (typically 60Hz, 230Hz, 910Hz, 4kHz, 14kHz)
       final Map<SoundEnhancer, List<double>> presets = {
-        SoundEnhancer.none: [0.0, 0.0, 0.0, 0.0, 0.0],
-        SoundEnhancer.bassBoost: [9.0, 5.0, -1.5, 0.0, 1.0],
-        SoundEnhancer.trebleBoost: [-2.0, -1.0, 1.0, 6.0, 10.0],
-        SoundEnhancer.vocal: [-4.0, 2.0, 7.0, 5.0, 2.0],
-        SoundEnhancer.ambient3d: [7.0, 3.0, -5.0, 3.0, 8.0],
+        SoundEnhancer.none:        [ 0.0,  0.0,  0.0,  0.0,  0.0],
+        SoundEnhancer.bassBoost:   [ 9.0,  5.0, -1.5,  0.0,  1.0],
+        SoundEnhancer.trebleBoost: [-2.0, -1.0,  1.0,  6.0, 10.0],
+        SoundEnhancer.vocal:       [-4.0,  2.0,  7.0,  5.0,  2.0],
+        SoundEnhancer.ambient3d:   [ 7.0,  3.0, -5.0,  3.0,  8.0],
+        // Genre presets
+        SoundEnhancer.electronic:  [ 5.0, -2.0, -3.0,  4.0,  6.0], // Sub punch, scooped mids, crisp highs
+        SoundEnhancer.rockMetal:   [ 4.0,  3.0,  4.0,  3.0, -1.0], // Tight bass, full mids, warm highs
+        SoundEnhancer.hipHop:      [ 8.0,  6.0, -2.0, -1.0,  2.0], // Deep sub, warm bass, controlled highs
+        SoundEnhancer.pop:         [-1.0,  2.0,  1.0,  4.0,  5.0], // V-curve: warm bass + bright presence
+        SoundEnhancer.acoustic:    [ 0.0,  3.0,  2.0,  3.0,  1.0], // Flat sub, warm natural mids
+        SoundEnhancer.jazzBlues:   [ 3.0,  4.0,  0.0,  2.0,  3.0], // Warm bottom, natural mids, airy highs
+        SoundEnhancer.nightMode:   [-3.0,  1.0,  3.0,  1.0, -4.0], // Vocal-forward, reduced sub & treble
       };
+
 
       final targetGains = presets[mode] ?? [0.0, 0.0, 0.0, 0.0, 0.0];
       await _applyGains(bands, targetGains, parameters.minDecibels, parameters.maxDecibels, smooth);

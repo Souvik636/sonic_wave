@@ -52,26 +52,23 @@ class DownloadNotificationService {
     });
   }
 
-  /// Ask for POST_NOTIFICATIONS once per run.
-  ///
-  /// Android 13+ needs the runtime grant before a notification is visible, and a
-  /// foreground service without a visible notification is a poor deal for the
-  /// user. Asked at the moment of the first shared download rather than at
-  /// startup, so the prompt arrives with something to explain it. A refusal is
-  /// remembered for the session: re-prompting on every share would be nagging.
+  /// Ask for POST_NOTIFICATIONS or check if already granted.
   static Future<bool> ensurePermission() async {
     if (!_supported) return false;
-    if (_permissionAsked) return _permissionGranted;
-    _permissionAsked = true;
     try {
-      final status = await Permission.notification.request();
-      _permissionGranted = status.isGranted;
-      if (!_permissionGranted) {
-        debugPrint('[DownloadNotification] Permission not granted: $status');
+      final status = await Permission.notification.status;
+      if (status.isGranted) {
+        _permissionGranted = true;
+        return true;
+      }
+      if (!_permissionAsked) {
+        _permissionAsked = true;
+        final res = await Permission.notification.request();
+        _permissionGranted = res.isGranted;
+        return _permissionGranted;
       }
     } catch (e) {
-      debugPrint('[DownloadNotification] Permission request failed: $e');
-      _permissionGranted = false;
+      debugPrint('[DownloadNotification] Permission check error: $e');
     }
     return _permissionGranted;
   }
@@ -87,7 +84,7 @@ class DownloadNotificationService {
     if (!_supported) return;
     _installHandler();
     _lastPercent = -1;
-    if (!await ensurePermission()) return;
+    await ensurePermission();
     await _invoke('start', {
       'videoId': videoId,
       'title': title,
@@ -97,17 +94,14 @@ class DownloadNotificationService {
 
   /// Update the progress bar.
   ///
-  /// Only whole-percent changes cross the channel. `onProgress` fires for every
-  /// chunk the socket delivers — hundreds of times a second on a fast
-  /// connection — and each call would otherwise be a binder round-trip plus a
-  /// notification rebuild, for a bar that is 1px wider.
+  /// Only whole-percent changes cross the channel.
   static Future<void> update({
     required String videoId,
     required double progress,
     required String title,
     String? subtitle,
   }) async {
-    if (!_supported || !_permissionGranted) return;
+    if (!_supported) return;
     final percent = (progress.clamp(0.0, 1.0) * 100).round();
     if (percent == _lastPercent) return;
     _lastPercent = percent;
@@ -120,15 +114,11 @@ class DownloadNotificationService {
   }
 
   /// Swap to a terminal notification and let the service stop.
-  ///
-  /// The notification stays (it is no longer ongoing, so it is dismissible) —
-  /// the download finished while the user was elsewhere, and that result is the
-  /// whole reason they shared the link.
   static Future<void> complete({
     required String videoId,
     required String title,
   }) async {
-    if (!_supported || !_permissionGranted) return;
+    if (!_supported) return;
     _lastPercent = -1;
     await _invoke('complete', {'videoId': videoId, 'title': title});
   }
@@ -138,7 +128,7 @@ class DownloadNotificationService {
     required String title,
     String? reason,
   }) async {
-    if (!_supported || !_permissionGranted) return;
+    if (!_supported) return;
     _lastPercent = -1;
     await _invoke('fail', {
       'videoId': videoId,
