@@ -33,15 +33,36 @@ class JioSaavnService {
   }
 
   /// Search for songs on JioSaavn using direct official endpoints + song details resolution.
-  Future<List<Song>> searchSongs(String query, {int maxResults = 12}) async {
+  Future<List<Song>> searchSongs(String query, {int maxResults = 12, int page = 1}) async {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return [];
 
     try {
       final Set<String> pids = {};
 
-      // 1. Search albums via official JioSaavn API
-      final albumSearchUrl = '$_officialApiBase?__call=search.getAlbumResults&_format=json&_marker=0&api_version=4&ctx=web64bit&q=${Uri.encodeComponent(cleanQuery)}&n=6';
+      // 1. Direct song search on JioSaavn official API
+      final songSearchUrl = '$_officialApiBase?__call=search.getResults&_format=json&_marker=0&api_version=4&ctx=web64bit&q=${Uri.encodeComponent(cleanQuery)}&p=$page&n=$maxResults';
+      try {
+        final request = await _client.getUrl(Uri.parse(songSearchUrl)).timeout(const Duration(seconds: 4));
+        final response = await request.close().timeout(const Duration(seconds: 4));
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          final data = jsonDecode(body);
+          if (data is Map && data['results'] is List) {
+            for (final item in data['results']) {
+              final id = item['id']?.toString() ?? item['song_id']?.toString() ?? '';
+              if (id.isNotEmpty) pids.add(id);
+            }
+          }
+        } else {
+          await response.drain();
+        }
+      } catch (e) {
+        debugPrint('[JioSaavn] direct song search failed: $e');
+      }
+
+      // 2. Search albums via official JioSaavn API
+      final albumSearchUrl = '$_officialApiBase?__call=search.getAlbumResults&_format=json&_marker=0&api_version=4&ctx=web64bit&q=${Uri.encodeComponent(cleanQuery)}&p=$page&n=6';
       try {
         final request = await _client.getUrl(Uri.parse(albumSearchUrl)).timeout(const Duration(seconds: 4));
         final response = await request.close().timeout(const Duration(seconds: 4));

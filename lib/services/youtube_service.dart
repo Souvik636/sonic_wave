@@ -763,22 +763,25 @@ class YouTubeService {
   }
 
   /// Search for songs on YouTube (user initiated search)
-  Future<List<Song>> searchSongs(String query, {int maxResults = 20}) async {
+  Future<List<Song>> searchSongs(String query, {int maxResults = 20, int page = 1}) async {
     // 1. Direct YouTube link or video ID detection:
-    final directVideoId = YouTubeLinkParser.extractVideoId(query) ??
-        (RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(query.trim()) ? query.trim() : null);
+    if (page == 1) {
+      final directVideoId = YouTubeLinkParser.extractVideoId(query) ??
+          (RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(query.trim()) ? query.trim() : null);
 
-    if (directVideoId != null) {
-      try {
-        final directSong = await getVideoDetailsResilient(directVideoId);
-        return [directSong];
-      } catch (e) {
-        debugPrint('[YT] Direct link resolution failed for $directVideoId: $e');
+      if (directVideoId != null) {
+        try {
+          final directSong = await getVideoDetailsResilient(directVideoId);
+          return [directSong];
+        } catch (e) {
+          debugPrint('[YT] Direct link resolution failed for $directVideoId: $e');
+        }
       }
     }
 
     try {
-      final searchResults = await _yt.search.search('$query music');
+      final searchTerm = page == 1 ? '$query music' : (page == 2 ? '$query audio' : '$query full song');
+      final searchResults = await _yt.search.search(searchTerm);
       final songs = <Song>[];
 
       for (final result in searchResults.take(maxResults)) {

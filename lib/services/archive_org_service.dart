@@ -12,10 +12,10 @@ class ArchiveOrgService {
     ..connectionTimeout = const Duration(seconds: 4);
 
   /// Search Archive.org for audio tracks matching [query]
-  Future<List<Song>> searchSongs(String query, {int maxResults = 5}) async {
+  Future<List<Song>> searchSongs(String query, {int maxResults = 5, int page = 1}) async {
     try {
       final uri = Uri.parse(
-        'https://archive.org/advancedsearch.php?q=title:(${Uri.encodeComponent(query)})+AND+mediatype:(audio)&fl[]=identifier,title,creator&output=json&rows=$maxResults'
+        'https://archive.org/advancedsearch.php?q=title:(${Uri.encodeComponent(query)})+AND+mediatype:(audio)&fl[]=identifier,title,creator&output=json&rows=$maxResults&page=$page'
       );
       
       final request = await _client.getUrl(uri).timeout(const Duration(seconds: 4));

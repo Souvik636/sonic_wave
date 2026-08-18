@@ -361,24 +361,100 @@ class _SearchScreenState extends State<SearchScreen>
 
     // 4. Search Results List
     if (searchProvider.hasResults) {
+      final resultsCount = searchProvider.results.length;
+      final showLoadMore = searchProvider.hasMore && !settings.offlineModeOnly;
+
       return ListView.builder(
         key: const ValueKey('search_results'),
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.only(top: 8, bottom: 140),
-        itemCount: searchProvider.results.length,
+        itemCount: resultsCount + (showLoadMore ? 1 : 0),
         itemBuilder: (context, index) {
-          final song = searchProvider.results[index];
-          return StaggeredReveal(
-            index: index,
-            child: SongTile(
-              song: song,
+          if (index < resultsCount) {
+            final song = searchProvider.results[index];
+            return StaggeredReveal(
               index: index,
-              onTap: () {
-                context.read<PlayerProvider>().playPlaylist(
-                      searchProvider.results,
-                      startIndex: index,
-                    );
-              },
+              child: SongTile(
+                song: song,
+                index: index,
+                onTap: () {
+                  context.read<PlayerProvider>().playPlaylist(
+                        searchProvider.results,
+                        startIndex: index,
+                      );
+                },
+              ),
+            );
+          }
+
+          // Animated Load More Footer
+          final primaryColor = Theme.of(context).colorScheme.primary;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: searchProvider.isLoadingMore
+                    ? null
+                    : () {
+                        context.read<SearchProvider>().loadMore(
+                              offlineOnly: settings.offlineModeOnly,
+                              downloadedSongs: playerProvider.downloadedSongs,
+                            );
+                      },
+                borderRadius: BorderRadius.circular(16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: AppColors.card.withValues(alpha: 0.8),
+                    border: Border.all(
+                      color: primaryColor.withValues(alpha: searchProvider.isLoadingMore ? 0.6 : 0.25),
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: primaryColor.withValues(alpha: searchProvider.isLoadingMore ? 0.2 : 0.05),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (searchProvider.isLoadingMore)
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                          ),
+                        )
+                      else
+                        Icon(
+                          Icons.expand_more_rounded,
+                          color: primaryColor,
+                          size: 22,
+                        ),
+                      const SizedBox(width: 10),
+                      Text(
+                        searchProvider.isLoadingMore ? 'Loading More Songs...' : 'Load More Songs',
+                        style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: searchProvider.isLoadingMore ? primaryColor : AppColors.textPrimary,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           );
         },

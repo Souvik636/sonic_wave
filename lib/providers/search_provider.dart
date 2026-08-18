@@ -16,7 +16,10 @@ class SearchProvider extends ChangeNotifier {
   List<String> _suggestions = [];
   List<String> _recentSearches = [];
   bool _isLoading = false;
+  bool _isLoadingMore = false;
   bool _isLoadingSuggestions = false;
+  bool _hasMore = true;
+  int _currentPage = 1;
   String? _error;
   Timer? _debounceTimer;
   Timer? _suggestionTimer;
@@ -36,7 +39,10 @@ class SearchProvider extends ChangeNotifier {
   List<String> get suggestions => _suggestions;
   List<String> get recentSearches => List.unmodifiable(_recentSearches);
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
   bool get isLoadingSuggestions => _isLoadingSuggestions;
+  bool get hasMore => _hasMore;
+  int get currentPage => _currentPage;
   String? get error => _error;
   bool get hasResults => _results.isNotEmpty;
 
@@ -114,6 +120,8 @@ class SearchProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     _suggestions = [];
+    _currentPage = 1;
+    _hasMore = true;
     addToRecentSearches(q);
     notifyListeners();
 
@@ -124,6 +132,7 @@ class SearchProvider extends ChangeNotifier {
           return song.title.toLowerCase().contains(queryLower) ||
                  song.artist.toLowerCase().contains(queryLower);
         }).toList();
+        _hasMore = false;
       } else {
         // Check cache first for instant results
         final cacheKey = q.toLowerCase().trim();
@@ -135,21 +144,24 @@ class SearchProvider extends ChangeNotifier {
           return;
         }
 
-        final ytFuture = _youtubeService.searchSongs(q);
-        final archiveFuture = _archiveOrgService.searchSongs(q);
-        final jioFuture = _jioSaavnService.searchSongs(q);
+        final jioFuture = _jioSaavnService.searchSongs(q, maxResults: 12, page: 1);
+        final ytFuture = _youtubeService.searchSongs(q, maxResults: 20, page: 1);
+        final archiveFuture = _archiveOrgService.searchSongs(q, maxResults: 5, page: 1);
         final searchResults = await Future.wait([
+          jioFuture.catchError((_) => <Song>[]),
           ytFuture.catchError((_) => <Song>[]),
           archiveFuture.catchError((_) => <Song>[]),
-          jioFuture.catchError((_) => <Song>[]),
         ]);
-        final ytResults = searchResults[0];
-        final archiveResults = searchResults[1];
-        final jioResults = searchResults[2];
+        final jioResults = searchResults[0];
+        final ytResults = searchResults[1];
+        final archiveResults = searchResults[2];
         
-        final ytWithQuery = ytResults.map((s) => s.copyWith(searchQuery: q)).toList();
         final jioWithQuery = jioResults.map((s) => s.copyWith(searchQuery: q)).toList();
-        _results = [...ytWithQuery, ...jioWithQuery, ...archiveResults];
+        final ytWithQuery = ytResults.map((s) => s.copyWith(searchQuery: q)).toList();
+        
+        // 1) JioSaavn results first, then YouTube, then Archive
+        _results = [...jioWithQuery, ...ytWithQuery, ...archiveResults];
+        _hasMore = (jioResults.length + ytResults.length + archiveResults.length) >= 8;
 
         // Store in cache
         _searchCache[cacheKey] = _CachedSearch(_results, DateTime.now());
@@ -159,6 +171,66 @@ class SearchProvider extends ChangeNotifier {
     } catch (e) {
       _error = 'Failed to search. Please try again.';
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Load more songs for pagination from all sources
+  Future<void> loadMore({bool offlineOnly = false, List<Song> downloadedSongs = const []}) async {
+    if (_isLoadingMore || _isLoading || _query.isEmpty || !_hasMore || offlineOnly) return;
+
+    _isLoadingMore = true;
+    notifyListeners();
+
+    try {
+      final nextPage = _currentPage + 1;
+      final jioFuture = _jioSaavnService.searchSongs(_query, maxResults: 10, page: nextPage);
+      final ytFuture = _youtubeService.searchSongs(_query, maxResults: 15, page: nextPage);
+      final archiveFuture = _archiveOrgService.searchSongs(_query, maxResults: 5, page: nextPage);
+
+      final searchResults = await Future.wait([
+        jioFuture.catchError((_) => <Song>[]),
+        ytFuture.catchError((_) => <Song>[]),
+        archiveFuture.catchError((_) => <Song>[]),
+      ]);
+
+      final jioResults = searchResults[0];
+      final ytResults = searchResults[1];
+      final archiveResults = searchResults[2];
+
+      final existingIds = _results.map((s) => s.videoId).toSet();
+      final newSongs = <Song>[];
+
+      for (final song in jioResults) {
+        if (!existingIds.contains(song.videoId)) {
+          existingIds.add(song.videoId);
+          newSongs.add(song.copyWith(searchQuery: _query));
+        }
+      }
+      for (final song in ytResults) {
+        if (!existingIds.contains(song.videoId)) {
+          existingIds.add(song.videoId);
+          newSongs.add(song.copyWith(searchQuery: _query));
+        }
+      }
+      for (final song in archiveResults) {
+        if (!existingIds.contains(song.videoId)) {
+          existingIds.add(song.videoId);
+          newSongs.add(song);
+        }
+      }
+
+      if (newSongs.isNotEmpty) {
+        _results.addAll(newSongs);
+        _currentPage = nextPage;
+        _hasMore = newSongs.length >= 5;
+      } else {
+        _hasMore = false;
+      }
+    } catch (e) {
+      debugPrint('[SearchProvider] loadMore failed: $e');
+    } finally {
+      _isLoadingMore = false;
       notifyListeners();
     }
   }

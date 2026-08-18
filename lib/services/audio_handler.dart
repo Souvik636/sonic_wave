@@ -413,12 +413,18 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
     try {
       // Update playlist immediately so UI reflects the correct song
-      final existingIndex = _playlist.indexWhere((s) => s.videoId == song.videoId);
-      if (existingIndex >= 0) {
-        _currentIndex = existingIndex;
+      if (_currentIndex >= 0 &&
+          _currentIndex < _playlist.length &&
+          _playlist[_currentIndex].videoId == song.videoId) {
+        // Current index already points to this exact song instance
       } else {
-        _playlist.add(song);
-        _currentIndex = _playlist.length - 1;
+        final existingIndex = _playlist.indexWhere((s) => s.videoId == song.videoId);
+        if (existingIndex >= 0) {
+          _currentIndex = existingIndex;
+        } else {
+          _playlist.add(song);
+          _currentIndex = _playlist.length - 1;
+        }
       }
 
       // Track active song for streaming & background cache lifecycle
