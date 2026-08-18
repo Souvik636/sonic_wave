@@ -158,6 +158,7 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       );
     }
     _init();
+    StreamCacheService.cleanupStagingDirs();
   }
 
   void _init() {
@@ -169,10 +170,30 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     // audio service mid-stop and crashes the app on next launch (see run_log.txt).
     _player.playbackEventStream.map(_transformEvent).listen(
       playbackState.add,
-      onError: (Object e, StackTrace st) {
+      onError: (Object e, StackTrace st) async {
         // just_audio surfaces player errors on this stream; reflect them in
         // playbackState instead of letting them escape as unhandled errors.
         debugPrint('[AudioHandler] playbackEventStream error: $e');
+
+        // Mid-stream connection recovery: check if stream cache file finished downloading
+        final song = currentSong;
+        if (song != null && !song.isLocalFile) {
+          try {
+            final quality = YouTubeService.streamingQuality.name;
+            final cachedPath = await StreamCacheService().getCachedFile(song.videoId, quality);
+            if (cachedPath != null && await File(cachedPath).exists()) {
+              final pos = _player.position;
+              debugPrint('[AudioHandler] Mid-stream connection drop recovered via cache file at $pos');
+              await _player.setAudioSource(AudioSource.file(cachedPath));
+              if (pos > Duration.zero) {
+                await _player.seek(pos);
+              }
+              _player.play();
+              return;
+            }
+          } catch (_) {}
+        }
+
         playbackState.add(playbackState.value.copyWith(
           processingState: AudioProcessingState.error,
         ));
@@ -399,6 +420,9 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         _playlist.add(song);
         _currentIndex = _playlist.length - 1;
       }
+
+      // Track active song for streaming & background cache lifecycle
+      StreamCacheService().setActivePlayingSong(song.videoId);
 
       // Update media item immediately for responsive UI
       _updateMediaItem(song);

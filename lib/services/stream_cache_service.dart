@@ -212,6 +212,30 @@ class StreamCacheService {
   final Map<String, Future<String>> _inFlightDownloads = {};
   final Map<String, List<ValueChanged<String>>> _inFlightPlayableListeners = {};
   final Map<String, String?> _inFlightPlayablePath = {};
+  static const int _maxConcurrentCacheDownloads = 2;
+  int _activeDownloadCount = 0;
+  final List<Completer<void>> _waitingQueue = [];
+  String? _activePlayingVideoId;
+
+  /// Set the currently active playing song to prioritize its cache download.
+  void setActivePlayingSong(String? videoId) {
+    _activePlayingVideoId = videoId;
+  }
+
+  /// Clean up old or orphaned staging directories from previous runs.
+  static Future<void> cleanupStagingDirs() async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      if (!await tempDir.exists()) return;
+      await for (final entity in tempDir.list(followLinks: false)) {
+        if (entity is Directory && entity.path.contains('stream_dl_')) {
+          try {
+            await entity.delete(recursive: true);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
 
   /// Download YouTube audio via yt-dlp native binary directly to the stream
   /// cache, bypassing the problematic ExoPlayer-direct-URL path.
@@ -282,6 +306,35 @@ class StreamCacheService {
   }
 
   Future<String> _executeDownloadToCache({
+    required String videoId,
+    required AudioQuality quality,
+    ValueChanged<String>? onPlayable,
+    ValueChanged<double>? onProgress,
+  }) async {
+    // Concurrency throttle: Non-active background songs wait if pool is full
+    while (_activeDownloadCount >= _maxConcurrentCacheDownloads && _activePlayingVideoId != videoId) {
+      final completer = Completer<void>();
+      _waitingQueue.add(completer);
+      await completer.future;
+    }
+    _activeDownloadCount++;
+
+    try {
+      return await _performDownload(
+        videoId: videoId,
+        quality: quality,
+        onPlayable: onPlayable,
+        onProgress: onProgress,
+      );
+    } finally {
+      _activeDownloadCount = (_activeDownloadCount - 1).clamp(0, 999);
+      if (_waitingQueue.isNotEmpty) {
+        _waitingQueue.removeAt(0).complete();
+      }
+    }
+  }
+
+  Future<String> _performDownload({
     required String videoId,
     required AudioQuality quality,
     ValueChanged<String>? onPlayable,
