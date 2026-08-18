@@ -251,7 +251,7 @@ class JioSaavnService {
       }
     }
 
-    // 2. Fallback: try official JioSaavn song.getDetails endpoint for media_preview_url / vlink
+    // 2. Fallback: try official JioSaavn song.getDetails endpoint for full vlink
     try {
       final detailsUrl = '$_officialApiBase?__call=song.getDetails&pids=$cleanId&_format=json';
       final request = await _client.getUrl(Uri.parse(detailsUrl)).timeout(const Duration(seconds: 4));
@@ -262,13 +262,8 @@ class JioSaavnService {
         final data = jsonDecode(body);
         if (data is Map && data.containsKey(cleanId)) {
           final item = data[cleanId];
-          final mediaPreviewUrl = item['media_preview_url']?.toString() ?? '';
           final vlink = item['vlink']?.toString() ?? '';
 
-          if (mediaPreviewUrl.isNotEmpty && mediaPreviewUrl.startsWith('http')) {
-            _putCache(cleanId, mediaPreviewUrl);
-            return mediaPreviewUrl;
-          }
           if (vlink.isNotEmpty && vlink.startsWith('http')) {
             _putCache(cleanId, vlink);
             return vlink;

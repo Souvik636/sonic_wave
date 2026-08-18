@@ -149,7 +149,7 @@ class SearchProvider extends ChangeNotifier {
         
         final ytWithQuery = ytResults.map((s) => s.copyWith(searchQuery: q)).toList();
         final jioWithQuery = jioResults.map((s) => s.copyWith(searchQuery: q)).toList();
-        _results = [...jioWithQuery, ...ytWithQuery, ...archiveResults];
+        _results = [...ytWithQuery, ...jioWithQuery, ...archiveResults];
 
         // Store in cache
         _searchCache[cacheKey] = _CachedSearch(_results, DateTime.now());
