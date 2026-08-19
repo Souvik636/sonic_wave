@@ -56,6 +56,8 @@ class _PlayerScreenState extends State<PlayerScreen>
   late Animation<double> _albumScale;
   late Animation<double> _controlsOpacity;
   late Animation<Offset> _controlsSlide;
+  bool _isDraggingSeek = false;
+  double _dragSeekValue = 0.0;
 
   @override
   void initState() {
@@ -620,6 +622,8 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Widget _buildProgressBar(PlayerProvider playerProvider) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
     return SlideTransition(
       position: _controlsSlide,
       child: FadeTransition(
@@ -629,58 +633,151 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: StreamBuilder<Duration>(
             stream: playerProvider.positionStream,
             builder: (context, snapshot) {
-              final position = snapshot.data ?? Duration.zero;
+              final position = snapshot.data ?? playerProvider.position;
               final duration = playerProvider.duration;
-              final progress = duration.inMilliseconds > 0
-                  ? position.inMilliseconds / duration.inMilliseconds
-                  : 0.0;
+              final buffered = playerProvider.bufferedPosition;
+
+              final totalMs = duration.inMilliseconds;
+              final posMs = position.inMilliseconds;
+              final bufMs = buffered.inMilliseconds;
+
+              final currentProgress = totalMs > 0 ? (posMs / totalMs).clamp(0.0, 1.0) : 0.0;
+              final bufferProgress = totalMs > 0 ? (bufMs / totalMs).clamp(0.0, 1.0) : 0.0;
+              final displayProgress = _isDraggingSeek ? _dragSeekValue : currentProgress;
+              final displayPosition = _isDraggingSeek
+                  ? Duration(milliseconds: (_dragSeekValue * totalMs).round())
+                  : position;
 
               return Column(
                 children: [
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      thumbShape:
-                          const RoundSliderThumbShape(enabledThumbRadius: 7),
-                      overlayShape:
-                          const RoundSliderOverlayShape(overlayRadius: 16),
-                      activeTrackColor: Theme.of(context).colorScheme.primary,
-                      inactiveTrackColor:
-                          Colors.white.withValues(alpha: 0.15),
-                      thumbColor: Colors.white,
-                      overlayColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-                    ),
-                    child: Slider(
-                      value: progress.clamp(0.0, 1.0),
-                      onChanged: (value) {
-                        final newPosition = Duration(
-                          milliseconds:
-                              (value * duration.inMilliseconds).toInt(),
-                        );
-                        playerProvider.seek(newPosition);
-                      },
-                    ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final maxW = constraints.maxWidth;
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onHorizontalDragStart: (d) {
+                          setState(() {
+                            _isDraggingSeek = true;
+                            _dragSeekValue = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
+                          });
+                        },
+                        onHorizontalDragUpdate: (d) {
+                          setState(() {
+                            _dragSeekValue = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
+                          });
+                        },
+                        onHorizontalDragEnd: (_) {
+                          final seekMs = (_dragSeekValue * totalMs).round();
+                          playerProvider.seek(Duration(milliseconds: seekMs));
+                          setState(() => _isDraggingSeek = false);
+                        },
+                        onTapDown: (d) {
+                          final ratio = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
+                          final seekMs = (ratio * totalMs).round();
+                          playerProvider.seek(Duration(milliseconds: seekMs));
+                        },
+                        child: SizedBox(
+                          height: 36,
+                          child: Stack(
+                            alignment: Alignment.centerLeft,
+                            children: [
+                              // 1. Background Track
+                              Container(
+                                width: maxW,
+                                height: _isDraggingSeek ? 6 : 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                              // 2. Animated / Illuminated Buffered Track
+                              FractionallySizedBox(
+                                widthFactor: bufferProgress,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  height: _isDraggingSeek ? 6 : 4,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.28),
+                                    borderRadius: BorderRadius.circular(3),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.white.withValues(alpha: 0.1),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // 3. Active Played Progress Track with Glow
+                              FractionallySizedBox(
+                                widthFactor: displayProgress,
+                                child: Container(
+                                  height: _isDraggingSeek ? 6 : 4,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        primaryColor,
+                                        primaryColor.withValues(alpha: 0.85),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(3),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: primaryColor.withValues(alpha: 0.5),
+                                        blurRadius: 8,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // 4. Thumb Indicator
+                              Positioned(
+                                left: (displayProgress * maxW - (_isDraggingSeek ? 8 : 6)).clamp(0.0, maxW - (_isDraggingSeek ? 16 : 12)),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 100),
+                                  width: _isDraggingSeek ? 16 : 12,
+                                  height: _isDraggingSeek ? 16 : 12,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: primaryColor.withValues(alpha: 0.6),
+                                        blurRadius: _isDraggingSeek ? 10 : 6,
+                                        spreadRadius: _isDraggingSeek ? 2 : 1,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
+                  const SizedBox(height: 2),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _formatDuration(position),
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 12,
-                                  ),
+                          _formatDuration(displayPosition),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textTertiary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                         ),
                         Text(
                           _formatDuration(duration),
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.textTertiary,
-                                    fontSize: 12,
-                                  ),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textTertiary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                         ),
                       ],
                     ),

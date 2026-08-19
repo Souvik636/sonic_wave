@@ -1110,6 +1110,45 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
   @override
   Future<void> seek(Duration position) async {
+    final song = currentSong;
+    final playerDur = _player.duration;
+
+    // If seeking past the currently downloaded progressive chunk of an online song:
+    if (song != null &&
+        !song.isLocalFile &&
+        playerDur != null &&
+        song.duration > playerDur &&
+        position > playerDur) {
+      debugPrint('[AudioHandler] Seeking past local buffer ($position > $playerDur). Switching to direct stream seek.');
+      try {
+        final httpStream = await _youtubeService.getFallbackStreamUrl(song.videoId) ??
+            await _youtubeService.getAudioStreamUrl(song.videoId);
+        if (httpStream.startsWith('http')) {
+          final headers = _buildStreamHeaders(ResolvedStream(httpStream, source: 'youtube'));
+          final defaultAlbum = song.albumFolderName ?? 'YouTube';
+          final mediaItemObj = MediaItem(
+            id: song.videoId,
+            album: defaultAlbum,
+            title: song.title,
+            artist: song.artist,
+            duration: song.duration,
+          );
+          await _player.setAudioSource(
+            AudioSource.uri(
+              Uri.parse(httpStream),
+              headers: headers,
+              tag: mediaItemObj,
+            ),
+            initialPosition: position,
+          );
+          _player.play();
+          return;
+        }
+      } catch (e) {
+        debugPrint('[AudioHandler] Stream seek switch error: $e');
+      }
+    }
+
     await _player.seek(position);
   }
 

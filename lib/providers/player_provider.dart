@@ -750,8 +750,30 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   Duration get position => _audioHandler.player.position;
-  Duration get duration => _audioHandler.player.duration ?? Duration.zero;
-  Duration get bufferedPosition => _audioHandler.player.bufferedPosition;
+
+  Duration get duration {
+    final songDuration = currentSong?.duration;
+    final playerDuration = _audioHandler.player.duration;
+    if (songDuration != null && songDuration > Duration.zero) {
+      if (playerDuration != null && playerDuration > songDuration) {
+        return playerDuration;
+      }
+      return songDuration;
+    }
+    return playerDuration ?? Duration.zero;
+  }
+
+  Duration get bufferedPosition {
+    final playerBuf = _audioHandler.player.bufferedPosition;
+    final playerDur = _audioHandler.player.duration;
+    final total = duration;
+
+    // For progressive streams, the downloaded chunk's duration acts as the current buffer horizon
+    if (playerDur != null && playerDur > playerBuf) {
+      return playerDur > total ? total : playerDur;
+    }
+    return playerBuf > total ? total : playerBuf;
+  }
 
   Stream<Duration> get positionStream => _audioHandler.player.positionStream;
   Stream<Duration?> get durationStream => _audioHandler.player.durationStream;
