@@ -1152,20 +1152,23 @@ class SettingsScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Manual Custom Equalizer',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Manually adjust acoustic frequency bands',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Manual Custom Equalizer',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Manually adjust acoustic frequency bands',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Switch(
                     value: settings.useCustomEqualizer,
                     onChanged: (v) {
@@ -1253,20 +1256,23 @@ class SettingsScreen extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Offline Mode Only',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Only display and search downloaded tracks',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Offline Mode Only',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 15),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Only display and search downloaded tracks',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Switch(
                 value: settings.offlineModeOnly,
                 onChanged: (v) {

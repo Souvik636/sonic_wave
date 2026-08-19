@@ -129,10 +129,10 @@ class StreamResolverService {
       return null;
     }
 
-    // 6. YouTube song — progressive parallel stream & cache
-    debugPrint('[StreamResolver] Resolving YouTube song exclusively: $id');
+    // 6. YouTube song — high-speed direct stream with parallel background caching
+    debugPrint('[StreamResolver] Resolving YouTube song: $id');
 
-    // 6a. Check stream cache for an existing completed file (instant replay, 0ms)
+    // 6a. Check stream cache for an existing completed file (instant replay, 0ms latency)
     final cache = StreamCacheService();
     final quality = YouTubeService.streamingQuality;
     final cachedFile = await cache.getCachedFile(id, quality.name);
@@ -141,57 +141,19 @@ class StreamResolverService {
       return ResolvedStream(cachedFile, source: 'youtube_cached');
     }
 
-    // 6b. Progressive cache download via native yt-dlp:
-    //     Fires onPlayable at 256KB (~1s) so ExoPlayer plays the local file instantly without 403 errors,
-    //     while the rest downloads in the background.
-    final completer = Completer<ResolvedStream?>();
-
+    // 6b. Start background cache download so future plays are 100% offline-ready & instant
     unawaited(() async {
       try {
-        final path = await cache.downloadToCache(
+        await cache.downloadToCache(
           videoId: id,
           quality: quality,
-          onPlayable: (playablePath) {
-            if (!completer.isCompleted) {
-              debugPrint('[StreamResolver] Progressive cache playable at 256KB for $id: $playablePath');
-              completer.complete(ResolvedStream(playablePath, source: 'youtube_cached'));
-            }
-          },
-        ).timeout(const Duration(seconds: 45));
-
-        if (path.isNotEmpty && !completer.isCompleted) {
-          debugPrint('[StreamResolver] Full cache download completed for $id');
-          completer.complete(ResolvedStream(path, source: 'youtube_cached'));
-        }
+        );
       } catch (e) {
-        if (!completer.isCompleted) {
-          debugPrint('[StreamResolver] Cache download error for $id: $e');
-        }
-      } finally {
-        if (!completer.isCompleted) {
-          completer.complete(null);
-        }
+        debugPrint('[StreamResolver] Background cache download error for $id: $e');
       }
     }());
 
-    // Wait up to 12s for progressive playable buffer (~256KB usually takes 1-2s)
-    final progressiveResult = await completer.future.timeout(
-      const Duration(seconds: 12),
-      onTimeout: () => null,
-    );
-    if (progressiveResult != null) return progressiveResult;
-
-    // 6c. Fallback: Proxy stream URL (Invidious / Piped proxy server-side)
-    try {
-      final proxyUrl = await _youtube.getFallbackStreamUrl(id);
-      if (proxyUrl != null && proxyUrl.startsWith('http')) {
-        return ResolvedStream(proxyUrl, source: 'youtube_proxy');
-      }
-    } catch (e) {
-      debugPrint('[StreamResolver] Proxy fallback failed for $id: $e');
-    }
-
-    // 6d. Last resort: Direct stream URL
+    // 6c. High-performance direct stream resolution (fast unthrottled streaming with zero truncation stalls)
     try {
       final ytUrl = await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
       if (ytUrl.startsWith('http')) {
@@ -199,6 +161,16 @@ class StreamResolverService {
       }
     } catch (e) {
       debugPrint('[StreamResolver] Direct stream fallback failed for $id: $e');
+    }
+
+    // 6d. Fallback: Proxy stream URL (Invidious / Piped proxy server-side)
+    try {
+      final proxyUrl = await _youtube.getFallbackStreamUrl(id);
+      if (proxyUrl != null && proxyUrl.startsWith('http')) {
+        return ResolvedStream(proxyUrl, source: 'youtube_proxy');
+      }
+    } catch (e) {
+      debugPrint('[StreamResolver] Proxy fallback failed for $id: $e');
     }
 
     return null;

@@ -609,14 +609,16 @@ class _StorageDiagnosticsCardState extends State<StorageDiagnosticsCard> {
           ),
         ),
         const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 12,
+          runSpacing: 6,
+          alignment: WrapAlignment.start,
           children: [
             _legendItem(Colors.cyanAccent,
                 'Music (${StorageStats.formatBytes(downloaded)})'),
-            _legendItem(Colors.purpleAccent, 'Stream'),
-            _legendItem(Colors.amberAccent, 'Art'),
-            _legendItem(Colors.tealAccent, 'Staging'),
+            _legendItem(Colors.purpleAccent, 'Stream (${StorageStats.formatBytes(stream)})'),
+            _legendItem(Colors.amberAccent, 'Art (${StorageStats.formatBytes(images)})'),
+            _legendItem(Colors.tealAccent, 'Staging (${StorageStats.formatBytes(staging)})'),
           ],
         ),
       ],

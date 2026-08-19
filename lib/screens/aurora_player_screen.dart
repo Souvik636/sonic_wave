@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/display_service.dart';
 import '../services/download_service.dart';
 import '../services/stream_cache_service.dart';
 import '../widgets/song_album_art.dart';
@@ -112,9 +113,10 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   }
 
   void _startEnergySampling() {
-    // Sample audio energy ~30 fps by watching position deltas
+    // Sample audio energy adaptively (16ms for 90Hz/120Hz high refresh displays, 33ms for 60Hz)
+    final intervalMs = DisplayService().isHighRefreshRate ? 16 : 33;
     _energyTimer?.cancel();
-    _energyTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
+    _energyTimer = Timer.periodic(Duration(milliseconds: intervalMs), (_) {
       if (!mounted) return;
       final pp = context.read<PlayerProvider>();
 

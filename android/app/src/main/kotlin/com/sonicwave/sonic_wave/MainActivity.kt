@@ -16,9 +16,11 @@ class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "com.sonicwave.sonic_wave/intent"
     private val MEDIA_CHANNEL = "com.sonicwave.sonic_wave/media"
     private val DOWNLOAD_CHANNEL = "com.sonicwave.sonic_wave/downloads"
+    private val DISPLAY_CHANNEL = "com.sonicwave.sonic_wave/display"
     private var methodChannel: MethodChannel? = null
     private var mediaChannel: MethodChannel? = null
     private var downloadChannel: MethodChannel? = null
+    private var displayChannel: MethodChannel? = null
     private var initialUri: String? = null
     private var initialSharedText: String? = null
 
@@ -307,6 +309,63 @@ class MainActivity : AudioServiceActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        displayChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DISPLAY_CHANNEL)
+        displayChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "enableHighRefreshRate" -> {
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                            runOnUiThread {
+                                val currentWindow = window
+                                val display = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                                    display
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    currentWindow.windowManager.defaultDisplay
+                                }
+                                val modes = display?.supportedModes ?: emptyArray()
+                                var bestMode: android.view.Display.Mode? = null
+                                for (mode in modes) {
+                                    if (bestMode == null || mode.refreshRate > bestMode.refreshRate) {
+                                        bestMode = mode
+                                    }
+                                }
+                                if (bestMode != null && bestMode.refreshRate > 60f) {
+                                    val params = currentWindow.attributes
+                                    params.preferredDisplayModeId = bestMode.modeId
+                                    currentWindow.attributes = params
+                                }
+                            }
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
+                }
+                "getSupportedRefreshRates" -> {
+                    try {
+                        val rates = mutableListOf<Double>()
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                            val display = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                                display
+                            } else {
+                                @Suppress("DEPRECATION")
+                                window.windowManager.defaultDisplay
+                            }
+                            val modes = display?.supportedModes ?: emptyArray()
+                            for (mode in modes) {
+                                rates.add(mode.refreshRate.toDouble())
+                            }
+                        }
+                        result.success(rates.distinct())
+                    } catch (e: Exception) {
+                        result.success(listOf(60.0))
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -316,6 +375,8 @@ class MainActivity : AudioServiceActivity() {
         DownloadForegroundService.channel = null
         downloadChannel?.setMethodCallHandler(null)
         downloadChannel = null
+        displayChannel?.setMethodCallHandler(null)
+        displayChannel = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 }

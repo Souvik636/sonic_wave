@@ -11,6 +11,7 @@ import 'providers/settings_provider.dart';
 import 'screens/splash_screen.dart';
 import 'services/app_messenger.dart';
 import 'services/audio_handler.dart';
+import 'services/display_service.dart';
 import 'services/jamendo_service.dart';
 import 'services/ytdlp_runtime.dart';
 import 'theme/app_theme.dart';
@@ -50,13 +51,10 @@ Future<void> main() async {
 
   runApp(const SonicWaveApp());
 
-  // Warm the yt-dlp runtime (binary + FFmpeg unpack) AFTER the first frame, so
-  // the cost overlaps UI paint instead of landing inline on the first play.
-  // Deliberately not awaited: playback never waits on this — the resolver races
-  // Explode/Invidious/Piped, none of which need yt-dlp, and getYtDlpStreamUrl
-  // shares this same single-flight future when it does.
+  // Warm the yt-dlp runtime and activate high refresh rate (90Hz/120Hz)
   WidgetsBinding.instance.addPostFrameCallback((_) {
     YtDlpRuntime.ensureInitialized();
+    DisplayService().initialize();
   });
 }
 
