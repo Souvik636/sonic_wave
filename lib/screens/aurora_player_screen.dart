@@ -225,9 +225,14 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   }
 
   String _formatDuration(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$m:$s';
+    if (d.isNegative) return '0:00';
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60);
+    final seconds = d.inSeconds.remainder(60);
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -751,155 +756,199 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   // SEEK BAR — draggable progress with time labels
   // ════════════════════════════════════════════════════════════════════════
   Widget _buildSeekBar(PlayerProvider pp, double progress, Color primary) {
-    final displayProgress = _isDraggingSeek ? _dragSeekValue : progress;
-    final displayPosition = _isDraggingSeek
-        ? Duration(milliseconds: (_dragSeekValue * pp.duration.inMilliseconds).round())
-        : pp.position;
-    final remaining = pp.duration - displayPosition;
+    return StreamBuilder<Duration>(
+      stream: pp.positionStream,
+      builder: (context, snapshot) {
+        final position = snapshot.data ?? pp.position;
+        final duration = pp.duration;
+        final buffered = pp.bufferedPosition;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 36),
-      child: Column(
-        children: [
-          // ── Seek slider ─────────────────────────────────────────
-          SizedBox(
-            height: 32,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final maxW = constraints.maxWidth;
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onPanStart: (d) {
-                    setState(() {
-                      _isDraggingSeek = true;
-                      _dragSeekValue = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
-                    });
-                  },
-                  onPanUpdate: (d) {
-                    setState(() {
-                      _dragSeekValue = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
-                    });
-                  },
-                  onPanEnd: (_) {
-                    final seekMs = (_dragSeekValue * pp.duration.inMilliseconds).round();
-                    pp.seek(Duration(milliseconds: seekMs));
-                    setState(() => _isDraggingSeek = false);
-                  },
-                  onTapDown: (d) {
-                    final ratio = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
-                    final seekMs = (ratio * pp.duration.inMilliseconds).round();
-                    pp.seek(Duration(milliseconds: seekMs));
-                  },
-                  child: Center(
-                    child: SizedBox(
-                      height: 32,
-                      child: Stack(
-                        alignment: Alignment.centerLeft,
-                        children: [
-                          // Track background
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Container(
-                                height: _isDraggingSeek ? 8 : 5,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Buffered indicator
-                          FractionallySizedBox(
-                            widthFactor: pp.duration.inMilliseconds > 0
-                                ? (pp.bufferedPosition.inMilliseconds /
-                                        pp.duration.inMilliseconds)
-                                    .clamp(0.0, 1.0)
-                                : 0.0,
-                            child: Container(
-                              height: _isDraggingSeek ? 8 : 5,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ),
-                          // Progress fill — energy-reactive glow
-                          FractionallySizedBox(
-                            widthFactor: displayProgress,
-                            child: Container(
-                              height: _isDraggingSeek ? 8 : 5,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    primary,
-                                    primary.withValues(alpha: 0.7 + _overallEnergy * 0.3),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(4),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: primary.withValues(alpha: 0.3 + _overallEnergy * 0.2),
-                                    blurRadius: 6 + _bassEnergy * 6,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          // Thumb dot
-                          Positioned(
-                            left: (displayProgress * maxW - 7).clamp(0.0, maxW - 14),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 100),
-                              width: _isDraggingSeek ? 16 : 14,
-                              height: _isDraggingSeek ? 16 : 14,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: primary.withValues(alpha: 0.5),
-                                    blurRadius: _isDraggingSeek ? 12 : 6,
-                                    spreadRadius: _isDraggingSeek ? 2 : 0,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 6),
-          // ── Time labels ──────────────────────────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        final totalMs = duration.inMilliseconds;
+        final posMs = position.inMilliseconds;
+        final bufMs = buffered.inMilliseconds;
+
+        final currentProgress = totalMs > 0 ? (posMs / totalMs).clamp(0.0, 1.0) : 0.0;
+        final bufferProgress = totalMs > 0 ? (bufMs / totalMs).clamp(0.0, 1.0) : 0.0;
+        final displayProgress = _isDraggingSeek ? _dragSeekValue : currentProgress;
+        final displayPosition = _isDraggingSeek
+            ? Duration(milliseconds: (_dragSeekValue * totalMs).round())
+            : position;
+        final remaining = duration - displayPosition;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 36),
+          child: Column(
             children: [
-              Text(
-                _formatDuration(displayPosition),
-                style: GoogleFonts.jetBrainsMono(
-                  color: Colors.white38,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
+              // ── Seek slider ─────────────────────────────────────────
+              SizedBox(
+                height: 32,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxW = constraints.maxWidth;
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanStart: (d) {
+                        setState(() {
+                          _isDraggingSeek = true;
+                          _dragSeekValue = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
+                        });
+                      },
+                      onPanUpdate: (d) {
+                        setState(() {
+                          _dragSeekValue = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
+                        });
+                      },
+                      onPanEnd: (_) {
+                        final seekMs = (_dragSeekValue * totalMs).round();
+                        pp.seek(Duration(milliseconds: seekMs));
+                        setState(() => _isDraggingSeek = false);
+                      },
+                      onTapDown: (d) {
+                        final ratio = (d.localPosition.dx / maxW).clamp(0.0, 1.0);
+                        final seekMs = (ratio * totalMs).round();
+                        pp.seek(Duration(milliseconds: seekMs));
+                      },
+                      child: Center(
+                        child: SizedBox(
+                          height: 32,
+                          child: Stack(
+                            alignment: Alignment.centerLeft,
+                            children: [
+                              // Track background
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                  child: Container(
+                                    height: _isDraggingSeek ? 8 : 5,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Animated Cosmic Aurora Plasma Buffered Indicator
+                              FractionallySizedBox(
+                                widthFactor: bufferProgress,
+                                child: AnimatedBuilder(
+                                  animation: _auroraController,
+                                  builder: (context, _) {
+                                    final auroraVal = _auroraController.value;
+                                    final plasmaHue = (HSLColor.fromColor(primary).hue + (auroraVal * 60.0)) % 360;
+                                    final plasmaColor = HSLColor.fromAHSL(
+                                      1.0,
+                                      plasmaHue,
+                                      0.85,
+                                      0.60,
+                                    ).toColor();
+
+                                    return Container(
+                                      height: _isDraggingSeek ? 8 : 5,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(4),
+                                        gradient: LinearGradient(
+                                          begin: Alignment.centerLeft,
+                                          end: Alignment.centerRight,
+                                          colors: [
+                                            primary.withValues(alpha: 0.20 + _overallEnergy * 0.15),
+                                            plasmaColor.withValues(alpha: 0.45 + _bassEnergy * 0.25),
+                                            primary.withValues(alpha: 0.30),
+                                          ],
+                                          stops: [
+                                            0.0,
+                                            (auroraVal * 0.7 + 0.15).clamp(0.0, 1.0),
+                                            1.0,
+                                          ],
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: plasmaColor.withValues(alpha: 0.35 + _bassEnergy * 0.2),
+                                            blurRadius: 8 + _bassEnergy * 6,
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              // Progress fill — energy-reactive glow
+                              FractionallySizedBox(
+                                widthFactor: displayProgress,
+                                child: Container(
+                                  height: _isDraggingSeek ? 8 : 5,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        primary,
+                                        primary.withValues(alpha: 0.7 + _overallEnergy * 0.3),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(4),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: primary.withValues(alpha: 0.3 + _overallEnergy * 0.2),
+                                        blurRadius: 6 + _bassEnergy * 6,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Thumb dot
+                              Positioned(
+                                left: (displayProgress * maxW - 7).clamp(0.0, maxW - 14),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 100),
+                                  width: _isDraggingSeek ? 16 : 14,
+                                  height: _isDraggingSeek ? 16 : 14,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: primary.withValues(alpha: 0.5),
+                                        blurRadius: _isDraggingSeek ? 12 : 6,
+                                        spreadRadius: _isDraggingSeek ? 2 : 0,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
-              Text(
-                '-${_formatDuration(remaining.isNegative ? Duration.zero : remaining)}',
-                style: GoogleFonts.jetBrainsMono(
-                  color: Colors.white38,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
+              const SizedBox(height: 6),
+              // ── Time labels ──────────────────────────────────────────
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _formatDuration(displayPosition),
+                    style: GoogleFonts.jetBrainsMono(
+                      color: Colors.white38,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    '-${_formatDuration(remaining.isNegative ? Duration.zero : remaining)}',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: Colors.white38,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 

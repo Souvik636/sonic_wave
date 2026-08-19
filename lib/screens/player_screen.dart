@@ -56,6 +56,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   late Animation<double> _albumScale;
   late Animation<double> _controlsOpacity;
   late Animation<Offset> _controlsSlide;
+  late AnimationController _shimmerController;
   bool _isDraggingSeek = false;
   double _dragSeekValue = 0.0;
 
@@ -115,6 +116,12 @@ class _PlayerScreenState extends State<PlayerScreen>
       ),
     );
 
+    // Linear studio shimmer for progressive buffer
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+
     _entranceController.forward();
 
     // Start rotation based on playing state
@@ -147,6 +154,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _entranceController.dispose();
     _ambientController.dispose();
     _visualizerController.dispose();
+    _shimmerController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -690,22 +698,40 @@ class _PlayerScreenState extends State<PlayerScreen>
                                   borderRadius: BorderRadius.circular(3),
                                 ),
                               ),
-                              // 2. Animated / Illuminated Buffered Track
+                              // 2. Animated / Illuminated Buffered Track with Linear Studio Shimmer
                               FractionallySizedBox(
                                 widthFactor: bufferProgress,
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 300),
-                                  height: _isDraggingSeek ? 6 : 4,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.28),
-                                    borderRadius: BorderRadius.circular(3),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.white.withValues(alpha: 0.1),
-                                        blurRadius: 4,
+                                child: AnimatedBuilder(
+                                  animation: _shimmerController,
+                                  builder: (context, _) {
+                                    final shimmer = _shimmerController.value;
+                                    return Container(
+                                      height: _isDraggingSeek ? 6 : 4,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(3),
+                                        gradient: LinearGradient(
+                                          begin: Alignment.centerLeft,
+                                          end: Alignment.centerRight,
+                                          colors: [
+                                            Colors.white.withValues(alpha: 0.16),
+                                            Colors.white.withValues(alpha: 0.45),
+                                            Colors.white.withValues(alpha: 0.16),
+                                          ],
+                                          stops: [
+                                            (shimmer - 0.3).clamp(0.0, 1.0),
+                                            shimmer.clamp(0.0, 1.0),
+                                            (shimmer + 0.3).clamp(0.0, 1.0),
+                                          ],
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.white.withValues(alpha: 0.12),
+                                            blurRadius: 4,
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
+                                    );
+                                  },
                                 ),
                               ),
                               // 3. Active Played Progress Track with Glow
@@ -1057,8 +1083,13 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds % 60;
+    if (duration.isNegative) return '0:00';
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
