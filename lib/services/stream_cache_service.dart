@@ -503,10 +503,12 @@ class StreamCacheService {
         notifyPlayable(cacheFile.path);
       }
 
-      // Clean up staging
-      try {
-        await stagingDirObj.delete(recursive: true);
-      } catch (_) {}
+      // Clean up staging directory only if this is NOT currently being played
+      if (_activePlayingVideoId != videoId) {
+        try {
+          await stagingDirObj.delete(recursive: true);
+        } catch (_) {}
+      }
 
       YtDlpRuntime.markHealthy();
       return cacheFile.path;

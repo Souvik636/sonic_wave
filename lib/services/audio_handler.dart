@@ -1217,6 +1217,23 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       return;
     }
 
+    // Check for premature completion during progressive streaming (The Seamless Stitch Guard)
+    final song = currentSong;
+    if (song != null && !song.isLocalFile && song.duration > const Duration(seconds: 15)) {
+      final pos = _player.position;
+      final expectedDuration = song.duration;
+      // If completed when we are NOT near the actual end of the track (e.g. played 30s of a 4min song)
+      if (pos < expectedDuration - const Duration(seconds: 6)) {
+        debugPrint('[AudioHandler] Progressive buffer reached boundary at $pos / $expectedDuration — executing seamless stitch');
+        _attemptMidStreamStitch(song, pos);
+        return;
+      }
+    }
+
+    _advanceQueue();
+  }
+
+  void _advanceQueue() {
     switch (_repeatMode) {
       case AudioServiceRepeatMode.one:
         _player.seek(Duration.zero);
@@ -1233,6 +1250,38 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       default:
         break;
     }
+  }
+
+  Future<void> _attemptMidStreamStitch(Song song, Duration pos) async {
+    try {
+      final quality = YouTubeService.streamingQuality.name;
+      final cachedPath = await StreamCacheService().getCachedFile(song.videoId, quality);
+      if (cachedPath != null && await File(cachedPath).exists()) {
+        final len = await File(cachedPath).length();
+        if (len > 128 * 1024) {
+          debugPrint('[AudioHandler] Seamless stitch resuming playback at $pos via full cache file ($len bytes)');
+          await _player.setAudioSource(AudioSource.file(cachedPath));
+          await _player.seek(pos);
+          _player.play();
+          return;
+        }
+      }
+
+      // If cache is still finalizing, wait 800ms and retry once
+      await Future.delayed(const Duration(milliseconds: 800));
+      final retryCache = await StreamCacheService().getCachedFile(song.videoId, quality);
+      if (retryCache != null && await File(retryCache).exists()) {
+        debugPrint('[AudioHandler] Seamless stitch retry resuming playback at $pos');
+        await _player.setAudioSource(AudioSource.file(retryCache));
+        await _player.seek(pos);
+        _player.play();
+        return;
+      }
+    } catch (e) {
+      debugPrint('[AudioHandler] Seamless stitch error: $e');
+    }
+
+    _advanceQueue();
   }
 
   void removeFromPlaylist(int index) {
