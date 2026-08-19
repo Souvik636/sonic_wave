@@ -126,19 +126,6 @@ class StreamResolverService {
       if (saavnUrl != null && saavnUrl.startsWith('http')) {
         return ResolvedStream(saavnUrl, source: 'jiosaavn');
       }
-
-      // Fallback: If JioSaavn stream is unavailable, seamlessly resolve matching full track on YouTube
-      try {
-        final query = song.artist.isNotEmpty ? '${song.title} ${song.artist}' : song.title;
-        final ytSongs = await _youtube.searchSongs(query, maxResults: 1);
-        if (ytSongs.isNotEmpty) {
-          final matchedYtSong = ytSongs.first;
-          debugPrint('[StreamResolver] JioSaavn fallback mapped to YouTube: ${matchedYtSong.videoId}');
-          return resolve(matchedYtSong, forceRefresh: forceRefresh);
-        }
-      } catch (e) {
-        debugPrint('[StreamResolver] JioSaavn YouTube fallback failed: $e');
-      }
       return null;
     }
 

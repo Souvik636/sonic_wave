@@ -182,9 +182,9 @@ class StreamCacheService {
   }
 
   /// Minimum bytes before we consider a partially-downloaded file playable.
-  /// ExoPlayer needs a few hundred KB of AAC/Opus header + audio data before it
-  /// can initialize the codec and start outputting audio.
-  static const int _playableThreshold = 256 * 1024; // 256 KB
+  /// ExoPlayer only needs ~128 KB of audio header + initial stream data to start
+  /// decoding and playing while yt-dlp continues downloading in the background.
+  static const int _playableThreshold = 128 * 1024; // 128 KB
 
   /// Check if a playable cache file exists for [songId] at [quality].
   Future<bool> hasCache(String songId, String quality) async {
@@ -407,9 +407,9 @@ class StreamCacheService {
           '--socket-timeout': '6',
           '-R': '2',
           '-S': YouTubeService.ytDlpAudioSorter(quality),
-          // Start with ios (fastest unthrottled client), with fallbacks for resilience:
+          // Fast client extraction chain (android, ios, web):
           '--extractor-args':
-              'youtube:player_client=ios,tv,mweb,android,web;skip=hls,dash,translated_subs,webpage',
+              'youtube:player_client=android,ios,web;skip=hls,dash,translated_subs,webpage',
           // Write directly to output file, not .part → enables progressive monitoring
           '--no-part': '',
           // Skip unnecessary side-files
@@ -434,10 +434,10 @@ class StreamCacheService {
         }
       }
 
-      // Start a timer to monitor staging directory for file growth.
+      // Start a fast timer to monitor staging directory for file growth.
       // With --no-part, yt-dlp writes directly to the output file, so we can
-      // detect playability progressively even during download.
-      monitorTimer = Timer.periodic(const Duration(milliseconds: 400), (_) async {
+      // detect playability progressively in ~500-1000ms.
+      monitorTimer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
         if (playableFired) return;
         try {
           final entities = await stagingDirObj.list().toList();

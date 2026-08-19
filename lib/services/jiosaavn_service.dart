@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/song.dart';
+import 'des_cipher.dart';
 import 'encoding_sanitizer.dart';
 
 class JioSaavnService {
@@ -214,7 +215,40 @@ class JioSaavnService {
       return cached.url;
     }
 
-    // 1. Try wrapper endpoints for 320kbps / 160kbps decoded audio links
+    // 1. Direct official JioSaavn DES-ECB decryption of encrypted_media_url (Fastest & 100% exact)
+    try {
+      final detailsUrl = '$_officialApiBase?__call=song.getDetails&pids=$cleanId&_format=json';
+      final request = await _client.getUrl(Uri.parse(detailsUrl)).timeout(const Duration(seconds: 4));
+      final response = await request.close().timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final body = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(body);
+        if (data is Map && data.containsKey(cleanId)) {
+          final item = data[cleanId];
+          final encUrl = item['encrypted_media_url']?.toString() ?? '';
+          if (encUrl.isNotEmpty) {
+            final decrypted = DesCipher.decryptJioSaavnMediaUrl(encUrl);
+            if (decrypted != null && decrypted.startsWith('http')) {
+              _putCache(cleanId, decrypted);
+              debugPrint('[JioSaavn] Decrypted direct 320kbps URL for $cleanId: $decrypted');
+              return decrypted;
+            }
+          }
+          final vlink = item['vlink']?.toString() ?? '';
+          if (vlink.isNotEmpty && vlink.startsWith('http')) {
+            _putCache(cleanId, vlink);
+            return vlink;
+          }
+        }
+      } else {
+        await response.drain();
+      }
+    } catch (e) {
+      debugPrint('[JioSaavn] official getStreamUrlById failed: $e');
+    }
+
+    // 2. Fallback: Try wrapper endpoints for 320kbps / 160kbps decoded audio links
     for (final base in _wrapperUrls) {
       final url = '$base/api/songs/$cleanId';
       try {
@@ -270,31 +304,6 @@ class JioSaavnService {
       } catch (e) {
         debugPrint('[JioSaavn] getStreamUrlById failed for $base: $e');
       }
-    }
-
-    // 2. Fallback: try official JioSaavn song.getDetails endpoint for full vlink
-    try {
-      final detailsUrl = '$_officialApiBase?__call=song.getDetails&pids=$cleanId&_format=json';
-      final request = await _client.getUrl(Uri.parse(detailsUrl)).timeout(const Duration(seconds: 4));
-      final response = await request.close().timeout(const Duration(seconds: 4));
-
-      if (response.statusCode == 200) {
-        final body = await response.transform(utf8.decoder).join();
-        final data = jsonDecode(body);
-        if (data is Map && data.containsKey(cleanId)) {
-          final item = data[cleanId];
-          final vlink = item['vlink']?.toString() ?? '';
-
-          if (vlink.isNotEmpty && vlink.startsWith('http')) {
-            _putCache(cleanId, vlink);
-            return vlink;
-          }
-        }
-      } else {
-        await response.drain();
-      }
-    } catch (e) {
-      debugPrint('[JioSaavn] official getStreamUrlById failed: $e');
     }
 
     return null;
