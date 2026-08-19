@@ -1086,7 +1086,7 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                           ),
                           child: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 200),
-                            child: pp.isBuffering
+                            child: (pp.isBuffering && (!pp.isPlaying || pp.position == Duration.zero))
                                 ? const SizedBox(
                                     key: ValueKey('aurora_loading'),
                                     width: 26,

@@ -1536,10 +1536,13 @@ class _PlayPauseMainButtonState extends State<_PlayPauseMainButton>
                 child: StreamBuilder<ProcessingState>(
                   stream: widget.playerProvider.processingStateStream,
                   builder: (context, stateSnapshot) {
-                    final state =
-                        stateSnapshot.data ?? ProcessingState.idle;
-                    final bool loading = state == ProcessingState.loading ||
-                        state == ProcessingState.buffering;
+                    final state = stateSnapshot.data ?? ProcessingState.idle;
+                    final isPlaying = widget.playerProvider.isPlaying;
+                    final isInitialLoad = !isPlaying || widget.playerProvider.position == Duration.zero;
+                    final bool loading = (state == ProcessingState.loading ||
+                            state == ProcessingState.buffering ||
+                            widget.playerProvider.loadingSong != null) &&
+                        isInitialLoad;
                     return AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
                       transitionBuilder: (child, anim) => FadeTransition(
