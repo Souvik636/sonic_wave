@@ -212,6 +212,7 @@ class StreamCacheService {
   final Map<String, Future<String>> _inFlightDownloads = {};
   final Map<String, List<ValueChanged<String>>> _inFlightPlayableListeners = {};
   final Map<String, String?> _inFlightPlayablePath = {};
+  static final ValueNotifier<Map<String, double>> bufferProgressNotifier = ValueNotifier({});
   static const int _maxConcurrentCacheDownloads = 2;
   int _activeDownloadCount = 0;
   final List<Completer<void>> _waitingQueue = [];
@@ -371,17 +372,12 @@ class StreamCacheService {
 
     // Listen for yt-dlp progress updates
     StreamSubscription<DownloadProgress>? progressSub;
-    if (onProgress != null || onPlayable != null) {
-      progressSub = YoutubeDLFlutter.instance.onProgress.listen((event) {
-        if (event.processId != processId) return;
-        if (event.progress < 0) {
-          onProgress?.call(0.05);
-        } else {
-          final fraction = event.progressFraction.clamp(0.0, 1.0);
-          onProgress?.call(fraction);
-        }
-      });
-    }
+    progressSub = YoutubeDLFlutter.instance.onProgress.listen((event) {
+      if (event.processId != processId) return;
+      final fraction = event.progress < 0 ? 0.05 : event.progressFraction.clamp(0.0, 1.0);
+      bufferProgressNotifier.value = Map.from(bufferProgressNotifier.value)..[videoId] = fraction;
+      onProgress?.call(fraction);
+    });
 
     try {
       debugPrint('[StreamCache] Starting yt-dlp cache download for $videoId');
@@ -510,6 +506,7 @@ class StreamCacheService {
         } catch (_) {}
       }
 
+      bufferProgressNotifier.value = Map.from(bufferProgressNotifier.value)..[videoId] = 1.0;
       YtDlpRuntime.markHealthy();
       return cacheFile.path;
     } catch (e) {
@@ -521,7 +518,7 @@ class StreamCacheService {
       } catch (_) {}
       rethrow;
     } finally {
-      await progressSub?.cancel();
+      await progressSub.cancel();
     }
   }
 }

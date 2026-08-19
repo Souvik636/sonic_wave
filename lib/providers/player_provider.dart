@@ -19,6 +19,7 @@ import '../services/youtube_link_parser.dart';
 import '../services/download_notification_service.dart';
 import '../services/local_metadata_service.dart';
 import '../services/recommendation_engine.dart';
+import '../services/stream_cache_service.dart';
 import '../widgets/app_toast.dart';
 import 'settings_provider.dart';
 
@@ -764,9 +765,23 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   Duration get bufferedPosition {
+    final song = currentSong;
+    final total = duration;
+
+    // Check if StreamCache has an active progressive download fraction for this song
+    if (song != null && !song.isLocalFile) {
+      final cacheFraction = StreamCacheService.bufferProgressNotifier.value[song.videoId];
+      if (cacheFraction != null && cacheFraction > 0.0 && total > Duration.zero) {
+        final calculatedBuffer = Duration(milliseconds: (total.inMilliseconds * cacheFraction).round());
+        if (calculatedBuffer >= total) return total;
+        if (calculatedBuffer > _audioHandler.player.bufferedPosition) {
+          return calculatedBuffer;
+        }
+      }
+    }
+
     final playerBuf = _audioHandler.player.bufferedPosition;
     final playerDur = _audioHandler.player.duration;
-    final total = duration;
 
     // For progressive streams, the downloaded chunk's duration acts as the current buffer horizon
     if (playerDur != null && playerDur > playerBuf) {
