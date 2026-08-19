@@ -664,31 +664,6 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       // every later attempt in this session, from retrying the same dead link.
       YouTubeService.invalidateStreamUrl(song.videoId);
 
-      if (resolved.source == 'jiosaavn') {
-        // JioSaavn failed → try YouTube (via full resolve which now uses cache-first)
-        if (_playGeneration != thisGeneration) return;
-        try {
-          final ytResolved = await StreamResolverService().resolve(
-            Song(
-              id: song.id,
-              title: song.title,
-              artist: song.artist,
-              thumbnailUrl: song.thumbnailUrl,
-              highResThumbnailUrl: song.highResThumbnailUrl,
-              duration: song.duration,
-              videoId: song.videoId, // stripped of jiosaavn_ prefix context
-            ),
-          );
-          if (ytResolved != null && _playGeneration == thisGeneration) {
-            await _loadResolvedSource(ytResolved, song, thisGeneration);
-            return;
-          }
-        } catch (ytError) {
-          debugPrint('[AudioHandler] YouTube fallback for JioSaavn also failed: $ytError');
-          YouTubeService.invalidateStreamUrl(song.videoId);
-        }
-      }
-
       // Primary failed → try forceRefresh resolution (bypasses all caches)
       if (_playGeneration != thisGeneration) return;
       debugPrint('[AudioHandler] Primary source failed. Retrying with forceRefresh...');
