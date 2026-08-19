@@ -2545,7 +2545,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     for (final songList in rawGroupLists) {
       final uniqueSongs = <String, Song>{};
       for (final s in songList) {
-        uniqueSongs[s.videoId] = s;
+        final pathKey = (s.filePath != null && s.filePath!.isNotEmpty)
+            ? PlayerProvider.canonicalizePath(s.filePath!)
+            : s.videoId;
+        uniqueSongs[pathKey] = s;
       }
       if (uniqueSongs.length >= 2) {
         final first = uniqueSongs.values.first;

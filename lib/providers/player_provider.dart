@@ -2499,31 +2499,74 @@ class PlayerProvider extends ChangeNotifier {
     return _sessionNewSongIds.contains(song.videoId) || _sessionNewSongIds.contains(song.id);
   }
 
+  /// Normalize and canonicalize storage paths across Android, Linux, and Windows.
+  /// Standardizes slashes, strips symlink aliases (/sdcard -> /storage/emulated/0),
+  /// and resolves redundant slashes.
+  static String canonicalizePath(String rawPath) {
+    if (rawPath.isEmpty) return rawPath;
+    String p = rawPath.replaceAll('\\', '/');
+    if (p.startsWith('/sdcard/')) {
+      p = '/storage/emulated/0/${p.substring(8)}';
+    } else if (p == '/sdcard') {
+      p = '/storage/emulated/0';
+    } else if (p.startsWith('/storage/self/primary/')) {
+      p = '/storage/emulated/0/${p.substring(22)}';
+    } else if (p == '/storage/self/primary') {
+      p = '/storage/emulated/0';
+    }
+    while (p.contains('//')) {
+      p = p.replaceAll('//', '/');
+    }
+    if (p.length > 1 && p.endsWith('/')) {
+      p = p.substring(0, p.length - 1);
+    }
+    return p;
+  }
+
   List<Song> get localSongsMerged {
     final List<Song> merged = [];
-    final Set<String> paths = {};
+    final Set<String> seenIdentifiers = {};
 
     for (final song in _downloadedSongs) {
       merged.add(song);
-      paths.add(song.videoId);
+      seenIdentifiers.add(song.videoId);
+      seenIdentifiers.add(song.id);
+      if (song.filePath != null && song.filePath!.isNotEmpty) {
+        seenIdentifiers.add(canonicalizePath(song.filePath!));
+      }
     }
 
     for (final song in _localDeviceSongs) {
-      if (!paths.contains(song.videoId) && !paths.contains(song.id)) {
+      final songPath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
+      final normPath = songPath != null && songPath.isNotEmpty ? canonicalizePath(songPath) : null;
+      final isSeen = seenIdentifiers.contains(song.videoId) ||
+          seenIdentifiers.contains(song.id) ||
+          (normPath != null && seenIdentifiers.contains(normPath));
+
+      if (!isSeen) {
         merged.add(song);
-        paths.add(song.videoId);
+        seenIdentifiers.add(song.videoId);
+        seenIdentifiers.add(song.id);
+        if (normPath != null) {
+          seenIdentifiers.add(normPath);
+        }
       }
     }
     return merged;
   }
 
-  Future<void> _scanDirRecursive(Directory dir, List<Song> foundSongs, Set<String> visited) async {
-    final path = dir.path;
-    if (visited.contains(path)) return;
-    visited.add(path);
+  Future<void> _scanDirRecursive(
+    Directory dir,
+    List<Song> foundSongs,
+    Set<String> visitedDirs,
+    Set<String> discoveredFiles,
+  ) async {
+    final normDirPath = canonicalizePath(dir.path);
+    if (visitedDirs.contains(normDirPath)) return;
+    visitedDirs.add(normDirPath);
 
     // Skip hidden folders and Android system directories to optimize scan speed and avoid permissions crashes
-    final name = path.split(Platform.isWindows ? '\\' : '/').last.toLowerCase();
+    final name = normDirPath.split('/').last.toLowerCase();
     if (name.startsWith('.') || name == 'android' || name == 'cache' || name == 'temp') {
       return;
     }
@@ -2531,10 +2574,19 @@ class PlayerProvider extends ChangeNotifier {
     try {
       await for (final entity in dir.list(followLinks: false)) {
         if (entity is File) {
-          final ext = entity.path.split('.').last.toLowerCase();
-          final supportedExts = {'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus', 'wma', 'aiff', 'aif', 'alac', 'mka', 'amr', 'm4b', 'mpeg', 'mp2'};
+          final normFilePath = canonicalizePath(entity.path);
+          if (discoveredFiles.contains(normFilePath)) continue;
+
+          final ext = normFilePath.split('.').last.toLowerCase();
+          final supportedExts = {
+            'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus',
+            'wma', 'aiff', 'aif', 'alac', 'mka', 'amr', 'm4b', 'mpeg', 'mp2'
+          };
           if (supportedExts.contains(ext)) {
-            final filename = entity.uri.pathSegments.last;
+            discoveredFiles.add(normFilePath);
+            final filename = entity.uri.pathSegments.isNotEmpty
+                ? entity.uri.pathSegments.last
+                : normFilePath.split('/').last;
             var nameWithoutExt = filename.contains('.')
                 ? filename.substring(0, filename.lastIndexOf('.'))
                 : filename;
@@ -2558,22 +2610,22 @@ class PlayerProvider extends ChangeNotifier {
             }
 
             foundSongs.add(Song(
-              id: entity.path,
+              id: normFilePath,
               title: title,
               artist: artist,
               thumbnailUrl: '',
               highResThumbnailUrl: '',
               duration: const Duration(minutes: 3),
-              videoId: entity.path,
-              filePath: entity.path,
+              videoId: normFilePath,
+              filePath: normFilePath,
             ));
           }
         } else if (entity is Directory) {
-          await _scanDirRecursive(entity, foundSongs, visited);
+          await _scanDirRecursive(entity, foundSongs, visitedDirs, discoveredFiles);
         }
       }
     } catch (e) {
-      debugPrint('Error scanning dir $path: $e');
+      debugPrint('Error scanning dir $normDirPath: $e');
     }
   }
 
@@ -2601,7 +2653,7 @@ class PlayerProvider extends ChangeNotifier {
       }
 
       // Track existing known paths before scan to tag new items
-      final previousPaths = _localDeviceSongs.map((s) => s.filePath ?? s.videoId).toSet();
+      final previousPaths = _localDeviceSongs.map((s) => canonicalizePath(s.filePath ?? s.videoId)).toSet();
 
       final List<Song> foundSongs = [];
       final Set<String> pathsToScan = {};
@@ -2609,7 +2661,6 @@ class PlayerProvider extends ChangeNotifier {
       if (Platform.isAndroid) {
         // Internal storage root
         pathsToScan.add('/storage/emulated/0');
-        pathsToScan.add('/sdcard');
 
         // Dynamically probe for external SD cards mounted inside /storage
         final storageDir = Directory('/storage');
@@ -2618,7 +2669,7 @@ class PlayerProvider extends ChangeNotifier {
             await for (final entity in storageDir.list(followLinks: false)) {
               if (entity is Directory) {
                 final name = entity.path.split('/').last;
-                if (name != 'self' && name != 'emulated') {
+                if (name != 'self' && name != 'emulated' && name != 'knox' && !name.startsWith('.')) {
                   pathsToScan.add(entity.path);
                 }
               }
@@ -2641,17 +2692,18 @@ class PlayerProvider extends ChangeNotifier {
         pathsToScan.add(docDir.path);
       } catch (_) {}
 
-      final Set<String> visited = {};
+      final Set<String> visitedDirs = {};
+      final Set<String> discoveredFiles = {};
       for (final path in pathsToScan) {
         final dir = Directory(path);
         if (await dir.exists()) {
-          await _scanDirRecursive(dir, foundSongs, visited);
+          await _scanDirRecursive(dir, foundSongs, visitedDirs, discoveredFiles);
         }
       }
 
       // Identify newly discovered tracks for session badge tagging
       for (final song in foundSongs) {
-        final path = song.filePath ?? song.videoId;
+        final path = canonicalizePath(song.filePath ?? song.videoId);
         if (!previousPaths.contains(path)) {
           _sessionNewSongIds.add(song.videoId);
           _sessionNewSongIds.add(song.id);
