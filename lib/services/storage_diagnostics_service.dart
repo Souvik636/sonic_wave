@@ -53,6 +53,7 @@ class StorageRepairReport {
   final int totalScanned;
   final int verifiedTracks;
   final int recoveredTracks;
+  final int containersRepaired;
   final int ghostTracksPurged;
   final int junkFilesCleaned;
   final int albumsSynced;
@@ -62,6 +63,7 @@ class StorageRepairReport {
     this.totalScanned = 0,
     this.verifiedTracks = 0,
     this.recoveredTracks = 0,
+    this.containersRepaired = 0,
     this.ghostTracksPurged = 0,
     this.junkFilesCleaned = 0,
     this.albumsSynced = 0,
@@ -248,6 +250,7 @@ class StorageDiagnosticsService {
     int totalScanned = 0;
     int verifiedTracks = 0;
     int recoveredTracks = 0;
+    int containersRepaired = 0;
     int ghostPurged = 0;
     int junkCleaned = 0;
     int bytesFreed = 0;
@@ -255,16 +258,27 @@ class StorageDiagnosticsService {
     try {
       final downloadService = DownloadService();
       await downloadService.loadDownloads();
-      final currentDownloads = await downloadService.getDownloadedSongs();
-      final currentPaths = <String>{};
 
+      // Step A: Self-healing container header & extension repair
+      final preRepairList = await downloadService.getDownloadedSongs();
+      final prePaths = {for (final s in preRepairList) s.id: s.filePath};
+      await downloadService.repairCorruptedDownloads();
+      final postRepairList = await downloadService.getDownloadedSongs();
+      for (final s in postRepairList) {
+        if (prePaths[s.id] != null && prePaths[s.id] != s.filePath) {
+          containersRepaired++;
+        }
+      }
+
+      final currentDownloads = postRepairList;
+      final currentPaths = <String>{};
       for (final s in currentDownloads) {
         if (s.filePath != null && s.filePath!.isNotEmpty) {
           currentPaths.add(s.filePath!);
         }
       }
 
-      // Step A: Purge Ghost Downloads from Metadata
+      // Step B: Purge Ghost Downloads from Metadata
       final initialCount = currentDownloads.length;
       await downloadService.verifyStorageIntegrity();
       final verifiedList = await downloadService.getDownloadedSongs();
@@ -272,7 +286,7 @@ class StorageDiagnosticsService {
       ghostPurged = initialCount - verifiedTracks;
       if (ghostPurged < 0) ghostPurged = 0;
 
-      // Step B: Scan Physical Directory for Unindexed Audio & Recover Them
+      // Step C: Scan Physical Directory for Unindexed Audio & Recover Them
       final storageDir = await StorageLocationService().getDownloadDir();
       final audioExts = const [
         '.mp3',
@@ -348,7 +362,11 @@ class StorageDiagnosticsService {
         }
       }
 
-      // Step C: Clean staging directory remnants
+      // Step D: Clean staging directory remnants & stream cache staging
+      try {
+        await StreamCacheService.cleanupStagingDirs();
+      } catch (_) {}
+
       final staging = await YtDlpDownloader.stagingDir();
       if (await staging.exists()) {
         await for (final entity in staging.list(recursive: false)) {
@@ -363,20 +381,20 @@ class StorageDiagnosticsService {
         }
       }
 
-      // Step D: Full PlayerProvider sync & Albums repair
+      // Step E: Full PlayerProvider sync & Albums repair
       await playerProvider.verifyAndSyncAllStores();
       await playerProvider.loadDownloads();
       await playerProvider.scanLocalSongs();
       final albumsSynced = await playerProvider.syncAlbumsWithStorage();
 
-      // Step E: Rescan public Android MediaStore
+      // Step F: Rescan public Android MediaStore
       if (await storageDir.exists()) {
         final samplePaths = <String>[];
         await for (final entity in storageDir.list(recursive: false)) {
           if (entity is File &&
               audioExts.any((ext) => entity.path.toLowerCase().endsWith(ext))) {
             samplePaths.add(entity.path);
-            if (samplePaths.length >= 50) break;
+            if (samplePaths.length >= 100) break;
           }
         }
         if (samplePaths.isNotEmpty) {
@@ -388,6 +406,7 @@ class StorageDiagnosticsService {
         totalScanned: totalScanned,
         verifiedTracks: verifiedTracks,
         recoveredTracks: recoveredTracks,
+        containersRepaired: containersRepaired,
         ghostTracksPurged: ghostPurged,
         junkFilesCleaned: junkCleaned,
         albumsSynced: albumsSynced,
@@ -399,6 +418,7 @@ class StorageDiagnosticsService {
         totalScanned: totalScanned,
         verifiedTracks: verifiedTracks,
         recoveredTracks: recoveredTracks,
+        containersRepaired: containersRepaired,
         ghostTracksPurged: ghostPurged,
         junkFilesCleaned: junkCleaned,
         albumsSynced: 0,

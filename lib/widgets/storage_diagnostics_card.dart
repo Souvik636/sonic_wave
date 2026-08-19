@@ -243,6 +243,12 @@ class _StorageDiagnosticsCardState extends State<StorageDiagnosticsCard> {
           children: [
             _buildReportRow(Icons.check_circle_rounded, 'Verified Offline Tracks',
                 '${report.verifiedTracks} tracks', Colors.greenAccent),
+            if (report.containersRepaired > 0)
+              _buildReportRow(
+                  Icons.build_circle_rounded,
+                  'Container Formats Repaired',
+                  '${report.containersRepaired} files',
+                  Colors.orangeAccent),
             _buildReportRow(
                 Icons.library_music_rounded,
                 'Recovered Unindexed Audio',
