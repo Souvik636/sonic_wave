@@ -31,6 +31,7 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
   bool _pressed = false;
   int _activeDeckIndex = 0; // 0 = Now Playing, 1 = Shared Download
   double _verticalDragOffset = 0.0;
+  double _horizontalDragOffset = 0.0;
   SharedDownloadPhase? _lastSeenDownloadPhase;
 
   @override
@@ -130,6 +131,31 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
         return SlideTransition(
           position: _slideAnimation,
           child: GestureDetector(
+            onHorizontalDragStart: (_) {
+              setState(() => _horizontalDragOffset = 0.0);
+            },
+            onHorizontalDragUpdate: (details) {
+              if (activeIndex == 0 && details.primaryDelta != null) {
+                setState(() {
+                  _horizontalDragOffset = (_horizontalDragOffset + details.primaryDelta!).clamp(-90.0, 90.0);
+                });
+              }
+            },
+            onHorizontalDragEnd: (details) {
+              if (activeIndex == 0) {
+                final vel = details.primaryVelocity ?? 0;
+                if (_horizontalDragOffset < -35 || vel < -180) {
+                  // Swiped Left -> Skip Next
+                  AppHaptics.medium();
+                  playerProvider.skipNext();
+                } else if (_horizontalDragOffset > 35 || vel > 180) {
+                  // Swiped Right -> Skip Previous
+                  AppHaptics.medium();
+                  playerProvider.skipPrevious();
+                }
+                setState(() => _horizontalDragOffset = 0.0);
+              }
+            },
             onVerticalDragStart: (_) {
               if (isDualMode) {
                 setState(() => _verticalDragOffset = 0.0);
@@ -160,6 +186,12 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                 }
               }
             },
+            onDoubleTap: activeIndex == 0
+                ? () {
+                    AppHaptics.light();
+                    playerProvider.togglePlayPause();
+                  }
+                : null,
             onTapDown: (_) => setState(() => _pressed = true),
             onTapUp: (_) => setState(() => _pressed = false),
             onTapCancel: () => setState(() => _pressed = false),
@@ -247,12 +279,15 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                         ],
                       )
                     : (song != null
-                        ? _buildNowPlayingContent(
-                            context,
-                            song,
-                            playerProvider,
-                            primaryColor,
-                            isDualMode: false,
+                        ? Transform.translate(
+                            offset: Offset(_horizontalDragOffset, 0),
+                            child: _buildNowPlayingContent(
+                              context,
+                              song,
+                              playerProvider,
+                              primaryColor,
+                              isDualMode: false,
+                            ),
                           )
                         : SharedDownloadCardSurface(
                             status: sharedDownload!,

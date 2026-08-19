@@ -15,6 +15,7 @@ import '../widgets/mini_player.dart';
 import '../widgets/shimmer_loading.dart';
 import '../widgets/song_tile.dart';
 import '../widgets/song_album_art.dart';
+import '../widgets/wearable_connection_banner.dart';
 import '../services/ai_categorization_service.dart';
 import '../services/youtube_service.dart';
 import '../services/archive_org_service.dart';
@@ -47,7 +48,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _localSearchQuery = '';
   String _localSortType = 'default'; // 'default', 'title', 'artist', 'duration', 'size'
   bool _localShowDuplicatesOnly = false;
-  final Set<String> _selectedDuplicateSongIds = {};
+  final Set<String> _selectedDuplicateSongKeys = {};
+  String _duplicateSongKey(Song song) => PlayerProvider.canonicalizePath(song.filePath ?? song.videoId);
   String _localFormatFilter = 'all'; // 'all', 'mp3', 'm4a', 'flac', 'wav', 'aac', 'ogg'
   final TextEditingController _localSearchController = TextEditingController();
   late AnimationController _fadeController;
@@ -225,6 +227,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   },
                 ),
               ),
+
+              // Smartwatch & Wearable Accessory Floating HUD
+              const WearableConnectionBanner(),
             ],
           ),
         ),
@@ -2626,7 +2631,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               final themePrimary = Theme.of(context).colorScheme.primary;
               final ok = await playerProvider.deleteSongPermanently(song);
               setState(() {
-                _selectedDuplicateSongIds.remove(song.videoId);
+                _selectedDuplicateSongKeys.remove(_duplicateSongKey(song));
+                // If all duplicate groups are resolved, auto-switch back to all files view
+                final remainingGroups = _getDuplicateGroups(playerProvider.localSongsMerged);
+                if (remainingGroups.isEmpty && _localShowDuplicatesOnly) {
+                  _localShowDuplicatesOnly = false;
+                }
               });
               if (mounted) {
                 messenger.showSnackBar(
@@ -2645,7 +2655,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _confirmDeleteSelectedDuplicates(BuildContext context, List<Song> allSongs, PlayerProvider playerProvider) {
-    final toDelete = allSongs.where((s) => _selectedDuplicateSongIds.contains(s.videoId)).toList();
+    final toDelete = allSongs.where((s) => _selectedDuplicateSongKeys.contains(_duplicateSongKey(s))).toList();
     if (toDelete.isEmpty) return;
 
     showDialog(
@@ -2694,7 +2704,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               final themePrimary = Theme.of(context).colorScheme.primary;
               final count = await playerProvider.deleteMultipleSongsPermanently(toDelete);
               setState(() {
-                _selectedDuplicateSongIds.clear();
+                _selectedDuplicateSongKeys.clear();
+                // If all duplicate groups are resolved, auto-switch back to all files view
+                final remainingGroups = _getDuplicateGroups(playerProvider.localSongsMerged);
+                if (remainingGroups.isEmpty && _localShowDuplicatesOnly) {
+                  _localShowDuplicatesOnly = false;
+                }
               });
               if (mounted) {
                 messenger.showSnackBar(
@@ -2749,9 +2764,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   setState(() {
                     for (final g in duplicateGroups) {
                       final rec = g.recommendedToKeep;
+                      final recKey = _duplicateSongKey(rec);
                       for (final s in g.songs) {
-                        if (s.videoId != rec.videoId) {
-                          _selectedDuplicateSongIds.add(s.videoId);
+                        final sKey = _duplicateSongKey(s);
+                        if (sKey != recKey) {
+                          _selectedDuplicateSongKeys.add(sKey);
                         }
                       }
                     }
@@ -2768,11 +2785,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(width: 8),
-              if (_selectedDuplicateSongIds.isNotEmpty)
+              if (_selectedDuplicateSongKeys.isNotEmpty)
                 TextButton(
                   onPressed: () {
                     setState(() {
-                      _selectedDuplicateSongIds.clear();
+                      _selectedDuplicateSongKeys.clear();
                     });
                   },
                   child: const Text('Clear Selection', style: TextStyle(color: Colors.white70, fontSize: 11)),
@@ -2787,10 +2804,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildDuplicateGroupCard(DuplicateGroup group, PlayerProvider playerProvider, int groupIndex) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final recommended = group.recommendedToKeep;
+    final recommendedKey = _duplicateSongKey(recommended);
 
     final allRedundantInGroupSelected = group.songs
-        .where((s) => s.videoId != recommended.videoId)
-        .every((s) => _selectedDuplicateSongIds.contains(s.videoId));
+        .where((s) => _duplicateSongKey(s) != recommendedKey)
+        .every((s) => _selectedDuplicateSongKeys.contains(_duplicateSongKey(s)));
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -2847,14 +2865,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     setState(() {
                       if (allRedundantInGroupSelected) {
                         for (final s in group.songs) {
-                          if (s.videoId != recommended.videoId) {
-                            _selectedDuplicateSongIds.remove(s.videoId);
+                          final sKey = _duplicateSongKey(s);
+                          if (sKey != recommendedKey) {
+                            _selectedDuplicateSongKeys.remove(sKey);
                           }
                         }
                       } else {
                         for (final s in group.songs) {
-                          if (s.videoId != recommended.videoId) {
-                            _selectedDuplicateSongIds.add(s.videoId);
+                          final sKey = _duplicateSongKey(s);
+                          if (sKey != recommendedKey) {
+                            _selectedDuplicateSongKeys.add(sKey);
                           }
                         }
                       }
@@ -2881,8 +2901,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               children: group.songs.map((song) {
-                final isRecommended = song.videoId == recommended.videoId;
-                final isSelected = _selectedDuplicateSongIds.contains(song.videoId);
+                final sKey = _duplicateSongKey(song);
+                final isRecommended = sKey == recommendedKey;
+                final isSelected = _selectedDuplicateSongKeys.contains(sKey);
                 final ext = (song.filePath ?? song.videoId).split('.').last.toUpperCase();
 
                 return Container(
@@ -2920,9 +2941,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           onChanged: (val) {
                             setState(() {
                               if (val == true) {
-                                _selectedDuplicateSongIds.add(song.videoId);
+                                _selectedDuplicateSongKeys.add(sKey);
                               } else {
-                                _selectedDuplicateSongIds.remove(song.videoId);
+                                _selectedDuplicateSongKeys.remove(sKey);
                               }
                             });
                           },
@@ -3073,7 +3094,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${_selectedDuplicateSongIds.length} duplicate file(s) selected',
+                    '${_selectedDuplicateSongKeys.length} duplicate file(s) selected',
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(height: 2),
@@ -3638,7 +3659,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               ],
             ),
-            if (_selectedDuplicateSongIds.isNotEmpty)
+            if (_selectedDuplicateSongKeys.isNotEmpty)
               _buildDuplicateBottomBar(allLocalSongs, playerProvider),
           ],
         );

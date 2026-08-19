@@ -48,12 +48,20 @@ class _SharedLinkDownloadCardState extends State<SharedLinkDownloadCard>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
-      reverseDuration: const Duration(milliseconds: 240),
+      duration: const Duration(milliseconds: 400),
+      reverseDuration: const Duration(milliseconds: 350),
     );
-    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _fade = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+      reverseCurve: Curves.easeInCubic,
+    );
     _slide = Tween<Offset>(begin: const Offset(0, 0.35), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+        .animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInOutCubic,
+    ));
   }
 
   @override
@@ -98,12 +106,12 @@ class _SharedLinkDownloadCardState extends State<SharedLinkDownloadCard>
       } else if (status.phase == SharedDownloadPhase.failed) {
         AppHaptics.medium();
       }
-      // Only terminal states time out. A download in progress stays on screen
+      // Only terminal states time out after 10s. A download in progress stays on screen
       // for as long as it takes — it is the only place its progress is shown.
       final linger = switch (status.phase) {
-        SharedDownloadPhase.done => const Duration(seconds: 4),
-        SharedDownloadPhase.duplicate => const Duration(seconds: 4),
-        SharedDownloadPhase.failed => const Duration(seconds: 6),
+        SharedDownloadPhase.done => const Duration(seconds: 10),
+        SharedDownloadPhase.duplicate => const Duration(seconds: 10),
+        SharedDownloadPhase.failed => const Duration(seconds: 10),
         _ => null,
       };
       if (linger != null) {

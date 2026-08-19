@@ -52,13 +52,46 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   Duration _lastPosition = Duration.zero;
   Timer? _energyTimer;
 
-  // ── Seek / Volume state ────────────────────────────────────────────────
+  // ── Seek / Volume / Gesture state ──────────────────────────────────────
   bool _isDraggingSeek = false;
   double _dragSeekValue = 0.0; // 0.0..1.0 for linear bar drag
   bool _isDraggingVolume = false;
   bool _showVolumeBar = false;
   Timer? _volumeHideTimer;
   final PageController _pageController = PageController();
+  int? _seekFeedbackSeconds;
+  Timer? _seekFeedbackTimer;
+  bool _showFavoriteBurst = false;
+  Timer? _favoriteBurstTimer;
+  Offset _doubleTapPosition = Offset.zero;
+
+  void _triggerSeekFeedback(int seconds) {
+    _seekFeedbackTimer?.cancel();
+    setState(() {
+      _seekFeedbackSeconds = seconds;
+    });
+    _seekFeedbackTimer = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) {
+        setState(() {
+          _seekFeedbackSeconds = null;
+        });
+      }
+    });
+  }
+
+  void _triggerFavoriteBurst() {
+    _favoriteBurstTimer?.cancel();
+    setState(() {
+      _showFavoriteBurst = true;
+    });
+    _favoriteBurstTimer = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        setState(() {
+          _showFavoriteBurst = false;
+        });
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -288,10 +321,13 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
               GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onVerticalDragStart: (d) {
-                  if (d.globalPosition.dx > screenWidth * 0.55 &&
-                      d.globalPosition.dy < screenHeight * 0.70) {
+                  final x = d.globalPosition.dx;
+                  final y = d.globalPosition.dy;
+                  // Dedicated sound gesture domain: rightmost strip of screen
+                  if (x >= screenWidth * 0.78 && y >= screenHeight * 0.12 && y <= screenHeight * 0.78) {
                     _isDraggingVolume = true;
                     _triggerVolumeBar();
+                    AppHaptics.selection();
                   } else {
                     _isDraggingVolume = false;
                   }
@@ -300,8 +336,13 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                   if (_isDraggingVolume) {
                     _triggerVolumeBar();
                     final settings = Provider.of<SettingsProvider>(context, listen: false);
-                    final delta = -d.primaryDelta! / 250.0;
-                    settings.setVolume((settings.volume + delta).clamp(0.0, 1.0));
+                    final double oldVolume = settings.volume;
+                    final delta = -d.primaryDelta! / 220.0;
+                    final newVolume = (oldVolume + delta).clamp(0.0, 1.0);
+                    if ((oldVolume * 10).floor() != (newVolume * 10).floor()) {
+                      AppHaptics.light();
+                    }
+                    settings.setVolume(newVolume);
                   }
                 },
                 onVerticalDragEnd: (_) => _isDraggingVolume = false,
@@ -568,6 +609,36 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
     final artSize = screenWidth * 0.62;
 
     return GestureDetector(
+      onDoubleTapDown: (details) {
+        _doubleTapPosition = details.localPosition;
+      },
+      onDoubleTap: () {
+        final dx = _doubleTapPosition.dx;
+        final totalW = artSize + 48;
+        if (dx < totalW * 0.38) {
+          // Seek -10s
+          AppHaptics.medium();
+          final newPos = pp.position - const Duration(seconds: 10);
+          pp.seek(newPos < Duration.zero ? Duration.zero : newPos);
+          _triggerSeekFeedback(-10);
+        } else if (dx > totalW * 0.62) {
+          // Seek +10s
+          AppHaptics.medium();
+          final maxDur = pp.duration;
+          final newPos = pp.position + const Duration(seconds: 10);
+          pp.seek(newPos > maxDur ? maxDur : newPos);
+          _triggerSeekFeedback(10);
+        } else {
+          // Toggle Play / Pause
+          AppHaptics.light();
+          pp.togglePlayPause();
+        }
+      },
+      onLongPress: () {
+        AppHaptics.medium();
+        pp.toggleFavorite(song);
+        _triggerFavoriteBurst();
+      },
       onHorizontalDragEnd: (details) {
         if (details.primaryVelocity == null) return;
         if (details.primaryVelocity! < -200) {
@@ -705,6 +776,89 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                               ),
                             ),
                           ),
+
+                          // Double-tap Seek indicator overlay (-10s / +10s)
+                          if (_seekFeedbackSeconds != null)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(28),
+                                    color: Colors.black.withValues(alpha: 0.50),
+                                  ),
+                                  child: Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: (_seekFeedbackSeconds! > 0 ? Colors.cyanAccent : Colors.amberAccent).withValues(alpha: 0.25),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: _seekFeedbackSeconds! > 0 ? Colors.cyanAccent : Colors.amberAccent,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            _seekFeedbackSeconds! > 0 ? Icons.forward_10_rounded : Icons.replay_10_rounded,
+                                            color: _seekFeedbackSeconds! > 0 ? Colors.cyanAccent : Colors.amberAccent,
+                                            size: 22,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _seekFeedbackSeconds! > 0 ? '+10s' : '-10s',
+                                            style: GoogleFonts.outfit(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                          // Long-press Favorite Heart Burst
+                          if (_showFavoriteBurst)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Center(
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(begin: 0.3, end: 1.25),
+                                    duration: const Duration(milliseconds: 550),
+                                    curve: Curves.elasticOut,
+                                    builder: (context, scale, child) {
+                                      return Transform.scale(
+                                        scale: scale,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.redAccent.withValues(alpha: 0.35),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.redAccent.withValues(alpha: 0.6),
+                                                blurRadius: 24,
+                                                spreadRadius: 4,
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Icon(
+                                            Icons.favorite_rounded,
+                                            color: Colors.redAccent,
+                                            size: 46,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),

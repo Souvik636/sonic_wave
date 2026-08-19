@@ -2479,6 +2479,15 @@ class PlayerProvider extends ChangeNotifier {
       if (physicalMove && newPath != null) {
         await DownloadService().updateDownloadedSong(updatedSong);
       }
+    } else {
+      // Physical copy made: register copy in local device songs with thumbnail
+      if (physicalMove && newPath != null) {
+        final canonNew = PlayerProvider.canonicalizePath(newPath);
+        if (!_localDeviceSongs.any((s) => s.filePath != null && PlayerProvider.canonicalizePath(s.filePath!) == canonNew)) {
+          _localDeviceSongs.add(updatedSong);
+          await _saveLocalDeviceSongs();
+        }
+      }
     }
 
     notifyListeners();
@@ -2993,12 +3002,18 @@ class PlayerProvider extends ChangeNotifier {
         }
       }
 
-      // Remove from local device cache
-      _localDeviceSongs.removeWhere((s) => s.videoId == song.videoId || (s.filePath != null && s.filePath == song.filePath));
+      // Remove from local device cache (prune by canonical file path if available, or videoId)
+      final canonDeleted = song.filePath != null ? PlayerProvider.canonicalizePath(song.filePath!) : null;
+      _localDeviceSongs.removeWhere((s) {
+        if (canonDeleted != null && s.filePath != null) {
+          return PlayerProvider.canonicalizePath(s.filePath!) == canonDeleted;
+        }
+        return s.videoId == song.videoId;
+      });
       await _saveLocalDeviceSongs();
 
       // Remove from all metadata stores (downloads, favorites, albums, history)
-      await _removeSongFromAllStores(song.videoId);
+      await _removeSongFromAllStores(song.videoId, deletedFilePath: song.filePath);
       await loadDownloads();
 
       // If playing this song, stop
@@ -3134,23 +3149,42 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   /// Helper to remove a song from downloads, favorites, albums, and history
-  Future<void> _removeSongFromAllStores(String videoId) async {
-    // Remove from downloads service
-    await DownloadService().deleteSong(videoId);
+  Future<void> _removeSongFromAllStores(String videoId, {String? deletedFilePath}) async {
+    final canonDeleted = deletedFilePath != null ? PlayerProvider.canonicalizePath(deletedFilePath) : null;
 
-    // Remove from favorites
-    _favorites.removeWhere((s) => s.videoId == videoId);
-    await _saveFavorites();
+    // Check if another copy of this song still exists in downloads on disk
+    final remainingDownloaded = _downloadedSongs.where((d) {
+      if (d.videoId != videoId) return false;
+      if (canonDeleted != null && d.filePath != null) {
+        return PlayerProvider.canonicalizePath(d.filePath!) != canonDeleted && File(d.filePath!).existsSync();
+      }
+      return false;
+    }).toList();
 
-    // Remove from history
-    _history.removeWhere((e) => e.song.videoId == videoId);
-    await _saveHistory();
+    if (remainingDownloaded.isEmpty) {
+      await DownloadService().deleteSong(videoId);
+    }
 
-    // Remove from albums
+    // Remove from favorites only if no remaining copies
+    if (remainingDownloaded.isEmpty) {
+      _favorites.removeWhere((s) => s.videoId == videoId);
+      await _saveFavorites();
+
+      _history.removeWhere((e) => e.song.videoId == videoId);
+      await _saveHistory();
+    }
+
+    // Remove from albums (remove the specific file copy if path matched, or all if no remaining copies)
     bool albumChanged = false;
     for (int i = 0; i < _albums.length; i++) {
       final before = _albums[i].songs.length;
-      final updatedSongs = _albums[i].songs.where((s) => s.videoId != videoId).toList();
+      final updatedSongs = _albums[i].songs.where((s) {
+        if (s.videoId != videoId) return true;
+        if (canonDeleted != null && s.filePath != null) {
+          return PlayerProvider.canonicalizePath(s.filePath!) != canonDeleted;
+        }
+        return remainingDownloaded.isNotEmpty;
+      }).toList();
       if (updatedSongs.length != before) {
         _albums[i] = _albums[i].copyWith(songs: updatedSongs);
         albumChanged = true;

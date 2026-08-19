@@ -60,6 +60,39 @@ class _PlayerScreenState extends State<PlayerScreen>
   late AnimationController _shimmerController;
   bool _isDraggingSeek = false;
   double _dragSeekValue = 0.0;
+  int? _seekFeedbackSeconds;
+  Timer? _seekFeedbackTimer;
+  bool _showFavoriteBurst = false;
+  Timer? _favoriteBurstTimer;
+  Offset _doubleTapPosition = Offset.zero;
+
+  void _triggerSeekFeedback(int seconds) {
+    _seekFeedbackTimer?.cancel();
+    setState(() {
+      _seekFeedbackSeconds = seconds;
+    });
+    _seekFeedbackTimer = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) {
+        setState(() {
+          _seekFeedbackSeconds = null;
+        });
+      }
+    });
+  }
+
+  void _triggerFavoriteBurst() {
+    _favoriteBurstTimer?.cancel();
+    setState(() {
+      _showFavoriteBurst = true;
+    });
+    _favoriteBurstTimer = Timer(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        setState(() {
+          _showFavoriteBurst = false;
+        });
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -207,9 +240,11 @@ class _PlayerScreenState extends State<PlayerScreen>
                       onVerticalDragStart: (details) {
                         final x = details.globalPosition.dx;
                         final y = details.globalPosition.dy;
-                        if (x > screenWidth * 0.55 && y < screenHeight * 0.70) {
+                        // Dedicated sound gesture domain: rightmost strip of screen
+                        if (x >= screenWidth * 0.78 && y >= screenHeight * 0.12 && y <= screenHeight * 0.78) {
                           _isDraggingVolume = true;
                           _triggerVolumeBar();
+                          AppHaptics.selection();
                         } else {
                           _isDraggingVolume = false;
                         }
@@ -218,12 +253,16 @@ class _PlayerScreenState extends State<PlayerScreen>
                         if (_isDraggingVolume) {
                           _triggerVolumeBar();
                           final settings = Provider.of<SettingsProvider>(context, listen: false);
-                          final double deltaVolume = -details.primaryDelta! / 250.0;
-                          final double newVolume = (settings.volume + deltaVolume).clamp(0.0, 1.0);
+                          final double oldVolume = settings.volume;
+                          final double deltaVolume = -details.primaryDelta! / 220.0;
+                          final double newVolume = (oldVolume + deltaVolume).clamp(0.0, 1.0);
+                          if ((oldVolume * 10).floor() != (newVolume * 10).floor()) {
+                            AppHaptics.light();
+                          }
                           settings.setVolume(newVolume);
                         }
                       },
-                      onVerticalDragEnd: (details) {
+                      onVerticalDragEnd: (_) {
                         _isDraggingVolume = false;
                       },
                       child: SafeArea(
@@ -372,6 +411,37 @@ class _PlayerScreenState extends State<PlayerScreen>
           Expanded(
             child: Center(
               child: GestureDetector(
+                onDoubleTapDown: (details) {
+                  _doubleTapPosition = details.localPosition;
+                },
+                onDoubleTap: () {
+                  final provider = Provider.of<PlayerProvider>(context, listen: false);
+                  final dx = _doubleTapPosition.dx;
+                  if (dx < artSize * 0.38) {
+                    // Seek -10s
+                    AppHaptics.medium();
+                    final newPos = provider.position - const Duration(seconds: 10);
+                    provider.seek(newPos < Duration.zero ? Duration.zero : newPos);
+                    _triggerSeekFeedback(-10);
+                  } else if (dx > artSize * 0.62) {
+                    // Seek +10s
+                    AppHaptics.medium();
+                    final maxDur = provider.duration;
+                    final newPos = provider.position + const Duration(seconds: 10);
+                    provider.seek(newPos > maxDur ? maxDur : newPos);
+                    _triggerSeekFeedback(10);
+                  } else {
+                    // Toggle Play / Pause
+                    AppHaptics.light();
+                    provider.togglePlayPause();
+                  }
+                },
+                onLongPress: () {
+                  final provider = Provider.of<PlayerProvider>(context, listen: false);
+                  AppHaptics.medium();
+                  provider.toggleFavorite(song);
+                  _triggerFavoriteBurst();
+                },
                 onHorizontalDragEnd: (details) {
                   if (details.primaryVelocity == null) return;
                   final provider = Provider.of<PlayerProvider>(context, listen: false);
@@ -562,6 +632,89 @@ class _PlayerScreenState extends State<PlayerScreen>
                               ),
                             ),
                           ),
+
+                          // 5. Double-tap Seek indicator overlay (-10s / +10s)
+                          if (_seekFeedbackSeconds != null)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.black.withValues(alpha: 0.50),
+                                  ),
+                                  child: Center(
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: (_seekFeedbackSeconds! > 0 ? Colors.cyanAccent : Colors.amberAccent).withValues(alpha: 0.25),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: _seekFeedbackSeconds! > 0 ? Colors.cyanAccent : Colors.amberAccent,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            _seekFeedbackSeconds! > 0 ? Icons.forward_10_rounded : Icons.replay_10_rounded,
+                                            color: _seekFeedbackSeconds! > 0 ? Colors.cyanAccent : Colors.amberAccent,
+                                            size: 22,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _seekFeedbackSeconds! > 0 ? '+10s' : '-10s',
+                                            style: GoogleFonts.outfit(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                          // 6. Long-press Favorite Heart Burst
+                          if (_showFavoriteBurst)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Center(
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(begin: 0.3, end: 1.25),
+                                    duration: const Duration(milliseconds: 550),
+                                    curve: Curves.elasticOut,
+                                    builder: (context, scale, child) {
+                                      return Transform.scale(
+                                        scale: scale,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.redAccent.withValues(alpha: 0.35),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.redAccent.withValues(alpha: 0.6),
+                                                blurRadius: 24,
+                                                spreadRadius: 4,
+                                              ),
+                                            ],
+                                          ),
+                                          child: const Icon(
+                                            Icons.favorite_rounded,
+                                            color: Colors.redAccent,
+                                            size: 46,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
               ],

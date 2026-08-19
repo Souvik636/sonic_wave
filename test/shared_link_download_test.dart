@@ -315,7 +315,7 @@ void main() {
       await settle(tester);
       expect(provider.sharedDownload, isNotNull);
 
-      await tester.pump(const Duration(seconds: 5));
+      await tester.pump(const Duration(seconds: 11));
       expect(provider.sharedDownload, isNull);
       provider.dispose();
     });

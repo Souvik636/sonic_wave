@@ -1,6 +1,14 @@
 package com.sonicwave.sonic_wave
 
+import android.bluetooth.BluetoothClass
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioDeviceInfo
+import android.media.AudioDeviceCallback
+import android.media.AudioManager
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Bundle
@@ -17,10 +25,13 @@ class MainActivity : AudioServiceActivity() {
     private val MEDIA_CHANNEL = "com.sonicwave.sonic_wave/media"
     private val DOWNLOAD_CHANNEL = "com.sonicwave.sonic_wave/downloads"
     private val DISPLAY_CHANNEL = "com.sonicwave.sonic_wave/display"
+    private val WEARABLE_CHANNEL = "com.sonicwave.sonic_wave/wearable"
     private var methodChannel: MethodChannel? = null
     private var mediaChannel: MethodChannel? = null
     private var downloadChannel: MethodChannel? = null
     private var displayChannel: MethodChannel? = null
+    private var wearableChannel: MethodChannel? = null
+    private var wearableReceiver: BroadcastReceiver? = null
     private var initialUri: String? = null
     private var initialSharedText: String? = null
 
@@ -366,6 +377,152 @@ class MainActivity : AudioServiceActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        wearableChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WEARABLE_CHANNEL)
+        wearableChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "checkConnectedDevices" -> {
+                    checkCurrentConnectedDevices()
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        registerWearableReceiver()
+        registerAudioDeviceCallback()
+        checkCurrentConnectedDevices()
+    }
+
+    private var audioDeviceCallback: AudioDeviceCallback? = null
+
+    private fun registerAudioDeviceCallback() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+                if (audioDeviceCallback == null) {
+                    audioDeviceCallback = object : AudioDeviceCallback() {
+                        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                            super.onAudioDevicesAdded(addedDevices)
+                            checkCurrentConnectedDevices()
+                        }
+
+                        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+                            super.onAudioDevicesRemoved(removedDevices)
+                            checkCurrentConnectedDevices()
+                        }
+                    }
+                    audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Error registering audio device callback: $e")
+            }
+        }
+    }
+
+    private fun checkCurrentConnectedDevices() {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                var foundDevice: AudioDeviceInfo? = null
+                for (dev in devices) {
+                    val t = dev.type
+                    if (t == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                        t == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                        t == AudioDeviceInfo.TYPE_HEARING_AID ||
+                        (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && t == AudioDeviceInfo.TYPE_BLE_HEADSET) ||
+                        (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S && t == AudioDeviceInfo.TYPE_BLE_SPEAKER) ||
+                        t == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                        t == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                        t == AudioDeviceInfo.TYPE_USB_HEADSET) {
+                        foundDevice = dev
+                        break
+                    }
+                }
+
+                if (foundDevice != null) {
+                    val rawName = foundDevice.productName?.toString() ?: ""
+                    val name = if (rawName.isBlank()) "Wireless Audio Accessory" else rawName
+                    val category = classifyAudioDeviceName(name, foundDevice.type)
+                    val addr = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        foundDevice.address ?: ""
+                    } else ""
+                    runOnUiThread {
+                        wearableChannel?.invokeMethod("onDeviceConnected", mapOf(
+                            "name" to name,
+                            "type" to category,
+                            "address" to addr
+                        ))
+                    }
+                    return
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Error checking audio devices: $e")
+        }
+    }
+
+    private fun classifyAudioDeviceName(name: String, deviceClass: Int = 0): String {
+        val lower = name.lowercase()
+        return when {
+            lower.contains("watch") || lower.contains("band") || lower.contains("gear") || lower.contains("fit") -> "watch"
+            lower.contains("neckband") || lower.contains("neck") || lower.contains("rockerz") || lower.contains("bullets") ||
+            lower.contains("wireless") || lower.contains("buds") || lower.contains("ear") || lower.contains("headset") ||
+            lower.contains("headphone") || lower.contains("airpod") || lower.contains("boat") || lower.contains("boult") ||
+            lower.contains("noise") || lower.contains("sony") || lower.contains("jbl") || lower.contains("realme") ||
+            lower.contains("oneplus") || lower.contains("oppo") || lower.contains("vivo") || lower.contains("samsung") ||
+            lower.contains("infinity") || lower.contains("zebronics") || lower.contains("portronics") -> "headset"
+            lower.contains("car") || lower.contains("auto") -> "car"
+            lower.contains("speaker") || lower.contains("soundbar") -> "speaker"
+            else -> "headset"
+        }
+    }
+
+    private fun registerWearableReceiver() {
+        if (wearableReceiver != null) return
+        wearableReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                val action = intent?.action ?: return
+                when (action) {
+                    BluetoothDevice.ACTION_ACL_CONNECTED,
+                    "android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED",
+                    "android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED" -> {
+                        checkCurrentConnectedDevices()
+                    }
+                    BluetoothDevice.ACTION_ACL_DISCONNECTED,
+                    AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
+                        val device: BluetoothDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                        }
+                        val name = try { device?.name ?: "Audio Device" } catch (e: SecurityException) { "Audio Device" }
+                        runOnUiThread {
+                            wearableChannel?.invokeMethod("onDeviceDisconnected", mapOf(
+                                "name" to name
+                            ))
+                        }
+                    }
+                }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+            addAction(AudioManager.ACTION_HEADSET_PLUG)
+            addAction("android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED")
+            addAction("android.bluetooth.headset.profile.action.CONNECTION_STATE_CHANGED")
+        }
+        try {
+            registerReceiver(wearableReceiver, filter)
+        } catch (e: Exception) {}
+    }
+
+    override fun onResume() {
+        super.onResume()
+        checkCurrentConnectedDevices()
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -377,6 +534,30 @@ class MainActivity : AudioServiceActivity() {
         downloadChannel = null
         displayChannel?.setMethodCallHandler(null)
         displayChannel = null
+        wearableChannel?.setMethodCallHandler(null)
+        wearableChannel = null
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && audioDeviceCallback != null) {
+                val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
+                audioDeviceCallback = null
+            }
+            wearableReceiver?.let { unregisterReceiver(it) }
+            wearableReceiver = null
+        } catch (e: Exception) {}
         super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    override fun onDestroy() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && audioDeviceCallback != null) {
+                val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
+                audioDeviceCallback = null
+            }
+            wearableReceiver?.let { unregisterReceiver(it) }
+            wearableReceiver = null
+        } catch (e: Exception) {}
+        super.onDestroy()
     }
 }
