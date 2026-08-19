@@ -18,7 +18,7 @@ class LyricsService {
   LyricsService._internal();
 
   static const String _userAgent =
-      'SonicWave/1.2.7 (https://github.com/sonicwave; contact@sonicwave.app)';
+      'SonicWave/1.2.9 (https://github.com/sonicwave; contact@sonicwave.app)';
 
   // ─────────────────────────────────────────────────────────
   // Public API
