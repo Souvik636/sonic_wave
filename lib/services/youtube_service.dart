@@ -586,7 +586,7 @@ class YouTubeService {
     }
   }
 
-  Future<List<Song>?> _fetchInvidiousSearch(String query) async {
+  Future<List<Song>?> _fetchInvidiousSearch(String query, {int page = 1}) async {
     _loadWorkingInstances();
     final client = HttpClient();
     
@@ -598,6 +598,7 @@ class YouTubeService {
         final uri = Uri.https(instance, '/api/v1/search', {
           'q': query,
           'type': 'video',
+          'page': '$page',
         });
         final request = await client.getUrl(uri).timeout(const Duration(seconds: 4));
         final response = await request.close().timeout(const Duration(seconds: 4));
@@ -764,10 +765,13 @@ class YouTubeService {
 
   /// Search for songs on YouTube (user initiated search)
   Future<List<Song>> searchSongs(String query, {int maxResults = 20, int page = 1}) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return [];
+
     // 1. Direct YouTube link or video ID detection:
     if (page == 1) {
-      final directVideoId = YouTubeLinkParser.extractVideoId(query) ??
-          (RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(query.trim()) ? query.trim() : null);
+      final directVideoId = YouTubeLinkParser.extractVideoId(cleanQuery) ??
+          (RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(cleanQuery) ? cleanQuery : null);
 
       if (directVideoId != null) {
         try {
@@ -780,23 +784,30 @@ class YouTubeService {
     }
 
     try {
-      final searchTerm = page == 1 ? '$query music' : (page == 2 ? '$query audio' : '$query full song');
-      final searchResults = await _yt.search.search(searchTerm);
+      final searchTerm = page == 1 ? cleanQuery : (page == 2 ? '$cleanQuery music' : '$cleanQuery song');
+      final searchResults = await _yt.search.search(searchTerm).timeout(const Duration(seconds: 6));
       final songs = <Song>[];
 
       for (final result in searchResults.take(maxResults)) {
         songs.add(_videoToSong(result));
       }
 
-      return songs;
+      if (songs.isNotEmpty) return songs;
     } catch (e) {
-      debugPrint('Failed to search songs using YouTube Explode: $e');
-      final fallbackSongs = await _fetchInvidiousSearch('$query music');
+      debugPrint('[YT] YouTube Explode search failed: $e');
+    }
+
+    // 2. Resilient Invidious Search Fallback
+    try {
+      final fallbackSongs = await _fetchInvidiousSearch(cleanQuery, page: page);
       if (fallbackSongs != null && fallbackSongs.isNotEmpty) {
         return fallbackSongs.take(maxResults).toList();
       }
-      throw Exception('Failed to search songs: $e');
+    } catch (e) {
+      debugPrint('[YT] Invidious search fallback failed: $e');
     }
+
+    return [];
   }
 
   /// Get trending music videos dynamically from YouTube. Falls back to static list.
