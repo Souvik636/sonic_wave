@@ -257,6 +257,20 @@ class PlayerProvider extends ChangeNotifier {
         notifyListeners();
       }
     });
+
+    // Listen to chunk lifecycle state transitions to synchronize loading animation
+    StreamCacheService.chunkStateNotifier.addListener(() {
+      final cur = currentSong;
+      if (cur != null) {
+        final state = StreamCacheService.chunkStateNotifier.value[cur.videoId];
+        if (state == ChunkLifecycleState.ready || state == ChunkLifecycleState.completed) {
+          if (_loadingSong != null) {
+            _loadingSong = null;
+            notifyListeners();
+          }
+        }
+      }
+    });
   }
 
   static const MethodChannel _intentChannel = MethodChannel('com.sonicwave.sonic_wave/intent');
@@ -758,6 +772,13 @@ class PlayerProvider extends ChangeNotifier {
   Song? get loadingSong => _loadingSong;
   bool get isPlaying => _audioHandler.player.playing;
   bool get isBuffering {
+    final cur = currentSong;
+    if (cur != null) {
+      final chunkState = StreamCacheService.chunkStateNotifier.value[cur.videoId];
+      if (chunkState == ChunkLifecycleState.ready || chunkState == ChunkLifecycleState.completed) {
+        return _audioHandler.player.processingState == ProcessingState.buffering;
+      }
+    }
     if (_audioHandler.player.playing && _audioHandler.player.position > Duration.zero) {
       return _audioHandler.player.processingState == ProcessingState.buffering;
     }
@@ -768,6 +789,11 @@ class PlayerProvider extends ChangeNotifier {
   bool get hasCurrentSong => currentSong != null;
 
   bool isSongLoading(Song song) {
+    final chunkState = StreamCacheService.chunkStateNotifier.value[song.videoId];
+    if (chunkState == ChunkLifecycleState.ready || chunkState == ChunkLifecycleState.completed) {
+      return currentSong?.videoId == song.videoId &&
+          _audioHandler.player.processingState == ProcessingState.buffering;
+    }
     return _loadingSong?.videoId == song.videoId ||
         (currentSong?.videoId == song.videoId && isBuffering);
   }

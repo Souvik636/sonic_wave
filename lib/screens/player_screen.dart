@@ -1691,7 +1691,15 @@ class _PlayPauseMainButtonState extends State<_PlayPauseMainButton>
                   builder: (context, stateSnapshot) {
                     final state = stateSnapshot.data ?? ProcessingState.idle;
                     final isPlaying = widget.playerProvider.isPlaying;
-                    final isInitialLoad = !isPlaying || widget.playerProvider.position == Duration.zero;
+                    final curSong = widget.playerProvider.currentSong;
+                    final chunkState = curSong != null
+                        ? StreamCacheService.chunkStateNotifier.value[curSong.videoId]
+                        : null;
+                    final isChunkReady = chunkState == ChunkLifecycleState.ready ||
+                        chunkState == ChunkLifecycleState.completed;
+                    final isInitialLoad =
+                        (!isPlaying || widget.playerProvider.position == Duration.zero) &&
+                            !isChunkReady;
                     final bool loading = (state == ProcessingState.loading ||
                             state == ProcessingState.buffering ||
                             widget.playerProvider.loadingSong != null) &&

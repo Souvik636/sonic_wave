@@ -8,6 +8,16 @@ import '../providers/settings_provider.dart' show AudioQuality;
 import 'youtube_service.dart';
 import 'ytdlp_runtime.dart';
 
+/// Explicit chunk lifecycle state for streaming tracks.
+enum ChunkLifecycleState {
+  notRequested,
+  loading,
+  ready,      // Playable chunk available (>= 64 KB) -> immediate audio start
+  completed,  // 100% downloaded and saved to permanent cache
+  cancelled,  // Cancelled upon song switch
+  error,      // Encountered terminal error
+}
+
 /// On-disk cache for audio that has been streamed.
 ///
 /// just_audio's [LockCachingAudioSource] writes every byte it plays to a file
@@ -41,6 +51,47 @@ class StreamCacheService {
   Directory? _dir;
   int _writtenSinceTrim = 0;
   Future<void>? _trimInFlight;
+
+  final Map<String, ChunkLifecycleState> _chunkStates = {};
+  final Set<String> _cancelledIds = {};
+  static final ValueNotifier<Map<String, ChunkLifecycleState>> chunkStateNotifier = ValueNotifier({});
+
+  /// Get the current chunk lifecycle state for [videoId].
+  ChunkLifecycleState getChunkState(String videoId) {
+    return _chunkStates[videoId] ?? ChunkLifecycleState.notRequested;
+  }
+
+  void _setChunkState(String videoId, ChunkLifecycleState state) {
+    _chunkStates[videoId] = state;
+    chunkStateNotifier.value = Map.from(chunkStateNotifier.value)..[videoId] = state;
+  }
+
+  /// Explicitly cancel and dispose in-progress chunk download for [videoId].
+  /// Called immediately when the user switches away from this song or skips tracks.
+  Future<void> cancelAndDispose(String videoId) async {
+    debugPrint('[StreamCache] Cancelling and disposing chunk load for $videoId');
+    _cancelledIds.add(videoId);
+    _setChunkState(videoId, ChunkLifecycleState.cancelled);
+
+    _inFlightDownloads.remove(videoId);
+    _inFlightPlayableListeners.remove(videoId);
+    _inFlightPlayablePath.remove(videoId);
+
+    // Cancel yt-dlp native process
+    try {
+      await YoutubeDLFlutter.instance.cancelDownload('stream_$videoId');
+    } catch (_) {}
+
+    // Clean up temporary staging directory if download was not completed
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final stagingPath = '${tempDir.path}${Platform.pathSeparator}stream_dl_$videoId';
+      final stagingDirObj = Directory(stagingPath);
+      if (await stagingDirObj.exists()) {
+        await stagingDirObj.delete(recursive: true);
+      }
+    } catch (_) {}
+  }
 
   /// Cache lives in the app's *cache* directory, not its documents directory:
   /// this is regenerable data, and Android is entitled to reclaim it under
@@ -266,14 +317,21 @@ class StreamCacheService {
     ValueChanged<String>? onPlayable,
     ValueChanged<double>? onProgress,
   }) async {
+    // If this videoId was previously marked cancelled, reset it since a fresh request came in
+    _cancelledIds.remove(videoId);
+
     // 1. Check if already cached
     final qualityName = quality.name;
     final cachedPath = await getCachedFile(videoId, qualityName);
     if (cachedPath != null) {
       debugPrint('[StreamCache] Cache hit for $videoId — skipping download');
+      _setChunkState(videoId, ChunkLifecycleState.completed);
+      bufferProgressNotifier.value = Map.from(bufferProgressNotifier.value)..[videoId] = 1.0;
       onPlayable?.call(cachedPath);
       return cachedPath;
     }
+
+    _setChunkState(videoId, ChunkLifecycleState.loading);
 
     // 1b. If already downloading in-flight, join the existing task to prevent race collisions
     final inFlight = _inFlightDownloads[videoId];
@@ -374,12 +432,15 @@ class StreamCacheService {
     StreamSubscription<DownloadProgress>? progressSub;
     progressSub = YoutubeDLFlutter.instance.onProgress.listen((event) {
       if (event.processId != processId) return;
+      if (_cancelledIds.contains(videoId)) return; // Discard late event for cancelled song
       final fraction = event.progress < 0 ? 0.05 : event.progressFraction.clamp(0.0, 1.0);
       bufferProgressNotifier.value = Map.from(bufferProgressNotifier.value)..[videoId] = fraction;
       onProgress?.call(fraction);
     });
 
     void notifyPlayable(String path) {
+      if (_cancelledIds.contains(videoId)) return; // Discard if cancelled
+      _setChunkState(videoId, ChunkLifecycleState.ready);
       _inFlightPlayablePath[videoId] = path;
       onPlayable?.call(path);
       final listeners = _inFlightPlayableListeners[videoId];
@@ -434,7 +495,7 @@ class StreamCacheService {
       // With --no-part, yt-dlp writes directly to the output file, so we can
       // detect playability progressively in ~500-1000ms.
       monitorTimer = Timer.periodic(const Duration(milliseconds: 100), (_) async {
-        if (playableFired) return;
+        if (playableFired || _cancelledIds.contains(videoId)) return;
         try {
           final entities = await stagingDirObj.list().toList();
           for (final entity in entities) {
@@ -458,6 +519,14 @@ class StreamCacheService {
 
       monitorTimer.cancel();
       monitorTimer = null;
+
+      if (_cancelledIds.contains(videoId)) {
+        debugPrint('[StreamCache] Download finished for cancelled $videoId — discarding');
+        try {
+          await stagingDirObj.delete(recursive: true);
+        } catch (_) {}
+        throw Exception('Download cancelled for $videoId');
+      }
 
       if (result.status != OperationStatus.success) {
         throw Exception(result.errorMessage ?? 'yt-dlp stream cache download failed');
@@ -506,14 +575,24 @@ class StreamCacheService {
         } catch (_) {}
       }
 
+      _setChunkState(videoId, ChunkLifecycleState.completed);
       bufferProgressNotifier.value = Map.from(bufferProgressNotifier.value)..[videoId] = 1.0;
       YtDlpRuntime.markHealthy();
       return cacheFile.path;
     } catch (e) {
       monitorTimer?.cancel();
+      if (_cancelledIds.contains(videoId)) {
+        debugPrint('[StreamCache] Discarding error for cancelled song $videoId');
+        try {
+          await stagingDirObj.delete(recursive: true);
+        } catch (_) {}
+        return '';
+      }
+
+      _setChunkState(videoId, ChunkLifecycleState.error);
       debugPrint('[StreamCache] Cache download failed for $videoId: $e');
 
-      // Preserve partial staged file if it already contains playable audio (> 128KB)
+      // Preserve partial staged file if it already contains playable audio (> 64KB)
       bool hasPlayableStagedFile = false;
       try {
         final entities = await stagingDirObj.list().toList();

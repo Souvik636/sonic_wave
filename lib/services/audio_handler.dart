@@ -51,6 +51,7 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
   }
 
   Timer? _prefetchTimer;
+  String? _activeStreamVideoId;
 
   /// Sleep-timer "end of track": when true, playback stops after the current
   /// song completes instead of advancing the queue. One-shot — reset on fire.
@@ -447,6 +448,13 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
           _currentIndex = _playlist.length - 1;
         }
       }
+
+      // Active song switch cancellation: cancel and dispose previous song's in-progress chunk downloads
+      if (_activeStreamVideoId != null && _activeStreamVideoId != song.videoId) {
+        final oldId = _activeStreamVideoId!;
+        unawaited(StreamCacheService().cancelAndDispose(oldId));
+      }
+      _activeStreamVideoId = song.videoId;
 
       // Track active song for streaming & background cache lifecycle
       StreamCacheService().setActivePlayingSong(song.videoId);
@@ -1094,6 +1102,11 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     _prefetchTimer?.cancel();
     _cancelIdleTimer();
     _cancelPrefetchCleanupTimer();
+    if (_activeStreamVideoId != null) {
+      final oldId = _activeStreamVideoId!;
+      unawaited(StreamCacheService().cancelAndDispose(oldId));
+      _activeStreamVideoId = null;
+    }
     // The queue is gone, so every pre-resolved URL is now dead weight. Without
     // this the map only ever grew for the life of the process.
     _prefetchedStreams.clear();
