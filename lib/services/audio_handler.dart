@@ -10,6 +10,7 @@ import 'youtube_service.dart';
 import 'download_service.dart';
 import 'stream_cache_service.dart';
 import 'stream_resolver_service.dart';
+import 'jiosaavn_service.dart';
 import 'audio_format_sniffer.dart';
 
 class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHandler {
@@ -449,11 +450,12 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         }
       }
 
-      // Active song switch cancellation: cancel and dispose previous song's in-progress chunk downloads
-      if (_activeStreamVideoId != null && _activeStreamVideoId != song.videoId) {
-        final oldId = _activeStreamVideoId!;
-        unawaited(StreamCacheService().cancelAndDispose(oldId));
-      }
+      // Cancel any pending prefetch timer so full bandwidth is focused on this clicked song
+      _prefetchTimer?.cancel();
+      _prefetchedStreams.removeWhere((key, _) => key != song.videoId);
+
+      // Active song switch cancellation: cancel and dispose all other song in-progress chunk downloads
+      await StreamCacheService().cancelAllExcept(song.videoId);
       _activeStreamVideoId = song.videoId;
 
       // Track active song for streaming & background cache lifecycle
@@ -958,15 +960,26 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       }
       if (targets.isEmpty) return;
 
-      // Resolve both in parallel — the old sequential await made the +2 song
-      // wait for the +1 song's full network round-trip.
+      // Resolve direct URLs in background without competing with active chunk downloads
       await Future.wait(targets.map((nextSong) async {
         try {
-          final resolved = await StreamResolverService().resolve(nextSong);
-          if (resolved != null) {
-            _prefetchedStreams[nextSong.videoId] =
-                _PrefetchedStream(resolved, DateTime.now());
-            debugPrint('[AudioHandler] Pre-resolved stream: ${nextSong.title}');
+          if (nextSong.videoId.startsWith('jiosaavn_')) {
+            final saavnUrl = await JioSaavnService().getStreamUrlById(nextSong.videoId);
+            if (saavnUrl != null && saavnUrl.startsWith('http')) {
+              _prefetchedStreams[nextSong.videoId] = _PrefetchedStream(
+                ResolvedStream(saavnUrl, source: 'jiosaavn'),
+                DateTime.now(),
+              );
+            }
+          } else {
+            final ytUrl = await YouTubeService().getAudioStreamUrl(nextSong.videoId);
+            if (ytUrl.startsWith('http')) {
+              _prefetchedStreams[nextSong.videoId] = _PrefetchedStream(
+                ResolvedStream(ytUrl, source: 'youtube'),
+                DateTime.now(),
+              );
+              debugPrint('[AudioHandler] Pre-resolved direct stream URL: ${nextSong.title}');
+            }
           }
         } catch (_) {}
       }));

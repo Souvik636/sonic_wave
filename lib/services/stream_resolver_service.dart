@@ -141,9 +141,12 @@ class StreamResolverService {
       return ResolvedStream(cachedFile, source: 'youtube_cached');
     }
 
+    // Prioritize this clicked song: cancel all other background loads
+    await cache.cancelAllExcept(id);
+
     final completer = Completer<ResolvedStream?>();
 
-    // 6b. Progressive chunk download via yt-dlp (Fires onPlayable at first 128KB chunk for instant start)
+    // 6b. Progressive chunk download via yt-dlp (Fires onPlayable at first 64KB chunk for instant start)
     unawaited(() async {
       try {
         await cache.downloadToCache(
@@ -180,9 +183,9 @@ class StreamResolverService {
       }
     }());
 
-    // Return the fastest playable source
+    // Return the fastest playable source (wait up to 20s for full resolution)
     try {
-      final stream = await completer.future.timeout(const Duration(seconds: 8));
+      final stream = await completer.future.timeout(const Duration(seconds: 20));
       if (stream != null) return stream;
     } catch (_) {}
 

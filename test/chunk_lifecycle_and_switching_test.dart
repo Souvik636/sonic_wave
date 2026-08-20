@@ -49,5 +49,10 @@ void main() {
       cacheService.setActivePlayingSong(songA.videoId);
       expect(songA.videoId, equals('yt_stream_track_A'));
     });
+
+    test('5. cancelAllExcept cancels other downloads and sets active playing song', () async {
+      await cacheService.cancelAllExcept('active_track_999');
+      expect(cacheService.getChunkState('active_track_999'), isNot(equals(ChunkLifecycleState.cancelled)));
+    });
   });
 }

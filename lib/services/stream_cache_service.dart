@@ -93,6 +93,22 @@ class StreamCacheService {
     } catch (_) {}
   }
 
+  /// Cancel and abort all background chunk downloads EXCEPT the actively requested song.
+  /// Gives 100% network bandwidth and process priority to the clicked song.
+  Future<void> cancelAllExcept(String activeVideoId) async {
+    _activePlayingVideoId = activeVideoId;
+    // Release all waiters in waiting queue immediately
+    while (_waitingQueue.isNotEmpty) {
+      try {
+        _waitingQueue.removeAt(0).complete();
+      } catch (_) {}
+    }
+    final otherIds = _inFlightDownloads.keys.where((id) => id != activeVideoId).toList();
+    for (final id in otherIds) {
+      await cancelAndDispose(id);
+    }
+  }
+
   /// Cache lives in the app's *cache* directory, not its documents directory:
   /// this is regenerable data, and Android is entitled to reclaim it under
   /// storage pressure rather than reporting the app as a space hog.
