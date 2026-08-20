@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sonic_wave/models/song.dart';
 import 'package:sonic_wave/providers/player_provider.dart';
 import 'package:sonic_wave/services/wearable_service.dart';
+import 'package:sonic_wave/widgets/wearable_connection_banner.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -96,6 +98,37 @@ void main() {
 
       expect(speakerEvent.iconLabel, '🔊');
       expect(carEvent.iconLabel, '🚗');
+    });
+
+    testWidgets('WearableConnectionBanner renders compact luxury pill without overflow on 320px phone', (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      WearableService().activeEventNotifier.value = WearableEvent(
+        name: 'OnePlus Bullets Wireless Z2',
+        type: WearableDeviceType.headset,
+        isConnected: true,
+        timestamp: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Stack(
+              children: const [
+                WearableConnectionBanner(),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('OnePlus Bullets Wireless Z2'), findsOneWidget);
+      expect(find.text('CONNECTED • LOSSLESS HI-FI'), findsOneWidget);
+
+      WearableService().activeEventNotifier.value = null;
     });
   });
 }

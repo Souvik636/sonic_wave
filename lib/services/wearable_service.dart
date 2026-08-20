@@ -102,18 +102,20 @@ class WearableService {
         } else if (call.method == 'onDeviceDisconnected') {
           final args = Map<String, dynamic>.from(call.arguments as Map);
           final name = (args['name'] as String?)?.trim() ?? 'Wireless Audio Accessory';
+          final rawType = args['type'] as String? ?? 'headset';
+          final type = _parseType(rawType, name);
 
-          _connectedDevices.removeWhere((d) => d.name == name);
+          _connectedDevices.clear();
           final event = WearableEvent(
             name: name,
-            type: WearableDeviceType.headset,
+            type: type,
             isConnected: false,
             timestamp: DateTime.now(),
           );
 
           AppHaptics.light();
           activeEventNotifier.value = event;
-          debugPrint('[WearableService] Disconnected: $name');
+          debugPrint('[WearableService] Disconnected: $name ($type)');
         }
       } catch (e) {
         debugPrint('[WearableService] MethodCall error: $e');

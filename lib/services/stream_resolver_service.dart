@@ -129,7 +129,7 @@ class StreamResolverService {
       return null;
     }
 
-    // 6. YouTube song — high-speed direct stream with parallel background caching
+    // 6. YouTube song — progressive chunk streaming + direct stream racing
     debugPrint('[StreamResolver] Resolving YouTube song: $id');
 
     // 6a. Check stream cache for an existing completed file (instant replay, 0ms latency)
@@ -141,36 +141,55 @@ class StreamResolverService {
       return ResolvedStream(cachedFile, source: 'youtube_cached');
     }
 
-    // 6b. Start background cache download so future plays are 100% offline-ready & instant
+    final completer = Completer<ResolvedStream?>();
+
+    // 6b. Progressive chunk download via yt-dlp (Fires onPlayable at first 128KB chunk for instant start)
     unawaited(() async {
       try {
         await cache.downloadToCache(
           videoId: id,
           quality: quality,
+          onPlayable: (filePath) {
+            if (!completer.isCompleted) {
+              debugPrint('[StreamResolver] Progressive stream chunk ready for $id: $filePath');
+              completer.complete(ResolvedStream(filePath, source: 'youtube_progressive'));
+            }
+          },
         );
       } catch (e) {
-        debugPrint('[StreamResolver] Background cache download error for $id: $e');
+        debugPrint('[StreamResolver] Progressive cache download error for $id: $e');
       }
     }());
 
-    // 6c. High-performance direct stream resolution (fast unthrottled streaming with zero truncation stalls)
-    try {
-      final ytUrl = await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
-      if (ytUrl.startsWith('http')) {
-        return ResolvedStream(ytUrl, source: 'youtube');
+    // 6c. Parallel direct stream resolution
+    unawaited(() async {
+      try {
+        final ytUrl = await _youtube.getAudioStreamUrl(id, forceRefresh: forceRefresh);
+        if (ytUrl.startsWith('http') && !completer.isCompleted) {
+          debugPrint('[StreamResolver] Direct stream URL ready for $id: $ytUrl');
+          completer.complete(ResolvedStream(ytUrl, source: 'youtube'));
+        }
+      } catch (e) {
+        debugPrint('[StreamResolver] Direct stream fallback failed for $id: $e');
+        try {
+          final proxyUrl = await _youtube.getFallbackStreamUrl(id);
+          if (proxyUrl != null && proxyUrl.startsWith('http') && !completer.isCompleted) {
+            completer.complete(ResolvedStream(proxyUrl, source: 'youtube_proxy'));
+          }
+        } catch (_) {}
       }
-    } catch (e) {
-      debugPrint('[StreamResolver] Direct stream fallback failed for $id: $e');
-    }
+    }());
 
-    // 6d. Fallback: Proxy stream URL (Invidious / Piped proxy server-side)
+    // Return the fastest playable source
     try {
-      final proxyUrl = await _youtube.getFallbackStreamUrl(id);
-      if (proxyUrl != null && proxyUrl.startsWith('http')) {
-        return ResolvedStream(proxyUrl, source: 'youtube_proxy');
-      }
-    } catch (e) {
-      debugPrint('[StreamResolver] Proxy fallback failed for $id: $e');
+      final stream = await completer.future.timeout(const Duration(seconds: 8));
+      if (stream != null) return stream;
+    } catch (_) {}
+
+    // Fallback: Check if cached file was finished in the interim
+    final fallbackCached = await cache.getCachedFile(id, quality.name);
+    if (fallbackCached != null) {
+      return ResolvedStream(fallbackCached, source: 'youtube_cached');
     }
 
     return null;

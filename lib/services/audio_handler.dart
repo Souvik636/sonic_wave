@@ -171,27 +171,48 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     _player.playbackEventStream.map(_transformEvent).listen(
       playbackState.add,
       onError: (Object e, StackTrace st) async {
-        // just_audio surfaces player errors on this stream; reflect them in
-        // playbackState instead of letting them escape as unhandled errors.
         debugPrint('[AudioHandler] playbackEventStream error: $e');
 
-        // Mid-stream connection recovery: check if stream cache file finished downloading
+        // Mid-stream connection recovery: check if stream cache file or fresh stream URL can resume
         final song = currentSong;
+        final currentPos = _player.position;
+
         if (song != null && !song.isLocalFile) {
+          // 1. Try recovering via stream cache file if already downloaded or in progress
           try {
             final quality = YouTubeService.streamingQuality.name;
             final cachedPath = await StreamCacheService().getCachedFile(song.videoId, quality);
             if (cachedPath != null && await File(cachedPath).exists()) {
-              final pos = _player.position;
-              debugPrint('[AudioHandler] Mid-stream connection drop recovered via cache file at $pos');
+              debugPrint('[AudioHandler] Mid-stream error recovered via cached file at $currentPos');
               await _player.setAudioSource(AudioSource.file(cachedPath));
-              if (pos > Duration.zero) {
-                await _player.seek(pos);
+              if (currentPos > Duration.zero) {
+                await _player.seek(currentPos);
               }
               _player.play();
               return;
             }
           } catch (_) {}
+
+          // 2. Seamless Mid-Stream Re-Resolution: Re-resolve fresh stream URL and resume at current position
+          try {
+            debugPrint('[AudioHandler] Stream interrupted at $currentPos. Re-resolving fresh URL to resume...');
+            YouTubeService.invalidateStreamUrl(song.videoId);
+            final freshStream = await StreamResolverService().resolve(song, forceRefresh: true);
+            if (freshStream != null && currentSong?.videoId == song.videoId) {
+              final headers = _buildStreamHeaders(freshStream);
+              await _player.setAudioSource(
+                AudioSource.uri(Uri.parse(freshStream.url), headers: headers),
+              );
+              if (currentPos > Duration.zero) {
+                await _player.seek(currentPos);
+              }
+              _player.play();
+              debugPrint('[AudioHandler] Successfully resumed mid-stream from $currentPos!');
+              return;
+            }
+          } catch (recoveryErr) {
+            debugPrint('[AudioHandler] Mid-stream live recovery failed: $recoveryErr');
+          }
         }
 
         playbackState.add(playbackState.value.copyWith(

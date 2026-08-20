@@ -182,9 +182,9 @@ class StreamCacheService {
   }
 
   /// Minimum bytes before we consider a partially-downloaded file playable.
-  /// ExoPlayer only needs ~128 KB of audio header + initial stream data to start
+  /// ExoPlayer only needs ~64 KB of audio header + initial stream data to start
   /// decoding and playing while yt-dlp continues downloading in the background.
-  static const int _playableThreshold = 128 * 1024; // 128 KB
+  static const int _playableThreshold = 64 * 1024; // 64 KB
 
   /// Check if a playable cache file exists for [songId] at [quality].
   Future<bool> hasCache(String songId, String quality) async {
@@ -379,6 +379,20 @@ class StreamCacheService {
       onProgress?.call(fraction);
     });
 
+    void notifyPlayable(String path) {
+      _inFlightPlayablePath[videoId] = path;
+      onPlayable?.call(path);
+      final listeners = _inFlightPlayableListeners[videoId];
+      if (listeners != null) {
+        for (final listener in List<ValueChanged<String>>.from(listeners)) {
+          try {
+            listener(path);
+          } catch (_) {}
+        }
+        listeners.clear();
+      }
+    }
+
     try {
       debugPrint('[StreamCache] Starting yt-dlp cache download for $videoId');
 
@@ -416,24 +430,10 @@ class StreamCacheService {
         },
       );
 
-      void notifyPlayable(String path) {
-        _inFlightPlayablePath[videoId] = path;
-        onPlayable?.call(path);
-        final listeners = _inFlightPlayableListeners[videoId];
-        if (listeners != null) {
-          for (final listener in List<ValueChanged<String>>.from(listeners)) {
-            try {
-              listener(path);
-            } catch (_) {}
-          }
-          listeners.clear();
-        }
-      }
-
       // Start a fast timer to monitor staging directory for file growth.
       // With --no-part, yt-dlp writes directly to the output file, so we can
       // detect playability progressively in ~500-1000ms.
-      monitorTimer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
+      monitorTimer = Timer.periodic(const Duration(milliseconds: 100), (_) async {
         if (playableFired) return;
         try {
           final entities = await stagingDirObj.list().toList();
@@ -512,10 +512,30 @@ class StreamCacheService {
     } catch (e) {
       monitorTimer?.cancel();
       debugPrint('[StreamCache] Cache download failed for $videoId: $e');
-      // Clean up on failure
+
+      // Preserve partial staged file if it already contains playable audio (> 128KB)
+      bool hasPlayableStagedFile = false;
       try {
-        await stagingDirObj.delete(recursive: true);
+        final entities = await stagingDirObj.list().toList();
+        for (final entity in entities) {
+          if (entity is File && entity.path.contains(videoId)) {
+            final len = await entity.length();
+            if (len >= _playableThreshold) {
+              hasPlayableStagedFile = true;
+              debugPrint('[StreamCache] Preserving partial stream download (${len ~/ 1024}KB) for $videoId: ${entity.path}');
+              notifyPlayable(entity.path);
+              break;
+            }
+          }
+        }
       } catch (_) {}
+
+      // Only clean up staging if no playable data exists and song is not active
+      if (!hasPlayableStagedFile && _activePlayingVideoId != videoId) {
+        try {
+          await stagingDirObj.delete(recursive: true);
+        } catch (_) {}
+      }
       rethrow;
     } finally {
       await progressSub.cancel();

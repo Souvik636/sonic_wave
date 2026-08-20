@@ -394,6 +394,8 @@ class MainActivity : AudioServiceActivity() {
     }
 
     private var audioDeviceCallback: AudioDeviceCallback? = null
+    private var lastConnectedDeviceName: String? = null
+    private var lastConnectedDeviceType: String? = null
 
     private fun registerAudioDeviceCallback() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
@@ -447,14 +449,36 @@ class MainActivity : AudioServiceActivity() {
                     val addr = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
                         foundDevice.address ?: ""
                     } else ""
-                    runOnUiThread {
-                        wearableChannel?.invokeMethod("onDeviceConnected", mapOf(
-                            "name" to name,
-                            "type" to category,
-                            "address" to addr
-                        ))
+
+                    val wasConnected = lastConnectedDeviceName != null
+                    val isSame = lastConnectedDeviceName == name
+                    lastConnectedDeviceName = name
+                    lastConnectedDeviceType = category
+
+                    if (!wasConnected || !isSame) {
+                        runOnUiThread {
+                            wearableChannel?.invokeMethod("onDeviceConnected", mapOf(
+                                "name" to name,
+                                "type" to category,
+                                "address" to addr
+                            ))
+                        }
                     }
                     return
+                } else {
+                    // No external accessory found -> dispatch disconnect if one was connected
+                    if (lastConnectedDeviceName != null) {
+                        val prevName = lastConnectedDeviceName ?: "Wireless Audio Accessory"
+                        val prevType = lastConnectedDeviceType ?: "headset"
+                        lastConnectedDeviceName = null
+                        lastConnectedDeviceType = null
+                        runOnUiThread {
+                            wearableChannel?.invokeMethod("onDeviceDisconnected", mapOf(
+                                "name" to prevName,
+                                "type" to prevType
+                            ))
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -497,10 +521,15 @@ class MainActivity : AudioServiceActivity() {
                             @Suppress("DEPRECATION")
                             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                         }
-                        val name = try { device?.name ?: "Audio Device" } catch (e: SecurityException) { "Audio Device" }
+                        val rawName = try { device?.name } catch (e: SecurityException) { null }
+                        val name = rawName ?: lastConnectedDeviceName ?: "Wireless Audio Accessory"
+                        val type = lastConnectedDeviceType ?: "headset"
+                        lastConnectedDeviceName = null
+                        lastConnectedDeviceType = null
                         runOnUiThread {
                             wearableChannel?.invokeMethod("onDeviceDisconnected", mapOf(
-                                "name" to name
+                                "name" to name,
+                                "type" to type
                             ))
                         }
                     }

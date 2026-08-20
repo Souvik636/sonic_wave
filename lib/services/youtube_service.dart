@@ -9,6 +9,7 @@ import '../providers/settings_provider.dart' show AudioQuality;
 import 'youtube_link_parser.dart';
 import 'ytdlp_runtime.dart';
 import 'encoding_sanitizer.dart';
+import 'jiosaavn_service.dart';
 
 class YouTubeService {
   final YoutubeExplode _yt = YoutubeExplode();
@@ -655,6 +656,67 @@ class YouTubeService {
     return null;
   }
 
+  /// Fetch live official YouTube Music trending songs directly from Invidious API
+  Future<List<Song>?> _fetchInvidiousTrending() async {
+    _loadWorkingInstances();
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+
+    for (final instance in _invidiousInstances) {
+      if (_isCoolingDown(_instanceCooldown, instance)) continue;
+
+      try {
+        final uri = Uri.https(instance, '/api/v1/trending', {'type': 'music'});
+        final request = await client.getUrl(uri).timeout(const Duration(seconds: 4));
+        final response = await request.close().timeout(const Duration(seconds: 4));
+
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          final data = json.decode(body);
+          if (data is List) {
+            final List<Song> songs = [];
+            for (final item in data) {
+              final videoId = item['videoId'] as String?;
+              final title = item['title'] as String? ?? 'Unknown';
+              final author = item['author'] as String? ?? 'Unknown';
+              final durationSecs = item['lengthSeconds'] as int? ?? 180;
+
+              if (videoId != null && videoId.isNotEmpty) {
+                String thumb = item['videoThumbnails']?.first['url'] as String? ?? '';
+                if (thumb.isNotEmpty) {
+                  thumb = EncodingSanitizer.sanitizeThumbnailUrl(thumb, videoId: videoId);
+                } else {
+                  thumb = 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+                }
+
+                final cleanTitle = EncodingSanitizer.sanitize(title);
+                final cleanAuthor = EncodingSanitizer.sanitize(author);
+
+                songs.add(Song(
+                  id: videoId,
+                  title: cleanTitle.isNotEmpty ? cleanTitle : 'YouTube Video',
+                  artist: cleanAuthor.isNotEmpty ? cleanAuthor : 'YouTube',
+                  thumbnailUrl: thumb,
+                  highResThumbnailUrl: thumb,
+                  duration: Duration(seconds: durationSecs),
+                  videoId: videoId,
+                ));
+              }
+            }
+            if (songs.isNotEmpty) {
+              client.close();
+              return songs;
+            }
+          }
+        }
+      } catch (e) {
+        _instanceCooldown[instance] = DateTime.now();
+        debugPrint('[YT] Invidious trending failed for instance $instance: $e');
+      }
+    }
+    client.close();
+    return null;
+  }
+
   /// Resolve a stream URL from the Invidious mirror pool.
   ///
   /// [shouldAbort] is polled between instances so the walk stops the moment the
@@ -810,30 +872,92 @@ class YouTubeService {
     return [];
   }
 
-  /// Get trending music videos dynamically from YouTube. Falls back to static list.
+  static List<Song> get trendingNowFallback => List.unmodifiable(_trendingNow);
+
+  /// Category search query mappings for daily dynamic genre discovery
+  static const Map<String, String> _categoryDiscoveryQueries = {
+    'Pop Hits': 'top pop hits songs 2026',
+    'Hip Hop': 'trending hip hop rap songs 2026',
+    'Lo-Fi Chill': 'lofi chill study beats relaxing',
+    'Bollywood': 'latest bollywood trending songs 2026',
+    'EDM': 'top edm dance electronic music',
+    'Rock': 'top rock songs modern alt rock',
+    'R&B Soul': 'latest r&b soul music hits',
+    'Jazz': 'smooth modern jazz relaxing music',
+  };
+
+  /// Get trending music videos dynamically from live YouTube Music & JioSaavn charts.
   Future<List<Song>> getTrendingMusic({bool forceRefresh = false}) async {
-    // Trending is fetched live on every call, so [forceRefresh] is accepted for
-    // API symmetry with the cached paths but needs no special handling here.
+    // 1. Try Live Invidious Official YouTube Music Trending API
+    try {
+      final invidiousTrending = await _fetchInvidiousTrending();
+      if (invidiousTrending != null && invidiousTrending.isNotEmpty) {
+        debugPrint('[YT] Fetched ${invidiousTrending.length} live trending songs from Invidious YouTube Music');
+        return invidiousTrending.take(20).toList();
+      }
+    } catch (e) {
+      debugPrint('[YT] Invidious trending fetch error: $e');
+    }
+
+    // 2. Try JioSaavn Live Top Charts & Trending Hits (High 320kbps Quality)
+    try {
+      final saavnTrending = await JioSaavnService().searchSongs('trending top hits 2026', maxResults: 20);
+      if (saavnTrending.isNotEmpty) {
+        debugPrint('[YT] Fetched ${saavnTrending.length} live trending songs from JioSaavn');
+        return saavnTrending;
+      }
+    } catch (e) {
+      debugPrint('[YT] JioSaavn trending fetch error: $e');
+    }
+
+    // 3. Try Invidious / YouTube Explode search query
+    try {
+      final liveTrending = await searchSongs('trending music global top 50 official', maxResults: 20);
+      if (liveTrending.isNotEmpty) {
+        return liveTrending;
+      }
+    } catch (e) {
+      debugPrint('[YT] Dynamic search for trending failed: $e');
+    }
+
+    // 4. Try official playlist
     try {
       final List<Song> trending = [];
-      // PL4fGSI1pDJn5kI81J1fYxT5M838p9c58A is YouTube Music's official Trending playlist
       final playlistVideos = _yt.playlists.getVideos('PL4fGSI1pDJn5kI81J1fYxT5M838p9c58A');
       await for (final video in playlistVideos.take(20)) {
         trending.add(_videoToSong(video));
       }
       if (trending.isNotEmpty) return trending;
-    } catch (e) {
-      debugPrint('Failed to fetch dynamic trending from YouTube: $e');
-    }
-    // Return predefined trending list directly as fallback
+    } catch (_) {}
+
+    // 5. Return predefined trending list directly as fallback
     return List.from(_trendingNow);
   }
 
-  /// Get songs by genre/mood (Static offline-first layout, zero startup server calls)
+  /// Get songs by genre/mood with live JioSaavn/YouTube search & offline static fallback
   Future<List<Song>> getSongsByCategory(String category,
       {bool forceRefresh = false}) async {
-    // Category listings come from the static catalog, so [forceRefresh] is a
-    // no-op here; it exists for API parity with the live fetch paths.
+    final query = _categoryDiscoveryQueries[category];
+    if (query != null) {
+      // 1. Try JioSaavn direct search for instant CD-quality tracks
+      try {
+        final saavnSongs = await JioSaavnService().searchSongs(query, maxResults: 15);
+        if (saavnSongs.isNotEmpty) {
+          return saavnSongs;
+        }
+      } catch (_) {}
+
+      // 2. Try YouTube / Invidious search
+      try {
+        final liveSongs = await searchSongs(query, maxResults: 15);
+        if (liveSongs.isNotEmpty) {
+          return liveSongs;
+        }
+      } catch (e) {
+        debugPrint('[YT] Category query failed for $category: $e');
+      }
+    }
+
     if (_staticCatalog.containsKey(category)) {
       return List.from(_staticCatalog[category]!);
     }

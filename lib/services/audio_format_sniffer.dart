@@ -63,6 +63,9 @@ class AudioFormatSniffer {
     if (bytes.length < 16) return const SniffedAudio(format: 'mp3');
 
     // 1. Direct offset 0 check
+    if (bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3) {
+      return const SniffedAudio(format: 'webm', offset: 0); // EBML (WebM/Matroska)
+    }
     if (bytes[0] == 0x49 && bytes[1] == 0x44 && bytes[2] == 0x33) {
       return const SniffedAudio(format: 'mp3', offset: 0); // ID3v2
     }

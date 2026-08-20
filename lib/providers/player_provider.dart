@@ -218,7 +218,12 @@ class PlayerProvider extends ChangeNotifier {
     };
 
     // Listen to playback state changes
-    _playbackStateSub = _audioHandler.playbackState.listen((_) {
+    _playbackStateSub = _audioHandler.playbackState.listen((state) {
+      if (state.playing || state.processingState == AudioProcessingState.ready) {
+        if (_loadingSong != null) {
+          _loadingSong = null;
+        }
+      }
       notifyListeners();
     });
 
@@ -232,12 +237,25 @@ class PlayerProvider extends ChangeNotifier {
 
     // Listen to processing state changes (buffering/loading)
     _processingStateSub = _audioHandler.player.processingStateStream.listen((state) {
+      if (state == ProcessingState.ready || state == ProcessingState.completed) {
+        if (_loadingSong != null) {
+          _loadingSong = null;
+        }
+      }
       // "Stop after this song" sleep mode: pause once the track completes.
       if (state == ProcessingState.completed && _sleepAfterCurrentTrack) {
         _sleepAfterCurrentTrack = false;
         pause();
       }
       notifyListeners();
+    });
+
+    // Listen to player position stream to clear loading spinner immediately once audio starts
+    _audioHandler.player.positionStream.listen((pos) {
+      if (pos > Duration.zero && _loadingSong != null) {
+        _loadingSong = null;
+        notifyListeners();
+      }
     });
   }
 
@@ -739,10 +757,14 @@ class PlayerProvider extends ChangeNotifier {
 
   Song? get loadingSong => _loadingSong;
   bool get isPlaying => _audioHandler.player.playing;
-  bool get isBuffering =>
-      _loadingSong != null ||
-      _audioHandler.player.processingState == ProcessingState.loading ||
-      _audioHandler.player.processingState == ProcessingState.buffering;
+  bool get isBuffering {
+    if (_audioHandler.player.playing && _audioHandler.player.position > Duration.zero) {
+      return _audioHandler.player.processingState == ProcessingState.buffering;
+    }
+    return _loadingSong != null ||
+        _audioHandler.player.processingState == ProcessingState.loading ||
+        _audioHandler.player.processingState == ProcessingState.buffering;
+  }
   bool get hasCurrentSong => currentSong != null;
 
   bool isSongLoading(Song song) {

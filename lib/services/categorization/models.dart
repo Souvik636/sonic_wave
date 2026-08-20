@@ -88,6 +88,7 @@ class CategorizationRequest {
           if (userCategories.isNotEmpty) GroupingStrategy.byUserCategories,
           GroupingStrategy.byFolder,
           GroupingStrategy.byArtist,
+          GroupingStrategy.byGenre,
           GroupingStrategy.byMood,
         ]);
       } else {
