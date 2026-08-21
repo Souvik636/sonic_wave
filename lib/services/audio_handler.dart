@@ -180,7 +180,7 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         final currentPos = _player.position;
 
         if (song != null && !song.isLocalFile) {
-          // 1. Try recovering via stream cache file if already downloaded or in progress
+          // 1. Try recovering via stream cache file if already downloaded
           try {
             final quality = YouTubeService.streamingQuality.name;
             final cachedPath = await StreamCacheService().getCachedFile(song.videoId, quality);
@@ -195,16 +195,36 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
             }
           } catch (_) {}
 
-          // 2. Seamless Mid-Stream Re-Resolution: Re-resolve fresh stream URL and resume at current position
+          // 2. Check if progressive chunk download has become playable
+          try {
+            final progressivePath = StreamCacheService().getInFlightPlayablePath(song.videoId);
+            if (progressivePath != null && await File(progressivePath).exists()) {
+              debugPrint('[AudioHandler] Mid-stream error recovered via progressive chunk at $currentPos');
+              await _player.setAudioSource(AudioSource.file(progressivePath));
+              if (currentPos > Duration.zero) {
+                await _player.seek(currentPos);
+              }
+              _player.play();
+              return;
+            }
+          } catch (_) {}
+
+          // 3. Seamless Mid-Stream Re-Resolution: Re-resolve fresh stream URL and resume at current position
           try {
             debugPrint('[AudioHandler] Stream interrupted at $currentPos. Re-resolving fresh URL to resume...');
             YouTubeService.invalidateStreamUrl(song.videoId);
             final freshStream = await StreamResolverService().resolve(song, forceRefresh: true);
             if (freshStream != null && currentSong?.videoId == song.videoId) {
-              final headers = _buildStreamHeaders(freshStream);
-              await _player.setAudioSource(
-                AudioSource.uri(Uri.parse(freshStream.url), headers: headers),
+              final defaultAlbum = song.isLocalFile ? 'Local Storage' : 'YouTube';
+              final mediaItem = MediaItem(
+                id: song.videoId,
+                album: song.albumFolderName ?? defaultAlbum,
+                title: song.title,
+                artist: song.artist,
+                duration: song.duration,
               );
+              final source = await _createAudioSourceFor(freshStream, song, mediaItem);
+              await _player.setAudioSource(source);
               if (currentPos > Duration.zero) {
                 await _player.seek(currentPos);
               }
@@ -695,7 +715,41 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       // every later attempt in this session, from retrying the same dead link.
       YouTubeService.invalidateStreamUrl(song.videoId);
 
-      // Primary failed → try forceRefresh resolution (bypasses all caches)
+      // Primary source failed (e.g. 403 on direct HTTP URL).
+      // 1. First check if progressive cache file is already available
+      try {
+        final qualityName = YouTubeService.streamingQuality.name;
+        final cachedPath = await StreamCacheService().getCachedFile(song.videoId, qualityName);
+        if (cachedPath != null && await File(cachedPath).exists() && _playGeneration == thisGeneration) {
+          debugPrint('[AudioHandler] Recovered from primary stream failure via completed cache: $cachedPath');
+          await _loadResolvedSource(
+            ResolvedStream(cachedPath, source: 'youtube_cached'),
+            song,
+            thisGeneration,
+          );
+          return;
+        }
+      } catch (_) {}
+
+      // 2. Wait up to 12s for the in-flight progressive chunk to become playable (&ge; 64KB)
+      try {
+        debugPrint('[AudioHandler] Primary direct stream failed. Waiting for in-flight progressive chunk...');
+        final progressivePath = await StreamCacheService().waitForPlayable(
+          song.videoId,
+          timeout: const Duration(seconds: 12),
+        );
+        if (progressivePath != null && await File(progressivePath).exists() && _playGeneration == thisGeneration) {
+          debugPrint('[AudioHandler] Recovered from primary stream failure via progressive chunk: $progressivePath');
+          await _loadResolvedSource(
+            ResolvedStream(progressivePath, source: 'youtube_progressive'),
+            song,
+            thisGeneration,
+          );
+          return;
+        }
+      } catch (_) {}
+
+      // 3. Fallback: try forceRefresh resolution (bypasses all caches)
       if (_playGeneration != thisGeneration) return;
       debugPrint('[AudioHandler] Primary source failed. Retrying with forceRefresh...');
       try {
@@ -840,35 +894,37 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     );
 
     await _withPlayerLock(thisGeneration, () async {
-      if (resolved.isLive) {
-        final headers = _buildStreamHeaders(resolved);
-        await _player.setAudioSource(
-          AudioSource.uri(
-            Uri.parse(resolved.url),
-            headers: headers,
-            tag: mediaItem,
-          ),
-        );
-      } else if (resolved.url.startsWith('file://') ||
-          resolved.url.startsWith('/') ||
-          (resolved.url.length >= 3 && resolved.url[1] == ':' && (resolved.url[2] == '/' || resolved.url[2] == '\\'))) {
-        final filePath = resolved.url.startsWith('file://')
-            ? Uri.parse(resolved.url).toFilePath()
-            : resolved.url;
-        final rawFile = File(filePath);
-        final playableFile = await AudioFormatSniffer().getPlayableFile(rawFile);
-        debugPrint('[AudioHandler] Playing local audio file: ${playableFile.path}');
-        await _player.setAudioSource(
-          AudioSource.file(playableFile.path, tag: mediaItem),
-        );
-      } else {
-        debugPrint('[AudioHandler] Playing HTTP stream URL: ${resolved.url}');
-        final headers = _buildStreamHeaders(resolved);
-        await _player.setAudioSource(
-          await _cachingSourceFor(resolved, song, mediaItem, headers),
-        );
-      }
+      final source = await _createAudioSourceFor(resolved, song, mediaItem);
+      await _player.setAudioSource(source);
     });
+  }
+
+  /// Unified factory that creates safe AudioSource for both local files and remote HTTP URLs.
+  Future<AudioSource> _createAudioSourceFor(
+    ResolvedStream resolved,
+    Song song,
+    MediaItem mediaItem,
+  ) async {
+    final url = resolved.url;
+    if (resolved.isLive) {
+      final headers = _buildStreamHeaders(resolved);
+      return AudioSource.uri(Uri.parse(url), headers: headers, tag: mediaItem);
+    }
+
+    final isLocalFile = url.startsWith('file://') ||
+        url.startsWith('/') ||
+        (url.length >= 3 && url[1] == ':' && (url[2] == '/' || url[2] == '\\'));
+
+    if (isLocalFile) {
+      final filePath = url.startsWith('file://') ? Uri.parse(url).toFilePath() : url;
+      final rawFile = File(filePath);
+      final playableFile = await AudioFormatSniffer().getPlayableFile(rawFile);
+      debugPrint('[AudioHandler] Playing local audio file: ${playableFile.path}');
+      return AudioSource.file(playableFile.path, tag: mediaItem);
+    } else {
+      final headers = _buildStreamHeaders(resolved);
+      return await _cachingSourceFor(resolved, song, mediaItem, headers);
+    }
   }
 
   /// Build the audio source for a streamed song, serving from disk if previously cached

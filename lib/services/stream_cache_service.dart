@@ -276,6 +276,32 @@ class StreamCacheService {
     return null;
   }
 
+  /// Get already available playable path for in-flight download if present.
+  String? getInFlightPlayablePath(String videoId) {
+    return _inFlightPlayablePath[videoId];
+  }
+
+  /// Wait for an in-flight download to reach playable threshold (or complete).
+  Future<String?> waitForPlayable(String videoId, {Duration timeout = const Duration(seconds: 12)}) async {
+    final existing = _inFlightPlayablePath[videoId];
+    if (existing != null && File(existing).existsSync()) return existing;
+
+    final completer = Completer<String?>();
+    void listener(String path) {
+      if (!completer.isCompleted) completer.complete(path);
+    }
+
+    _inFlightPlayableListeners.putIfAbsent(videoId, () => []).add(listener);
+
+    try {
+      return await completer.future.timeout(timeout);
+    } catch (_) {
+      return _inFlightPlayablePath[videoId];
+    } finally {
+      _inFlightPlayableListeners[videoId]?.remove(listener);
+    }
+  }
+
   final Map<String, Future<String>> _inFlightDownloads = {};
   final Map<String, List<ValueChanged<String>>> _inFlightPlayableListeners = {};
   final Map<String, String?> _inFlightPlayablePath = {};
