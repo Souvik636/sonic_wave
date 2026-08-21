@@ -443,6 +443,9 @@ class StreamCacheService {
   }) async {
     final qualityName = quality.name;
 
+    // Clear any previous cancellation marker for this specific videoId
+    _cancelledIds.remove(videoId);
+
     // 2. Ensure yt-dlp runtime is ready
     if (!YtDlpRuntime.isReady) {
       final ok = await YtDlpRuntime.ensureInitialized().timeout(

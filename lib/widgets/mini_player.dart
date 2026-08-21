@@ -186,7 +186,7 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                 }
               }
             },
-            onDoubleTap: activeIndex == 0
+            onDoubleTap: (activeIndex == 0 && playerProvider.isPlayPauseEnabled)
                 ? () {
                     AppHaptics.light();
                     playerProvider.togglePlayPause();
@@ -746,10 +746,12 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
 
                                     // Hero Floating Play/Pause Button
                                     PremiumTap(
-                                      onTap: () {
-                                        AppHaptics.light();
-                                        playerProvider.togglePlayPause();
-                                      },
+                                      onTap: playerProvider.isPlayPauseEnabled
+                                          ? () {
+                                              AppHaptics.light();
+                                              playerProvider.togglePlayPause();
+                                            }
+                                          : null,
                                       pressedScale: 0.90,
                                       child: Container(
                                         width: 50,
@@ -766,7 +768,7 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: primaryColor.withValues(alpha: 0.45),
+                                              color: primaryColor.withValues(alpha: playerProvider.isPlayPauseEnabled ? 0.45 : 0.2),
                                               blurRadius: 14,
                                               spreadRadius: 1,
                                               offset: const Offset(0, 3),
@@ -775,12 +777,22 @@ class _MiniPlayerState extends State<MiniPlayer> with TickerProviderStateMixin {
                                         ),
                                         child: AnimatedSwitcher(
                                           duration: const Duration(milliseconds: 180),
-                                          child: Icon(
-                                            isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                                            key: ValueKey(isPlaying),
-                                            color: Colors.white,
-                                            size: 30,
-                                          ),
+                                          child: !playerProvider.isPlayPauseEnabled
+                                              ? const SizedBox(
+                                                  key: ValueKey('floating_mini_loading'),
+                                                  width: 22,
+                                                  height: 22,
+                                                  child: CircularProgressIndicator(
+                                                    color: Colors.white,
+                                                    strokeWidth: 2.2,
+                                                  ),
+                                                )
+                                              : Icon(
+                                                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                                  key: ValueKey(isPlaying),
+                                                  color: Colors.white,
+                                                  size: 30,
+                                                ),
                                         ),
                                       ),
                                     ),
@@ -1005,16 +1017,33 @@ class _PlayPauseButtonState extends State<_PlayPauseButton> with SingleTickerPro
               _animController.reverse();
             }
 
+            final canPlayPause = widget.playerProvider.isPlayPauseEnabled;
             return IconButton(
-              onPressed: () {
-                AppHaptics.light();
-                widget.playerProvider.togglePlayPause();
-              },
-              icon: AnimatedIcon(
-                icon: AnimatedIcons.play_pause,
-                progress: _animController,
-                color: AppColors.textPrimary,
-                size: 26,
+              onPressed: canPlayPause
+                  ? () {
+                      AppHaptics.light();
+                      widget.playerProvider.togglePlayPause();
+                    }
+                  : null,
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: !canPlayPause
+                    ? SizedBox(
+                        key: const ValueKey('compact_mini_loading'),
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Theme.of(context).colorScheme.primary,
+                          strokeWidth: 2.0,
+                        ),
+                      )
+                    : AnimatedIcon(
+                        key: const ValueKey('compact_mini_icon'),
+                        icon: AnimatedIcons.play_pause,
+                        progress: _animController,
+                        color: AppColors.textPrimary,
+                        size: 26,
+                      ),
               ),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,

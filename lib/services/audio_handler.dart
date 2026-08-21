@@ -644,7 +644,10 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       if (_playGeneration != thisGeneration) return;
 
       _nearEndPrefetchedIndex = -1;
-      _player.play();
+      await _withPlayerLock(thisGeneration, () async {
+        if (_playGeneration != thisGeneration) return;
+        await _player.play();
+      });
 
       // The equalizer is a pure effect on an already-running stream, so it does
       // NOT gate first audio — applying it used to cost several awaits ahead of
@@ -1415,21 +1418,44 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
         final len = await File(cachedPath).length();
         if (len > 128 * 1024) {
           debugPrint('[AudioHandler] Seamless stitch resuming playback at $pos via full cache file ($len bytes)');
-          await _player.setAudioSource(AudioSource.file(cachedPath));
+          final mediaItem = MediaItem(
+            id: song.videoId,
+            album: song.albumFolderName ?? (song.isLocalFile ? 'Local Storage' : 'YouTube'),
+            title: song.title,
+            artist: song.artist,
+            duration: song.duration,
+          );
+          final source = await _createAudioSourceFor(
+            ResolvedStream(cachedPath, source: 'youtube_cached'),
+            song,
+            mediaItem,
+          );
+          await _player.setAudioSource(source);
           await _player.seek(pos);
-          _player.play();
+          await _player.play();
           return;
         }
       }
 
-      // If cache is still finalizing, wait 800ms and retry once
-      await Future.delayed(const Duration(milliseconds: 800));
-      final retryCache = await StreamCacheService().getCachedFile(song.videoId, quality);
-      if (retryCache != null && await File(retryCache).exists()) {
-        debugPrint('[AudioHandler] Seamless stitch retry resuming playback at $pos');
-        await _player.setAudioSource(AudioSource.file(retryCache));
+      // If cache is still finalizing, wait up to 2s for in-flight progressive chunk / completed file
+      final playable = await StreamCacheService().waitForPlayable(song.videoId, timeout: const Duration(seconds: 2));
+      if (playable != null && await File(playable).exists()) {
+        debugPrint('[AudioHandler] Seamless stitch retry resuming playback at $pos via $playable');
+        final mediaItem = MediaItem(
+          id: song.videoId,
+          album: song.albumFolderName ?? (song.isLocalFile ? 'Local Storage' : 'YouTube'),
+          title: song.title,
+          artist: song.artist,
+          duration: song.duration,
+        );
+        final source = await _createAudioSourceFor(
+          ResolvedStream(playable, source: 'youtube_progressive'),
+          song,
+          mediaItem,
+        );
+        await _player.setAudioSource(source);
         await _player.seek(pos);
-        _player.play();
+        await _player.play();
         return;
       }
     } catch (e) {

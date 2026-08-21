@@ -788,6 +788,24 @@ class PlayerProvider extends ChangeNotifier {
   }
   bool get hasCurrentSong => currentSong != null;
 
+  /// Returns true only when a song is actively playing or in a playable/ready paused state.
+  /// When true, the Play/Pause button is active. When false (track is still resolving/loading/buffering),
+  /// the UI shows the loading animation and clicking on it is a no-op.
+  bool get isPlayPauseEnabled {
+    if (!hasCurrentSong) return false;
+    if (_loadingSong != null) return false;
+    if (_audioHandler.player.processingState == ProcessingState.loading) return false;
+    final cur = currentSong;
+    if (cur != null && !cur.isLocalFile) {
+      final chunkState = StreamCacheService.chunkStateNotifier.value[cur.videoId];
+      final isChunkReady = chunkState == ChunkLifecycleState.ready || chunkState == ChunkLifecycleState.completed;
+      if (!isChunkReady && !_audioHandler.player.playing && _audioHandler.player.position == Duration.zero) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   bool isSongLoading(Song song) {
     final chunkState = StreamCacheService.chunkStateNotifier.value[song.videoId];
     if (chunkState == ChunkLifecycleState.ready || chunkState == ChunkLifecycleState.completed) {
@@ -1017,6 +1035,7 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   Future<void> togglePlayPause() async {
+    if (!isPlayPauseEnabled) return;
     if (isPlaying) {
       await pause();
     } else {

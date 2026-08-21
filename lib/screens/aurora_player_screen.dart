@@ -630,8 +630,10 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
           _triggerSeekFeedback(10);
         } else {
           // Toggle Play / Pause
-          AppHaptics.light();
-          pp.togglePlayPause();
+          if (pp.isPlayPauseEnabled) {
+            AppHaptics.light();
+            pp.togglePlayPause();
+          }
         }
       },
       onLongPress: () {
@@ -1209,10 +1211,12 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                 ),
                 // Play / Pause — the hero button
                 PremiumTap(
-                  onTap: () {
-                    AppHaptics.light();
-                    pp.togglePlayPause();
-                  },
+                  onTap: pp.isPlayPauseEnabled
+                      ? () {
+                          AppHaptics.light();
+                          pp.togglePlayPause();
+                        }
+                      : null,
                   pressedScale: 0.90,
                   child: AnimatedBuilder(
                     animation: _beatController,
@@ -1232,7 +1236,7 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: primary.withValues(alpha: 0.4 + _bassEnergy * 0.2),
+                                color: primary.withValues(alpha: pp.isPlayPauseEnabled ? (0.4 + _bassEnergy * 0.2) : 0.2),
                                 blurRadius: 20 + _bassEnergy * 10,
                                 spreadRadius: 2 + _bassEnergy * 3,
                               ),
@@ -1240,7 +1244,7 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                           ),
                           child: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 200),
-                            child: (pp.isBuffering && (!pp.isPlaying || pp.position == Duration.zero))
+                            child: !pp.isPlayPauseEnabled
                                 ? const SizedBox(
                                     key: ValueKey('aurora_loading'),
                                     width: 26,

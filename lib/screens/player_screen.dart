@@ -5,7 +5,6 @@ import 'dart:math' as math;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
@@ -432,8 +431,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                     _triggerSeekFeedback(10);
                   } else {
                     // Toggle Play / Pause
-                    AppHaptics.light();
-                    provider.togglePlayPause();
+                    if (provider.isPlayPauseEnabled) {
+                      AppHaptics.light();
+                      provider.togglePlayPause();
+                    }
                   }
                 },
                 onLongPress: () {
@@ -1661,13 +1662,17 @@ class _PlayPauseMainButtonState extends State<_PlayPauseMainButton>
           _iconController.reverse();
         }
 
+        final canPlayPause = widget.playerProvider.isPlayPauseEnabled;
+
         return GestureDetector(
-          onTapDown: (_) => _scaleController.forward(),
-          onTapUp: (_) {
-            _scaleController.reverse();
-            AppHaptics.light();
-            widget.playerProvider.togglePlayPause();
-          },
+          onTapDown: canPlayPause ? (_) => _scaleController.forward() : null,
+          onTapUp: canPlayPause
+              ? (_) {
+                  _scaleController.reverse();
+                  AppHaptics.light();
+                  widget.playerProvider.togglePlayPause();
+                }
+              : null,
           onTapCancel: () => _scaleController.reverse(),
           child: ScaleTransition(
             scale: _scaleAnimation,
@@ -1679,56 +1684,36 @@ class _PlayPauseMainButtonState extends State<_PlayPauseMainButton>
                 gradient: Provider.of<SettingsProvider>(context).accentGradient,
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: canPlayPause ? 0.5 : 0.25),
                     blurRadius: 20,
                     spreadRadius: 2,
                   ),
                 ],
               ),
               child: Center(
-                child: StreamBuilder<ProcessingState>(
-                  stream: widget.playerProvider.processingStateStream,
-                  builder: (context, stateSnapshot) {
-                    final state = stateSnapshot.data ?? ProcessingState.idle;
-                    final isPlaying = widget.playerProvider.isPlaying;
-                    final curSong = widget.playerProvider.currentSong;
-                    final chunkState = curSong != null
-                        ? StreamCacheService.chunkStateNotifier.value[curSong.videoId]
-                        : null;
-                    final isChunkReady = chunkState == ChunkLifecycleState.ready ||
-                        chunkState == ChunkLifecycleState.completed;
-                    final isInitialLoad =
-                        (!isPlaying || widget.playerProvider.position == Duration.zero) &&
-                            !isChunkReady;
-                    final bool loading = (state == ProcessingState.loading ||
-                            state == ProcessingState.buffering ||
-                            widget.playerProvider.loadingSong != null) &&
-                        isInitialLoad;
-                    return AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      transitionBuilder: (child, anim) => FadeTransition(
-                        opacity: anim,
-                        child: ScaleTransition(scale: anim, child: child),
-                      ),
-                      child: loading
-                          ? const SizedBox(
-                              key: ValueKey('loading'),
-                              width: 28,
-                              height: 28,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.5,
-                              ),
-                            )
-                          : AnimatedIcon(
-                              key: const ValueKey('icon'),
-                              icon: AnimatedIcons.play_pause,
-                              progress: _iconController,
-                              color: Colors.white,
-                              size: 36,
-                            ),
-                    );
-                  },
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder: (child, anim) => FadeTransition(
+                    opacity: anim,
+                    child: ScaleTransition(scale: anim, child: child),
+                  ),
+                  child: !canPlayPause
+                      ? const SizedBox(
+                          key: ValueKey('loading'),
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : AnimatedIcon(
+                          key: const ValueKey('icon'),
+                          icon: AnimatedIcons.play_pause,
+                          progress: _iconController,
+                          color: Colors.white,
+                          size: 36,
+                        ),
                 ),
               ),
             ),
