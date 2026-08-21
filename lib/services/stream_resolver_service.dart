@@ -75,18 +75,20 @@ class StreamResolverService {
     }
 
     if (RadioService.isRadioId(id)) {
-      final url = RadioService.streamUrlFromId(id);
-      if (url == null) {
+      final rawUrl = RadioService.streamUrlFromId(id);
+      if (rawUrl == null) {
         debugPrint('[StreamResolver] radio id has no URL: $id');
         return null;
       }
+      final resolvedUrl = await RadioService.resolveStreamUrl(rawUrl);
       return ResolvedStream(
-        url,
+        resolvedUrl,
         isLive: true,
         source: 'radio',
         headers: const {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': '*/*',
+          'Icy-MetaData': '1',
         },
       );
     }

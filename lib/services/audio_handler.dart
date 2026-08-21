@@ -11,6 +11,7 @@ import 'download_service.dart';
 import 'stream_cache_service.dart';
 import 'stream_resolver_service.dart';
 import 'jiosaavn_service.dart';
+import 'radio_service.dart';
 import 'audio_format_sniffer.dart';
 
 class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHandler {
@@ -748,6 +749,32 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       await _loadResolvedSource(resolved, song, thisGeneration);
     } catch (playerError) {
       debugPrint('[AudioHandler] Primary source failed (${resolved.source}): $playerError');
+
+      // Fast-fail for Live Radio: bypass YouTube chunk caching and proxy retries
+      if (resolved.source == 'radio' || RadioService.isRadioId(song.videoId)) {
+        final rawUrl = RadioService.streamUrlFromId(song.videoId);
+        if (rawUrl != null && rawUrl != resolved.url && _playGeneration == thisGeneration) {
+          try {
+            debugPrint('[AudioHandler] Attempting direct raw radio URL: $rawUrl');
+            await _loadResolvedSource(
+              ResolvedStream(
+                rawUrl,
+                isLive: true,
+                source: 'radio_direct',
+                headers: const {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  'Accept': '*/*',
+                  'Icy-MetaData': '1',
+                },
+              ),
+              song,
+              thisGeneration,
+            );
+            return;
+          } catch (_) {}
+        }
+        throw Exception('Live radio broadcast is currently offline or unreachable. Please try another station.');
+      }
 
       // The url just proved unplayable, so it must not be served again from the
       // 90-minute cache. Resolution cannot detect this — the url resolved fine;

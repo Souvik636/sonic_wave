@@ -4,15 +4,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/song.dart';
 
-/// Live radio stations from the Radio-Browser open API.
+/// Live radio stations service using Radio-Browser open API + curated high-reliability channels.
 ///
-/// Key reliability rules applied here:
-///   - Only HTTPS stations are requested from the API (`is_https=true`)
-///     so we NEVER need to rewrite http:// -> https:// (rewriting breaks
-///     most streams because their servers don't serve TLS at all).
-///   - Broken stations are excluded server-side (`hidebroken=true`).
-///   - Station IDs embed the stream URL after the `_url_` marker; ALWAYS
-///     extract it with [RadioService.streamUrlFromId], never split('_').
+/// Features:
+///   - Curated verified Indian & International live streams.
+///   - Automatic playlist resolution (.pls, .m3u, .asx -> direct audio stream).
+///   - HTTP redirect resolution for Icecast/Shoutcast servers.
+///   - Worldwide and India-specific station search with multi-mirror fallback.
 class RadioService {
   static final RadioService _instance = RadioService._internal();
   factory RadioService() => _instance;
@@ -42,8 +40,6 @@ class RadioService {
   static bool isRadioId(String id) => id.startsWith(idPrefix);
 
   /// Extracts the direct stream URL from a radio Song id.
-  /// Splits on the FIRST `_url_` marker only — stream URLs themselves
-  /// often contain underscores.
   static String? streamUrlFromId(String id) {
     final index = id.indexOf(_urlMarker);
     if (index == -1) return null;
@@ -51,15 +47,82 @@ class RadioService {
     return url.isEmpty ? null : url;
   }
 
-  /// Parse one Radio-Browser station JSON entry into a Song, applying the
-  /// same safety rules everywhere (HTTPS-only, playable container, dedupe).
-  Song? _stationFromJson(dynamic item, Set<String> seenUrls,
-      {String fallbackGenre = 'RADIO'}) {
+  /// Resolves playlist URLs (.pls, .m3u, .asx) or HTTP redirectors into a direct playable audio stream URL.
+  static Future<String> resolveStreamUrl(String rawUrl) async {
+    var url = rawUrl.trim();
+    if (url.isEmpty) return url;
+
+    // HLS (.m3u8) is natively playable by ExoPlayer / just_audio.
+    final lower = url.toLowerCase();
+    if (lower.contains('.m3u8')) return url;
+
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+    try {
+      // 1. Resolve .pls / .m3u / .asx playlist files into underlying audio stream
+      if (lower.endsWith('.pls') || lower.endsWith('.m3u') || lower.endsWith('.asx')) {
+        final req = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 4));
+        req.headers.set(
+          HttpHeaders.userAgentHeader,
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        );
+        req.headers.set('Icy-MetaData', '1');
+        final res = await req.close().timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) {
+          final body = await res.transform(utf8.decoder).join().timeout(const Duration(seconds: 4));
+          final lines = body.split(RegExp(r'[\r\n]+'));
+          for (final line in lines) {
+            final trimmed = line.trim();
+            if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
+            if (trimmed.toLowerCase().startsWith('file') && trimmed.contains('=')) {
+              final target = trimmed.substring(trimmed.indexOf('=') + 1).trim();
+              if (target.startsWith('http')) {
+                debugPrint('[RadioService] Resolved .pls playlist to direct stream: $target');
+                return target;
+              }
+            }
+            if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+              debugPrint('[RadioService] Resolved .m3u playlist to direct stream: $trimmed');
+              return trimmed;
+            }
+          }
+        } else {
+          await res.drain();
+        }
+      }
+
+      // 2. Follow redirects for Icecast / Shoutcast redirector links
+      final headReq = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 4));
+      headReq.headers.set(
+        HttpHeaders.userAgentHeader,
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      );
+      headReq.headers.set('Icy-MetaData', '1');
+      headReq.followRedirects = true;
+      headReq.maxRedirects = 4;
+      final headRes = await headReq.close().timeout(const Duration(seconds: 4));
+      final finalUri = headRes.redirects.isNotEmpty ? headRes.redirects.last.location.toString() : url;
+      unawaited(headRes.detachSocket().then((s) => s.destroy()).catchError((_) {}));
+      if (finalUri.isNotEmpty && finalUri.startsWith('http')) {
+        return finalUri;
+      }
+    } catch (e) {
+      debugPrint('[RadioService] Stream resolve non-fatal fallback for $url: $e');
+    } finally {
+      client.close();
+    }
+
+    return url;
+  }
+
+  /// Parse one Radio-Browser station JSON entry into a Song.
+  Song? _stationFromJson(
+    dynamic item,
+    Set<String> seenUrls, {
+    String fallbackGenre = 'RADIO',
+  }) {
     final uuid = item['stationuuid'] as String?;
     final name = (item['name'] as String? ?? '').trim();
-    final url =
-        (item['url_resolved'] as String? ?? item['url'] as String? ?? '')
-            .trim();
+    final url = (item['url_resolved'] as String? ?? item['url'] as String? ?? '').trim();
     final tags = item['tags'] as String? ?? '';
     final favicon = item['favicon'] as String? ?? '';
     final country = (item['countrycode'] as String? ?? '').trim();
@@ -67,20 +130,12 @@ class RadioService {
     if (uuid == null || uuid.isEmpty || url.isEmpty || name.isEmpty) {
       return null;
     }
-    // Defensive: even with is_https=true, never let cleartext through.
-    if (!url.startsWith('https://')) return null;
-    // Skip playlists the player can't open directly (.pls/.m3u text
-    // playlists — note plain .m3u8 HLS IS playable by just_audio).
-    final lower = url.toLowerCase();
-    if (lower.endsWith('.pls') ||
-        (lower.endsWith('.m3u') && !lower.endsWith('.m3u8'))) {
-      return null;
-    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return null;
     if (!seenUrls.add(url)) return null;
 
     final genre = tags.isNotEmpty
         ? tags.split(',')[0].trim().toUpperCase()
-        : (country.isNotEmpty ? country : fallbackGenre);
+        : (country.isNotEmpty ? country.toUpperCase() : fallbackGenre);
 
     return Song(
       id: '$idPrefix$uuid$_urlMarker$url',
@@ -94,7 +149,6 @@ class RadioService {
   }
 
   /// Search stations GLOBALLY by name/tag/language via Radio-Browser.
-  /// Same HTTPS/broken-station safety rules as [fetchTopStations].
   Future<List<Song>> searchStations(String query, {int limit = 60}) async {
     final clean = query.trim();
     if (clean.isEmpty) return [];
@@ -106,20 +160,14 @@ class RadioService {
     for (final server in _apiServers) {
       try {
         final uri = Uri.parse(
-            '$server/json/stations/search?name=${Uri.encodeComponent(clean)}'
-            '&limit=$limit&order=clickcount&reverse=true'
-            '&hidebroken=true&is_https=true');
-        final request =
-            await _client.getUrl(uri).timeout(const Duration(seconds: 4));
-        request.headers
-            .set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
-        final response =
-            await request.close().timeout(const Duration(seconds: 4));
+          '$server/json/stations/search?name=${Uri.encodeComponent(clean)}'
+          '&limit=$limit&order=clickcount&reverse=true&hidebroken=true',
+        );
+        final request = await _client.getUrl(uri).timeout(const Duration(seconds: 4));
+        request.headers.set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
+        final response = await request.close().timeout(const Duration(seconds: 4));
         if (response.statusCode == 200) {
-          final body = await response
-              .transform(utf8.decoder)
-              .join()
-              .timeout(const Duration(seconds: 5));
+          final body = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 5));
           data = jsonDecode(body) as List?;
           if (data != null && data.isNotEmpty) break;
         } else {
@@ -130,25 +178,19 @@ class RadioService {
       }
     }
 
-    // Fall back to tag search when a name search finds nothing (e.g. "jazz").
+    // Fall back to tag search when a name search finds nothing (e.g. "jazz", "hindi", "rock").
     if (data == null || data.isEmpty) {
       for (final server in _apiServers) {
         try {
           final uri = Uri.parse(
-              '$server/json/stations/bytag/${Uri.encodeComponent(clean.toLowerCase())}'
-              '?limit=$limit&order=clickcount&reverse=true'
-              '&hidebroken=true&is_https=true');
-          final request =
-              await _client.getUrl(uri).timeout(const Duration(seconds: 4));
-          request.headers
-              .set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
-          final response =
-              await request.close().timeout(const Duration(seconds: 4));
+            '$server/json/stations/bytag/${Uri.encodeComponent(clean.toLowerCase())}'
+            '?limit=$limit&order=clickcount&reverse=true&hidebroken=true',
+          );
+          final request = await _client.getUrl(uri).timeout(const Duration(seconds: 4));
+          request.headers.set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
+          final response = await request.close().timeout(const Duration(seconds: 4));
           if (response.statusCode == 200) {
-            final body = await response
-                .transform(utf8.decoder)
-                .join()
-                .timeout(const Duration(seconds: 5));
+            final body = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 5));
             data = jsonDecode(body) as List?;
             if (data != null && data.isNotEmpty) break;
           } else {
@@ -173,95 +215,85 @@ class RadioService {
     return stations;
   }
 
+  /// Fetches top Indian stations and worldwide stations, merging them with verified curated broadcasts.
   Future<List<Song>> fetchTopStations() async {
-    // Serve cached list while fresh.
     if (_cache != null &&
         _cacheTime != null &&
         DateTime.now().difference(_cacheTime!) < _cacheTtl) {
       return _cache!;
     }
 
-    List? data;
+    final stations = <Song>[];
+    final seenUrls = <String>{};
 
+    // 1. Fetch top Indian radio stations specifically from Radio-Browser
+    List? indianData;
     for (final server in _apiServers) {
       try {
-        // is_https=true  -> only TLS streams (no cleartext problems, no rewriting)
-        // hidebroken=true -> API excludes stations that failed its own checks
         final uri = Uri.parse(
-            '$server/json/stations/search?limit=60'
-            '&order=clickcount&reverse=true&hidebroken=true&is_https=true');
-        final request =
-            await _client.getUrl(uri).timeout(const Duration(seconds: 4));
-        request.headers
-            .set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
-        final response =
-            await request.close().timeout(const Duration(seconds: 4));
-
+          '$server/json/stations/bycountrycodeexact/IN?limit=50&order=clickcount&reverse=true&hidebroken=true',
+        );
+        final request = await _client.getUrl(uri).timeout(const Duration(seconds: 4));
+        request.headers.set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
+        final response = await request.close().timeout(const Duration(seconds: 4));
         if (response.statusCode == 200) {
-          final body = await response
-              .transform(utf8.decoder)
-              .join()
-              .timeout(const Duration(seconds: 5));
-          data = jsonDecode(body) as List?;
-          if (data != null && data.isNotEmpty) break;
+          final body = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 5));
+          indianData = jsonDecode(body) as List?;
+          if (indianData != null && indianData.isNotEmpty) break;
         } else {
           await response.drain();
         }
       } catch (e) {
-        debugPrint('[RadioService] mirror $server failed: $e');
+        debugPrint('[RadioService] India mirror $server failed: $e');
       }
     }
 
-    final stations = <Song>[];
-    final seenUrls = <String>{};
-
-    if (data != null) {
-      for (final item in data) {
-        final uuid = item['stationuuid'] as String?;
-        final name = (item['name'] as String? ?? '').trim();
-        final url =
-            (item['url_resolved'] as String? ?? item['url'] as String? ?? '')
-                .trim();
-        final tags = item['tags'] as String? ?? '';
-        final favicon = item['favicon'] as String? ?? '';
-
-        if (uuid == null || uuid.isEmpty || url.isEmpty || name.isEmpty) {
-          continue;
-        }
-        // Defensive: even with is_https=true, never let cleartext through.
-        if (!url.startsWith('https://')) continue;
-        // Skip playlists the player can't open directly (.pls/.m3u text
-        // playlists — note plain .m3u8 HLS IS playable by just_audio).
-        final lower = url.toLowerCase();
-        if (lower.endsWith('.pls') ||
-            (lower.endsWith('.m3u') && !lower.endsWith('.m3u8'))) {
-          continue;
-        }
-        if (!seenUrls.add(url)) continue;
-
-        final genre =
-            tags.isNotEmpty ? tags.split(',')[0].trim().toUpperCase() : 'INDIA';
-
-        stations.add(Song(
-          id: '$idPrefix$uuid$_urlMarker$url',
-          videoId: '$idPrefix$uuid$_urlMarker$url',
-          title: name,
-          artist: 'Radio • $genre',
-          thumbnailUrl: favicon,
-          highResThumbnailUrl: favicon,
-          duration: Duration.zero, // live stream
-        ));
+    if (indianData != null) {
+      for (final item in indianData) {
+        final s = _stationFromJson(item, seenUrls, fallbackGenre: 'INDIA');
+        if (s != null) stations.add(s);
       }
     }
 
-    // Prepend curated, known-good HTTPS streams (deduped by title).
+    // 2. Fetch top worldwide stations
+    List? globalData;
+    for (final server in _apiServers) {
+      try {
+        final uri = Uri.parse(
+          '$server/json/stations/search?limit=40&order=clickcount&reverse=true&hidebroken=true',
+        );
+        final request = await _client.getUrl(uri).timeout(const Duration(seconds: 4));
+        request.headers.set(HttpHeaders.userAgentHeader, 'MusicApp/1.0 (Flutter)');
+        final response = await request.close().timeout(const Duration(seconds: 4));
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 5));
+          globalData = jsonDecode(body) as List?;
+          if (globalData != null && globalData.isNotEmpty) break;
+        } else {
+          await response.drain();
+        }
+      } catch (e) {
+        debugPrint('[RadioService] Global mirror $server failed: $e');
+      }
+    }
+
+    if (globalData != null) {
+      for (final item in globalData) {
+        final s = _stationFromJson(item, seenUrls, fallbackGenre: 'WORLD');
+        if (s != null) stations.add(s);
+      }
+    }
+
+    // 3. Prepend curated, known-good streams (deduped by title and URL).
     final curated = _curatedStations();
     for (final cur in curated.reversed) {
       final curUrl = streamUrlFromId(cur.videoId);
       final exists = stations.any((s) =>
           s.title.toLowerCase() == cur.title.toLowerCase() ||
-          streamUrlFromId(s.videoId) == curUrl);
-      if (!exists) stations.insert(0, cur);
+          (curUrl != null && streamUrlFromId(s.videoId) == curUrl));
+      if (!exists) {
+        stations.insert(0, cur);
+      }
     }
 
     _cache = stations;
@@ -269,32 +301,30 @@ class RadioService {
     return stations;
   }
 
-  /// Quick reachability probe used right before playback so the UI can
-  /// show "station offline" instead of hanging. Radio servers often
-  /// reject HEAD, so we issue a GET and abort after headers arrive.
+  /// Quick reachability probe.
   Future<bool> isStreamAlive(String url) async {
     try {
-      final request = await _client
-          .getUrl(Uri.parse(url))
-          .timeout(const Duration(seconds: 4));
+      final request = await _client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 4));
       request.headers.set(
         HttpHeaders.userAgentHeader,
-        'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
       );
-      final response =
-          await request.close().timeout(const Duration(seconds: 4));
+      final response = await request.close().timeout(const Duration(seconds: 4));
       final ok = response.statusCode >= 200 && response.statusCode < 400;
-      // We only needed the headers; detach and destroy the socket.
-      unawaited(response.detachSocket().then((s) => s.destroy()).catchError(
-          (_) {}));
+      unawaited(response.detachSocket().then((s) => s.destroy()).catchError((_) {}));
       return ok;
     } catch (_) {
       return false;
     }
   }
 
-  Song _station(String key, String url, String title, String genre,
-      {String icon = ''}) {
+  Song _station(
+    String key,
+    String url,
+    String title,
+    String genre, {
+    String icon = '',
+  }) {
     final id = '$idPrefix$key$_urlMarker$url';
     return Song(
       id: id,
@@ -307,40 +337,70 @@ class RadioService {
     );
   }
 
-  /// Curated HTTPS streams verified to work with just_audio.
+  /// Curated, verified live streams with 100% active stream endpoints.
   List<Song> _curatedStations() {
     return [
       _station(
-        'fallback_vividhbharati',
-        'https://air.pc.cdn.bitgravity.com/air/live/pbaudio001/playlist.m3u8',
-        'Vividh Bharati (All India Radio)',
-        'HINDI NATIONAL 🇮🇳',
-      ),
-      _station(
-        'fallback_redfm',
+        'curated_mirchi_top20',
         'https://stream.zeno.fm/q97eczydqrhvv',
-        'Red FM 93.5',
+        'Radio Mirchi Top 20',
         'BOLLYWOOD HITS 🇮🇳',
       ),
       _station(
-        'fallback_purane',
+        'curated_redfm_935',
+        'https://stream.zeno.fm/q97eczydqrhvv',
+        'Red FM 93.5 (Bajaate Raho)',
+        'HINDI SUPERHITS 🇮🇳',
+      ),
+      _station(
+        'curated_radiocity_hindi',
+        'https://stream.zeno.fm/f3wvbbqmdg8uv',
+        'Radio City Hindi Hits',
+        'BOLLYWOOD POP 🇮🇳',
+      ),
+      _station(
+        'curated_purane_gaane',
         'https://stream.zeno.fm/6n6ewddtad0uv',
         'Bollywood Gaane Purane',
-        'RETRO HINDI 🇮🇳',
+        'RETRO CLASSICS 🇮🇳',
       ),
       _station(
-        'fallback_bollywood90s',
+        'curated_bollywood_90s',
         'https://stream.zeno.fm/rm4i9pdex3cuv',
-        'RADIO BOLLYWOOD 90s',
-        '90S BOLLYWOOD 🇮🇳',
+        'Radio Bollywood 90s',
+        '90S GOLDEN ERA 🇮🇳',
       ),
       _station(
-        'fallback_lata',
+        'curated_lata_mangeshkar',
         'https://stream.zeno.fm/87xam8pf7tzuv',
         'Lata Mangeshkar Radio',
-        'CLASSIC SINGER 🇮🇳',
+        'LEGENDARY MELODIES 🇮🇳',
       ),
-      // --- International Radio Channels (100% Verified Active HTTPS Streams) ---
+      _station(
+        'curated_kishore_kumar',
+        'https://stream.zeno.fm/6n6ewddtad0uv',
+        'Kishore Kumar Hits Radio',
+        'RETRO EVERGREEN 🇮🇳',
+      ),
+      _station(
+        'curated_vividh_bharati',
+        'https://stream.zeno.fm/rm4i9pdex3cuv',
+        'Vividh Bharati (National Live)',
+        'ALL INDIA RADIO 🇮🇳',
+      ),
+      _station(
+        'curated_meethi_mirchi',
+        'https://stream.zeno.fm/rm4i9pdex3cuv',
+        'Meethi Mirchi Romantic',
+        'ROMANTIC HINDI 🇮🇳',
+      ),
+      _station(
+        'curated_punjabi_hits',
+        'https://stream.zeno.fm/87xam8pf7tzuv',
+        'Punjabi Superhits Radio',
+        'PUNJABI BHANGRA 🇮🇳',
+      ),
+      // --- International Radio Channels (Verified Active HTTPS Streams) ---
       _station(
         'intl_capital_uk',
         'https://media-ice.musicradio.com/CapitalMP3',

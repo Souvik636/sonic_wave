@@ -20,6 +20,7 @@ import '../services/download_notification_service.dart';
 import '../services/local_metadata_service.dart';
 import '../services/recommendation_engine.dart';
 import '../services/stream_cache_service.dart';
+import '../services/radio_service.dart';
 import '../widgets/app_toast.dart';
 import 'settings_provider.dart';
 
@@ -796,7 +797,7 @@ class PlayerProvider extends ChangeNotifier {
     if (_loadingSong != null) return false;
     if (_audioHandler.player.processingState == ProcessingState.loading) return false;
     final cur = currentSong;
-    if (cur != null && !cur.isLocalFile) {
+    if (cur != null && !cur.isLocalFile && !RadioService.isRadioId(cur.videoId)) {
       final chunkState = StreamCacheService.chunkStateNotifier.value[cur.videoId];
       final isChunkReady = chunkState == ChunkLifecycleState.ready || chunkState == ChunkLifecycleState.completed;
       if (!isChunkReady && !_audioHandler.player.playing && _audioHandler.player.position == Duration.zero) {
@@ -807,6 +808,12 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   bool isSongLoading(Song song) {
+    if (RadioService.isRadioId(song.videoId)) {
+      return _loadingSong?.videoId == song.videoId ||
+          (currentSong?.videoId == song.videoId &&
+              (_audioHandler.player.processingState == ProcessingState.loading ||
+                  _audioHandler.player.processingState == ProcessingState.buffering));
+    }
     final chunkState = StreamCacheService.chunkStateNotifier.value[song.videoId];
     if (chunkState == ChunkLifecycleState.ready || chunkState == ChunkLifecycleState.completed) {
       return currentSong?.videoId == song.videoId &&
