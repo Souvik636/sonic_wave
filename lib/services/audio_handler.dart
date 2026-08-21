@@ -53,6 +53,7 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
 
   Timer? _prefetchTimer;
   String? _activeStreamVideoId;
+  bool _isMidStreamRecovering = false;
 
   /// Sleep-timer "end of track": when true, playback stops after the current
   /// song completes instead of advancing the queue. One-shot — reset on fire.
@@ -175,71 +176,108 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       onError: (Object e, StackTrace st) async {
         debugPrint('[AudioHandler] playbackEventStream error: $e');
 
-        // Mid-stream connection recovery: check if stream cache file or fresh stream URL can resume
+        if (_isMidStreamRecovering) return;
         final song = currentSong;
         final currentPos = _player.position;
+        final thisGen = _playGeneration;
 
-        if (song != null && !song.isLocalFile) {
-          // 1. Try recovering via stream cache file if already downloaded
-          try {
-            final quality = YouTubeService.streamingQuality.name;
-            final cachedPath = await StreamCacheService().getCachedFile(song.videoId, quality);
-            if (cachedPath != null && await File(cachedPath).exists()) {
-              debugPrint('[AudioHandler] Mid-stream error recovered via cached file at $currentPos');
-              await _player.setAudioSource(AudioSource.file(cachedPath));
-              if (currentPos > Duration.zero) {
-                await _player.seek(currentPos);
-              }
-              _player.play();
-              return;
-            }
-          } catch (_) {}
-
-          // 2. Check if progressive chunk download has become playable
-          try {
-            final progressivePath = StreamCacheService().getInFlightPlayablePath(song.videoId);
-            if (progressivePath != null && await File(progressivePath).exists()) {
-              debugPrint('[AudioHandler] Mid-stream error recovered via progressive chunk at $currentPos');
-              await _player.setAudioSource(AudioSource.file(progressivePath));
-              if (currentPos > Duration.zero) {
-                await _player.seek(currentPos);
-              }
-              _player.play();
-              return;
-            }
-          } catch (_) {}
-
-          // 3. Seamless Mid-Stream Re-Resolution: Re-resolve fresh stream URL and resume at current position
-          try {
-            debugPrint('[AudioHandler] Stream interrupted at $currentPos. Re-resolving fresh URL to resume...');
-            YouTubeService.invalidateStreamUrl(song.videoId);
-            final freshStream = await StreamResolverService().resolve(song, forceRefresh: true);
-            if (freshStream != null && currentSong?.videoId == song.videoId) {
-              final defaultAlbum = song.isLocalFile ? 'Local Storage' : 'YouTube';
-              final mediaItem = MediaItem(
-                id: song.videoId,
-                album: song.albumFolderName ?? defaultAlbum,
-                title: song.title,
-                artist: song.artist,
-                duration: song.duration,
-              );
-              final source = await _createAudioSourceFor(freshStream, song, mediaItem);
-              await _player.setAudioSource(source);
-              if (currentPos > Duration.zero) {
-                await _player.seek(currentPos);
-              }
-              _player.play();
-              debugPrint('[AudioHandler] Successfully resumed mid-stream from $currentPos!');
-              return;
-            }
-          } catch (recoveryErr) {
-            debugPrint('[AudioHandler] Mid-stream live recovery failed: $recoveryErr');
-          }
+        // Only attempt mid-stream recovery if this is truly an in-flight drop
+        // (i.e. we were already playing or position > 1s), NOT during initial track load
+        // which is already actively managed by _resolveAndLoadStream.
+        if (song == null || song.isLocalFile || (currentPos <= const Duration(seconds: 1) && !_player.playing)) {
+          return;
         }
 
-        playbackState.add(playbackState.value.copyWith(
-          processingState: AudioProcessingState.error,
-        ));
+        _isMidStreamRecovering = true;
+        try {
+          await _withPlayerLock(thisGen, () async {
+            if (_playGeneration != thisGen) return;
+
+            // 1. Try recovering via stream cache file if already downloaded
+            try {
+              final quality = YouTubeService.streamingQuality.name;
+              final cachedPath = await StreamCacheService().getCachedFile(song.videoId, quality);
+              if (cachedPath != null && await File(cachedPath).exists() && _playGeneration == thisGen) {
+                debugPrint('[AudioHandler] Mid-stream error recovered via cached file at $currentPos');
+                final source = await _createAudioSourceFor(
+                  ResolvedStream(cachedPath, source: 'youtube_cached'),
+                  song,
+                  MediaItem(
+                    id: song.videoId,
+                    album: song.albumFolderName ?? 'YouTube',
+                    title: song.title,
+                    artist: song.artist,
+                    duration: song.duration,
+                  ),
+                );
+                await _player.setAudioSource(source);
+                if (currentPos > Duration.zero) {
+                  await _player.seek(currentPos);
+                }
+                _player.play();
+                return;
+              }
+            } catch (_) {}
+
+            // 2. Check if progressive chunk download has become playable
+            try {
+              final progressivePath = StreamCacheService().getInFlightPlayablePath(song.videoId);
+              if (progressivePath != null && await File(progressivePath).exists() && _playGeneration == thisGen) {
+                debugPrint('[AudioHandler] Mid-stream error recovered via progressive chunk at $currentPos');
+                final source = await _createAudioSourceFor(
+                  ResolvedStream(progressivePath, source: 'youtube_progressive'),
+                  song,
+                  MediaItem(
+                    id: song.videoId,
+                    album: song.albumFolderName ?? 'YouTube',
+                    title: song.title,
+                    artist: song.artist,
+                    duration: song.duration,
+                  ),
+                );
+                await _player.setAudioSource(source);
+                if (currentPos > Duration.zero) {
+                  await _player.seek(currentPos);
+                }
+                _player.play();
+                return;
+              }
+            } catch (_) {}
+
+            // 3. Seamless Mid-Stream Re-Resolution: Re-resolve fresh stream URL and resume at current position
+            try {
+              debugPrint('[AudioHandler] Stream interrupted at $currentPos. Re-resolving fresh URL to resume...');
+              YouTubeService.invalidateStreamUrl(song.videoId);
+              final freshStream = await StreamResolverService().resolve(song, forceRefresh: true);
+              if (freshStream != null && currentSong?.videoId == song.videoId && _playGeneration == thisGen) {
+                final defaultAlbum = song.isLocalFile ? 'Local Storage' : 'YouTube';
+                final mediaItem = MediaItem(
+                  id: song.videoId,
+                  album: song.albumFolderName ?? defaultAlbum,
+                  title: song.title,
+                  artist: song.artist,
+                  duration: song.duration,
+                );
+                final source = await _createAudioSourceFor(freshStream, song, mediaItem);
+                await _player.setAudioSource(source);
+                if (currentPos > Duration.zero) {
+                  await _player.seek(currentPos);
+                }
+                _player.play();
+                debugPrint('[AudioHandler] Successfully resumed mid-stream from $currentPos!');
+                return;
+              }
+            } catch (recoveryErr) {
+              debugPrint('[AudioHandler] Mid-stream live recovery failed: $recoveryErr');
+            }
+
+            playbackState.add(playbackState.value.copyWith(
+              processingState: AudioProcessingState.error,
+            ));
+          });
+        } finally {
+          _isMidStreamRecovering = false;
+        }
       },
     );
 

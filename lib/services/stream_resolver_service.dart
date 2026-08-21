@@ -189,10 +189,15 @@ class StreamResolverService {
       if (stream != null) return stream;
     } catch (_) {}
 
-    // Fallback: Check if cached file was finished in the interim
+    // Fallback: Check if cached file or in-flight progressive chunk is playable
     final fallbackCached = await cache.getCachedFile(id, quality.name);
-    if (fallbackCached != null) {
+    if (fallbackCached != null && await File(fallbackCached).exists()) {
       return ResolvedStream(fallbackCached, source: 'youtube_cached');
+    }
+
+    final inFlightPath = cache.getInFlightPlayablePath(id);
+    if (inFlightPath != null && await File(inFlightPath).exists()) {
+      return ResolvedStream(inFlightPath, source: 'youtube_progressive');
     }
 
     return null;

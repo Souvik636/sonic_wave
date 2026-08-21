@@ -58,14 +58,15 @@ class DownloadItem {
   }
 
   String get formattedEta {
-    if (eta == null || eta!.inSeconds <= 0) return '';
-    if (eta!.inHours >= 1) {
-      return '~${eta!.inHours}h ${eta!.inMinutes % 60}m left';
+    final remaining = eta;
+    if (remaining == null || remaining.inSeconds <= 0) return '';
+    if (remaining.inHours >= 1) {
+      return '~${remaining.inHours}h ${remaining.inMinutes % 60}m left';
     }
-    if (eta!.inMinutes >= 1) {
-      return '~${eta!.inMinutes}m ${eta!.inSeconds % 60}s left';
+    if (remaining.inMinutes >= 1) {
+      return '~${remaining.inMinutes}m ${remaining.inSeconds % 60}s left';
     }
-    return '~${eta!.inSeconds}s left';
+    return '~${remaining.inSeconds}s left';
   }
 
   String get formattedBytesDownloaded => formatFileSize(bytesDownloaded);
@@ -1499,8 +1500,9 @@ class DownloadService {
       audioFile: plannedAudio,
       thumbFile: await _coverFileFor(song.videoId),
       onStateChanged: () {
-        if (onProgress != null && _activeTasks.containsKey(song.videoId)) {
-          onProgress(_activeTasks[song.videoId]!.progress);
+        final activeTask = _activeTasks[song.videoId];
+        if (onProgress != null && activeTask != null) {
+          onProgress(activeTask.progress);
         }
         if (onStateChanged != null) onStateChanged();
       },
@@ -1772,8 +1774,9 @@ class DownloadService {
         audioFile: audioFile,
         thumbFile: thumbFile,
         onStateChanged: () {
-          if (onProgress != null && _activeTasks.containsKey(song.videoId)) {
-            onProgress(_activeTasks[song.videoId]!.progress);
+          final activeTask = _activeTasks[song.videoId];
+          if (onProgress != null && activeTask != null) {
+            onProgress(activeTask.progress);
           }
           if (onStateChanged != null) onStateChanged();
         },

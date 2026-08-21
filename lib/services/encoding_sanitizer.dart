@@ -53,7 +53,7 @@ class EncodingSanitizer {
     }
 
     // 6. Repair UTF-16 Byte-Swap ID3 Parser Mojibake (8-bit bytes read as 16-bit CJK units)
-    if (_hasWideUnits(text)) {
+    if (_hasSignificantWideUnits(text)) {
       text = _repairUtf16ByteSwap(text);
     }
 
@@ -301,6 +301,17 @@ class EncodingSanitizer {
     return cjkCount > 0 && (cjkCount / input.length) >= 0.15;
   }
 
+  static bool _hasSignificantWideUnits(String input) {
+    if (input.length < 2) return false;
+    int wideCount = 0;
+    for (int i = 0; i < input.length; i++) {
+      if (input.codeUnitAt(i) > 0xFF) {
+        wideCount++;
+      }
+    }
+    return (wideCount / input.length) >= 0.40 || hasMojibakeCjk(input);
+  }
+
   static String _repairUtf16ByteSwap(String trimmed) {
     for (final littleEndian in [true, false]) {
       for (final filterNulls in [true, false]) {
@@ -314,13 +325,6 @@ class EncodingSanitizer {
       }
     }
     return trimmed;
-  }
-
-  static bool _hasWideUnits(String s) {
-    for (int i = 0; i < s.length; i++) {
-      if (s.codeUnitAt(i) > 0xFF) return true;
-    }
-    return false;
   }
 
   static List<int> _unpack(String s, bool littleEndian, {required bool filterNulls}) {

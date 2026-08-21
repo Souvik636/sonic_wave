@@ -21,6 +21,8 @@ void main() {
       expect(EncodingSanitizer.sanitize('Hotel California'), equals('Hotel California'));
       expect(EncodingSanitizer.sanitize('Bohemian Rhapsody - Queen'), equals('Bohemian Rhapsody - Queen'));
       expect(EncodingSanitizer.sanitize('Track 01.mp3'), equals('Track 01.mp3'));
+      expect(EncodingSanitizer.sanitize('Call recording ⛔ Spam Alert From Jio_260412_171228'),
+          equals('Call recording ⛔ Spam Alert From Jio_260412_171228'));
     });
 
     test('Handles empty and whitespace inputs gracefully', () {
