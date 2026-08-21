@@ -26,6 +26,7 @@ import 'radio_screen.dart';
 import 'settings_screen.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/app_toast.dart';
+import '../widgets/storage_operation_dialog.dart';
 import '../services/storage_location_service.dart';
 import '../services/download_service.dart';
 import '../widgets/download_widgets.dart';
@@ -5125,7 +5126,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             onPressed: selectedCount == 0
                                 ? null
                                 : () async {
-                                    _showLoadingDialog(context, 'Organizing tracks into album folders...\nExecuting secure file move...');
+                                    final hasAnyLocalSongs = songs.any((s) =>
+                                        s.isLocalFile || (s.filePath != null && File(s.filePath!).existsSync()));
+
+                                    StorageOperationChoice? chosenOp = StorageOperationChoice.bookmark;
+                                    if (hasAnyLocalSongs) {
+                                      chosenOp = await showStorageOperationDialog(
+                                        context,
+                                        title: 'AI Organization Storage Mode',
+                                        subtitle: 'Choose how to organize physical audio files on disk into your new album folders:',
+                                      );
+                                      if (chosenOp == null || !context.mounted) return;
+                                    }
+
+                                    _showLoadingDialog(
+                                      context,
+                                      chosenOp.physicalMove
+                                          ? 'Organizing tracks into album folders...\nExecuting secure file storage operations...'
+                                          : 'Organizing tracks into album playlists...',
+                                    );
                                     int albumsCreated = 0;
                                     int albumsUpdated = 0;
                                     try {
@@ -5149,20 +5168,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                             );
                                           }).toList();
 
+                                          String targetAlbumId;
                                           if (proposal.existingAlbumId != null) {
-                                            final existing = provider.albums.firstWhere((a) => a.id == proposal.existingAlbumId);
-                                            final List<Song> merged = List.from(existing.songs);
-                                            for (final s in albumSongs) {
-                                              if (!merged.any((item) => item.videoId == s.videoId)) {
-                                                merged.add(s);
-                                              }
-                                            }
-                                            await provider.updateAlbumSongs(existing.id, merged);
+                                            targetAlbumId = proposal.existingAlbumId!;
                                             albumsUpdated++;
                                           } else {
                                             final newAlbum = await provider.createAlbum(proposal.name.trim());
-                                            await provider.updateAlbumSongs(newAlbum.id, albumSongs);
+                                            targetAlbumId = newAlbum.id;
                                             albumsCreated++;
+                                          }
+
+                                          if (chosenOp.physicalMove) {
+                                            for (final songItem in albumSongs) {
+                                              final sourcePath = songItem.filePath ?? (songItem.isLocalFile ? songItem.videoId : null);
+                                              final isLocal = sourcePath != null && File(sourcePath).existsSync();
+                                              if (isLocal) {
+                                                await provider.moveSongToAnotherAlbumFolder(
+                                                  songItem,
+                                                  targetAlbumId,
+                                                  physicalMove: true,
+                                                  isCopyMode: chosenOp.isCopyMode,
+                                                );
+                                              } else {
+                                                await provider.addSongToAlbum(targetAlbumId, songItem);
+                                              }
+                                            }
+                                          } else {
+                                            if (proposal.existingAlbumId != null) {
+                                              final existing = provider.albums.firstWhere((a) => a.id == proposal.existingAlbumId);
+                                              final List<Song> merged = List.from(existing.songs);
+                                              for (final s in albumSongs) {
+                                                if (!merged.any((item) => item.videoId == s.videoId)) {
+                                                  merged.add(s);
+                                                }
+                                              }
+                                              await provider.updateAlbumSongs(existing.id, merged);
+                                            } else {
+                                              await provider.updateAlbumSongs(targetAlbumId, albumSongs);
+                                            }
                                           }
                                         }
                                       }
@@ -5178,7 +5221,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     if (albumsCreated > 0 && albumsUpdated > 0) {
                                       msg = 'Created $albumsCreated new and updated $albumsUpdated existing albums!';
                                     } else if (albumsCreated > 0) {
-                                      msg = 'Successfully created $albumsCreated albums!';
+                                      msg = 'Successfully organized $albumsCreated albums!';
                                     } else if (albumsUpdated > 0) {
                                       msg = 'Successfully updated $albumsUpdated existing albums!';
                                     } else {
@@ -5445,101 +5488,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Future<_HomeScreenMoveResult?> _promptMoveType(BuildContext context) async {
-    return showDialog<_HomeScreenMoveResult>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        contentPadding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.swap_horiz_rounded, color: AppColors.primaryLight, size: 36),
-            const SizedBox(height: 12),
-            const Text('Choose Storage Operation', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            // Make a Copy option card
-            _buildMoveOptionCard(
-              ctx,
-              icon: Icons.copy_rounded,
-              title: 'Make a Copy',
-              subtitle: 'Duplicates audio file into target album folder while leaving original file intact.',
-              color: Colors.cyanAccent,
-              onTap: () => Navigator.pop(ctx, const _HomeScreenMoveResult(physicalMove: true, isCopyMode: true)),
-            ),
-            const SizedBox(height: 10),
-            // Permanently Move option card
-            _buildMoveOptionCard(
-              ctx,
-              icon: Icons.drive_file_move_rounded,
-              title: 'Permanently Move',
-              subtitle: 'Physically transfers original audio file on disk into target album\'s folder.',
-              color: AppColors.primary,
-              onTap: () => Navigator.pop(ctx, const _HomeScreenMoveResult(physicalMove: true, isCopyMode: false)),
-            ),
-            const SizedBox(height: 10),
-            // In-App Bookmark option card
-            _buildMoveOptionCard(
-              ctx,
-              icon: Icons.bookmark_rounded,
-              title: 'In-App Bookmark',
-              subtitle: 'Reorganize album tags inside app memory only without moving disk files.',
-              color: AppColors.secondary,
-              onTap: () => Navigator.pop(ctx, const _HomeScreenMoveResult(physicalMove: false, isCopyMode: false)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMoveOptionCard(BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(color: AppColors.textTertiary, fontSize: 10, height: 1.3)),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_rounded, color: color.withValues(alpha: 0.5), size: 18),
-            ],
-          ),
-        ),
-      ),
-    );
+  Future<StorageOperationChoice?> _promptMoveType(BuildContext context) async {
+    return showStorageOperationDialog(context);
   }
 
   void _showDeleteSongDialog(BuildContext context, Song song, UserAlbum album, PlayerProvider provider, VoidCallback onDeleted) {
@@ -6286,10 +6236,4 @@ class _AnimatedEqualizerBarsState extends State<_AnimatedEqualizerBars>
       ),
     );
   }
-}
-
-class _HomeScreenMoveResult {
-  final bool physicalMove;
-  final bool isCopyMode;
-  const _HomeScreenMoveResult({required this.physicalMove, required this.isCopyMode});
 }

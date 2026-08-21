@@ -2485,7 +2485,6 @@ class PlayerProvider extends ChangeNotifier {
     String? newPath = song.filePath;
 
     if (physicalMove) {
-      if (targetAlbum.folderPath == null) return false;
       final sourcePath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
       if (sourcePath == null) return false;
 
@@ -2493,11 +2492,27 @@ class PlayerProvider extends ChangeNotifier {
       if (!await sourceFile.exists()) return false;
 
       final storageService = StorageLocationService();
-      final targetDir = Directory(targetAlbum.folderPath!);
+      Directory targetDir;
+      if (targetAlbum.folderPath != null && targetAlbum.folderPath!.isNotEmpty) {
+        targetDir = Directory(targetAlbum.folderPath!);
+      } else {
+        targetDir = await storageService.getAlbumDir(targetAlbum.name);
+        _albums[albumIdx] = targetAlbum.copyWith(
+          folderPath: targetDir.path,
+          isFolderBased: true,
+        );
+      }
       
+      final sourceDir = sourceFile.parent.path;
+      final isSameDir = PlayerProvider.canonicalizePath(sourceDir) ==
+          PlayerProvider.canonicalizePath(targetDir.path);
+
       if (isCopyMode) {
         // "Make a Copy": duplicate into target album while preserving original
         newPath = await storageService.copyFile(sourcePath, targetDir);
+      } else if (isSameDir) {
+        // Already in target folder, no disk move needed
+        newPath = sourcePath;
       } else {
         // "Permanently Move": physically transfer file to destination folder
         newPath = await storageService.moveFile(sourcePath, targetDir);

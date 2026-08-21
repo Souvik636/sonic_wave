@@ -14,6 +14,7 @@ import '../theme/app_colors.dart';
 import 'animated_equalizer.dart';
 import 'glassmorphic_card.dart';
 import 'app_toast.dart';
+import 'storage_operation_dialog.dart';
 import '../screens/sound_studio_screen.dart';
 
 /// Shared "three-dot" song options sheet used by both the Classic and Aurora
@@ -1194,40 +1195,57 @@ void _showAlbumSelectionSheet(
                                       size: 14,
                                     ),
                               onTap: () async {
-                                Navigator.pop(ctx);
-                                if (isDownloadAndMove) {
-                                  provider.downloadAndAddToAlbum(
-                                    song,
-                                    album.id,
-                                    context: context,
-                                  );
-                                } else {
-                                  // Local or downloaded file move
-                                  if (album.isFolderBased &&
-                                      song.filePath != null &&
-                                      File(song.filePath!).existsSync()) {
-                                    await provider.moveSongToAnotherAlbumFolder(
-                                      song,
-                                      album.id,
-                                      physicalMove: true,
-                                      isCopyMode: false,
-                                    );
-                                  } else {
-                                    await provider.addSongToAlbum(
-                                      album.id,
-                                      song,
-                                    );
-                                  }
-                                  if (context.mounted) {
-                                    AppToast.show(
-                                      context,
-                                      'Moved "${song.title}" to "${album.name}"',
-                                      type: ToastType.success,
-                                      icon: Icons.album_rounded,
-                                    );
-                                  }
-                                }
-                              },
+                                 Navigator.pop(ctx);
+                                 if (isDownloadAndMove) {
+                                   provider.downloadAndAddToAlbum(
+                                     song,
+                                     album.id,
+                                     context: context,
+                                   );
+                                 } else {
+                                   // Local or downloaded file move/copy/bookmark
+                                   final sourcePath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
+                                   final hasLocalFile = sourcePath != null && File(sourcePath).existsSync();
+
+                                   if (hasLocalFile) {
+                                     final op = await showStorageOperationDialog(context);
+                                     if (op == null) return;
+
+                                     final success = await provider.moveSongToAnotherAlbumFolder(
+                                       song,
+                                       album.id,
+                                       physicalMove: op.physicalMove,
+                                       isCopyMode: op.isCopyMode,
+                                     );
+                                     if (context.mounted) {
+                                       final label = op.isCopyMode
+                                           ? 'Copied to "${album.name}"'
+                                           : (op.physicalMove
+                                               ? 'Moved to "${album.name}"'
+                                               : 'Added to "${album.name}"');
+                                       AppToast.show(
+                                         context,
+                                         success ? label : 'Failed operation for "${album.name}"',
+                                         type: success ? ToastType.success : ToastType.error,
+                                         icon: Icons.album_rounded,
+                                       );
+                                     }
+                                   } else {
+                                     await provider.addSongToAlbum(
+                                       album.id,
+                                       song,
+                                     );
+                                     if (context.mounted) {
+                                       AppToast.show(
+                                         context,
+                                         'Added "${song.title}" to "${album.name}"',
+                                         type: ToastType.success,
+                                         icon: Icons.album_rounded,
+                                       );
+                                     }
+                                   }
+                                 }
+                               },
                             ),
                           );
                         },
@@ -1331,23 +1349,53 @@ void _showCreateAlbumDialog(
               if (name.isEmpty) return;
               Navigator.pop(dialogCtx);
               final provider = context.read<PlayerProvider>();
-              final newAlbum = await provider.createAlbum(name);
-              if (!context.mounted) return;
               if (isDownloadAndMove) {
+                final newAlbum = await provider.createAlbum(name);
+                if (!context.mounted) return;
                 provider.downloadAndAddToAlbum(
                   song,
                   newAlbum.id,
                   context: context,
                 );
               } else {
-                await provider.addSongToAlbum(newAlbum.id, song);
-                if (context.mounted) {
-                  AppToast.show(
-                    context,
-                    'Moved "${song.title}" to "$name"',
-                    type: ToastType.success,
-                    icon: Icons.album_rounded,
+                final sourcePath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
+                final hasLocalFile = sourcePath != null && File(sourcePath).existsSync();
+
+                if (hasLocalFile) {
+                  final op = await showStorageOperationDialog(context);
+                  if (op == null) return;
+
+                  final newAlbum = await provider.createAlbum(name);
+                  final success = await provider.moveSongToAnotherAlbumFolder(
+                    song,
+                    newAlbum.id,
+                    physicalMove: op.physicalMove,
+                    isCopyMode: op.isCopyMode,
                   );
+                  if (context.mounted) {
+                    final label = op.isCopyMode
+                        ? 'Created folder & copied to "$name"'
+                        : (op.physicalMove
+                            ? 'Created folder & moved to "$name"'
+                            : 'Created album "$name"');
+                    AppToast.show(
+                      context,
+                      success ? label : 'Failed operation for "$name"',
+                      type: success ? ToastType.success : ToastType.error,
+                      icon: Icons.album_rounded,
+                    );
+                  }
+                } else {
+                  final newAlbum = await provider.createAlbum(name);
+                  await provider.addSongToAlbum(newAlbum.id, song);
+                  if (context.mounted) {
+                    AppToast.show(
+                      context,
+                      'Created album "$name"',
+                      type: ToastType.success,
+                      icon: Icons.album_rounded,
+                    );
+                  }
                 }
               }
             },

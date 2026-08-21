@@ -10,6 +10,7 @@ import 'song_album_art.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'premium_interaction.dart';
 import 'app_toast.dart';
+import 'storage_operation_dialog.dart';
 
 class SongTile extends StatelessWidget {
   final Song song;
@@ -596,16 +597,41 @@ class SongTile extends StatelessWidget {
                             : null,
                         onTap: isAlreadyAdded
                             ? null
-                            : () {
-                                playerProvider.addSongToAlbum(album.id, song);
+                            : () async {
                                 Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Added to "${album.name}"'),
-                                    backgroundColor: Theme.of(context).colorScheme.primary,
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
+                                final sourcePath = song.filePath ?? (song.isLocalFile ? song.videoId : null);
+                                final hasLocalFile = sourcePath != null && File(sourcePath).existsSync();
+
+                                if (hasLocalFile) {
+                                  final op = await showStorageOperationDialog(context);
+                                  if (op == null) return;
+
+                                  final success = await playerProvider.moveSongToAnotherAlbumFolder(
+                                    song,
+                                    album.id,
+                                    physicalMove: op.physicalMove,
+                                    isCopyMode: op.isCopyMode,
+                                  );
+                                  final label = op.isCopyMode
+                                      ? 'Copied to "${album.name}"'
+                                      : (op.physicalMove
+                                          ? 'Moved to "${album.name}"'
+                                          : 'Added to "${album.name}"');
+                                  if (!context.mounted) return;
+                                  AppToast.show(
+                                    context,
+                                    success ? label : 'Failed operation for "${album.name}"',
+                                    type: success ? ToastType.success : ToastType.error,
+                                  );
+                                } else {
+                                  await playerProvider.addSongToAlbum(album.id, song);
+                                  if (!context.mounted) return;
+                                  AppToast.show(
+                                    context,
+                                    'Added to "${album.name}"',
+                                    type: ToastType.success,
+                                  );
+                                }
                               },
                       );
                     },
@@ -874,57 +900,9 @@ class SongTile extends StatelessWidget {
     );
   }
 
-  Future<_MoveOpResult?> _promptMoveType(BuildContext context) async {
-    return showDialog<_MoveOpResult>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Choose Storage Operation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: const Text(
-          'How would you like to handle the file storage for this target album?',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-        ),
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        actions: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.copy_rounded, color: Colors.cyanAccent),
-                title: const Text('Make a Copy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text('Duplicates file in target album directory while preserving original', style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-                onTap: () => Navigator.pop(ctx, _MoveOpResult(physicalMove: true, isCopyMode: true)),
-              ),
-              const Divider(color: AppColors.divider, height: 1),
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.drive_file_move_rounded, color: Colors.amberAccent),
-                title: const Text('Permanently Move', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                subtitle: const Text('Transfers original file to target album directory completely', style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-                onTap: () => Navigator.pop(ctx, _MoveOpResult(physicalMove: true, isCopyMode: false)),
-              ),
-              const Divider(color: AppColors.divider, height: 1),
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.bookmark_add_rounded, color: Colors.white70),
-                title: const Text('In-App Bookmark', style: TextStyle(color: Colors.white70)),
-                subtitle: const Text('Organizes song in app memory only without moving disk files', style: TextStyle(color: AppColors.textTertiary, fontSize: 11)),
-                onTap: () => Navigator.pop(ctx, _MoveOpResult(physicalMove: false, isCopyMode: false)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+  Future<StorageOperationChoice?> _promptMoveType(BuildContext context) async {
+    return showStorageOperationDialog(context);
   }
-}
-
-class _MoveOpResult {
-  final bool physicalMove;
-  final bool isCopyMode;
-  const _MoveOpResult({required this.physicalMove, required this.isCopyMode});
 }
 
 /// A favourite toggle that pops with a spring + colour cross-fade and a light
