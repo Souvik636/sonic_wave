@@ -19,7 +19,6 @@ import '../widgets/queue_sheet.dart';
 import '../widgets/sound_studio_editing_view.dart';
 import 'player_screen.dart';
 import '../widgets/karaoke_lyrics_view.dart';
-import '../widgets/audio_visualizer_suite.dart';
 
 /// Aurora Player — a premium glassmorphic alternative to the classic disc player.
 /// Background, aurora ribbons, floating orbs, glow ring, and particles all react
@@ -527,10 +526,8 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _deckPill('Aurora Orb', 0, Icons.blur_on_rounded, primary),
-          const SizedBox(width: 8),
-          _deckPill('60FPS Visualizer', 1, Icons.graphic_eq_rounded, primary),
-          const SizedBox(width: 8),
-          _deckPill('Karaoke Lyrics', 2, Icons.lyrics_rounded, primary),
+          const SizedBox(width: 12),
+          _deckPill('Lyrics', 1, Icons.lyrics_rounded, primary),
         ],
       ),
     );
@@ -545,10 +542,10 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
         decoration: BoxDecoration(
           color: isActive ? primary.withValues(alpha: 0.22) : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isActive ? primary : Colors.white.withValues(alpha: 0.08),
             width: isActive ? 1.2 : 0.8,
@@ -557,13 +554,13 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 12, color: isActive ? primary : Colors.white60),
-            const SizedBox(width: 4),
+            Icon(icon, size: 13, color: isActive ? primary : Colors.white60),
+            const SizedBox(width: 6),
             Text(
               label,
               style: GoogleFonts.outfit(
                 color: isActive ? Colors.white : Colors.white60,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
               ),
             ),
@@ -578,23 +575,14 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   ) {
     final isJioSaavn = song.videoId.startsWith('jiosaavn_');
     if (isJioSaavn && _centerDeckMode == 1) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: AudioVisualizerSuite(
-          height: screenWidth * 0.65,
-        ),
-      );
-    }
-    if (isJioSaavn && _centerDeckMode == 2) {
       return Container(
-        height: screenWidth * 0.70,
+        height: screenWidth * 0.82,
         margin: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        child: KaraokeLyricsView(
+          song: song,
+          theme: KaraokePlayerTheme.aurora,
+          accentColor: primary,
         ),
-        clipBehavior: Clip.antiAlias,
-        child: KaraokeLyricsView(song: song),
       );
     }
     return _buildAlbumArtIsland(screenWidth, song, pp, progress, primary);

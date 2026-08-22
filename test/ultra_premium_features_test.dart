@@ -3,7 +3,7 @@ import 'package:sonic_wave/models/song.dart';
 import 'package:sonic_wave/models/album.dart';
 import 'package:sonic_wave/providers/player_provider.dart';
 import 'package:sonic_wave/services/lyrics_service.dart';
-import 'package:sonic_wave/widgets/audio_visualizer_suite.dart';
+import 'package:sonic_wave/widgets/karaoke_lyrics_view.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -149,15 +149,11 @@ void main() {
       expect(isKaraokeAvailable(jioSaavnSong), isTrue);
       expect(isKaraokeAvailable(ytSong), isFalse);
     });
-  });
 
-  group('4. Real-Time 60FPS Audio Visualizer Suite Tests', () {
-    test('VisualizerMode enum defines 4 GPU modes', () {
-      expect(VisualizerMode.values.length, equals(4));
-      expect(VisualizerMode.values, contains(VisualizerMode.spectrumBars));
-      expect(VisualizerMode.values, contains(VisualizerMode.analogVuMeters));
-      expect(VisualizerMode.values, contains(VisualizerMode.cosmicGalaxy));
-      expect(VisualizerMode.values, contains(VisualizerMode.auroraRibbon));
+    test('KaraokePlayerTheme enum provides distinct styles for Classic and Aurora players', () {
+      expect(KaraokePlayerTheme.values.length, equals(2));
+      expect(KaraokePlayerTheme.values, contains(KaraokePlayerTheme.classic));
+      expect(KaraokePlayerTheme.values, contains(KaraokePlayerTheme.aurora));
     });
   });
 }

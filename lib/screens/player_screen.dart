@@ -20,7 +20,6 @@ import '../widgets/sound_studio_editing_view.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'aurora_player_screen.dart';
 import '../widgets/karaoke_lyrics_view.dart';
-import '../widgets/audio_visualizer_suite.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
@@ -288,11 +287,6 @@ class _PlayerScreenState extends State<PlayerScreen>
                             // Song info
                             _buildSongInfo(song),
 
-                            const SizedBox(height: 8),
-
-                            // Dynamic Visualizer Panel
-                            _buildVisualizerPanel(playerProvider),
-
                             const SizedBox(height: 12),
 
                             // Progress bar
@@ -338,10 +332,8 @@ class _PlayerScreenState extends State<PlayerScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _deckPill('Classic', 0, Icons.album_rounded),
-          const SizedBox(width: 8),
-          _deckPill('60FPS Visualizer', 1, Icons.graphic_eq_rounded),
-          const SizedBox(width: 8),
-          _deckPill('Karaoke Lyrics', 2, Icons.lyrics_rounded),
+          const SizedBox(width: 12),
+          _deckPill('Lyrics', 1, Icons.lyrics_rounded),
         ],
       ),
     );
@@ -356,12 +348,12 @@ class _PlayerScreenState extends State<PlayerScreen>
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
         decoration: BoxDecoration(
           color: isActive
               ? AppColors.primary.withValues(alpha: 0.22)
               : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isActive ? AppColors.primary : Colors.white.withValues(alpha: 0.08),
             width: isActive ? 1.2 : 0.8,
@@ -370,13 +362,13 @@ class _PlayerScreenState extends State<PlayerScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 12, color: isActive ? AppColors.primary : Colors.white60),
-            const SizedBox(width: 4),
+            Icon(icon, size: 13, color: isActive ? AppColors.primary : Colors.white60),
+            const SizedBox(width: 6),
             Text(
               label,
               style: GoogleFonts.outfit(
                 color: isActive ? Colors.white : Colors.white60,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
               ),
             ),
@@ -389,23 +381,13 @@ class _PlayerScreenState extends State<PlayerScreen>
   Widget _buildCenterDeck(double screenWidth, Song song) {
     final isJioSaavn = song.videoId.startsWith('jiosaavn_');
     if (isJioSaavn && _centerDeckMode == 1) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: AudioVisualizerSuite(
-          height: screenWidth * 0.70,
-        ),
-      );
-    }
-    if (isJioSaavn && _centerDeckMode == 2) {
       return Container(
-        height: screenWidth * 0.74,
+        height: screenWidth * 0.82,
         margin: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        child: KaraokeLyricsView(
+          song: song,
+          theme: KaraokePlayerTheme.classic,
         ),
-        clipBehavior: Clip.antiAlias,
-        child: KaraokeLyricsView(song: song),
       );
     }
     return _buildAlbumArt(screenWidth, song);
@@ -1548,128 +1530,6 @@ class _PlayerScreenState extends State<PlayerScreen>
       HSVColor.fromAHSV(1.0, hue3, 0.60, 0.80).toColor(),
     ];
   }
-
-  Widget _buildVisualizerPanel(PlayerProvider playerProvider) {
-    final settings = Provider.of<SettingsProvider>(context);
-    if (!settings.showVisualizer) return const SizedBox.shrink();
-
-    final theme = settings.visualizerTheme;
-    final isPlaying = playerProvider.isPlaying;
-    final song = playerProvider.currentSong;
-    if (song == null) return const SizedBox.shrink();
-    final auraColors = _getAuraColors(song.videoId);
-
-    return SlideTransition(
-      position: _controlsSlide,
-      child: FadeTransition(
-        opacity: _controlsOpacity,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 36),
-          child: GestureDetector(
-            onTap: () {
-              final themes = ['bars', 'circle', 'waveform'];
-              final nextIdx = (themes.indexOf(theme) + 1) % themes.length;
-              settings.setVisualizerTheme(themes[nextIdx]);
-            },
-            child: Container(
-              width: double.infinity,
-              height: 48,
-              color: Colors.transparent,
-              child: AnimatedBuilder(
-                animation: _visualizerController,
-                builder: (context, child) {
-                  final gains = settings.customEqualizerGains;
-                  final useCustom = settings.useCustomEqualizer;
-                  final enhancer = settings.soundEnhancer;
-
-                  double bassMult = 1.0;
-                  double vocalMult = 1.0;
-                  double trebleMult = 1.0;
-
-                  if (useCustom && gains.length >= 5) {
-                    bassMult = 1.0 + (gains[0] / 12.0);
-                    vocalMult = 1.0 + (gains[2] / 12.0);
-                    trebleMult = 1.0 + (gains[4] / 12.0);
-                  } else {
-                    switch (enhancer) {
-                      case SoundEnhancer.none:
-                        break;
-                      case SoundEnhancer.bassBoost:
-                        bassMult = 1.6;
-                        break;
-                      case SoundEnhancer.trebleBoost:
-                        trebleMult = 1.6;
-                        break;
-                      case SoundEnhancer.vocal:
-                        vocalMult = 1.5;
-                        break;
-                      case SoundEnhancer.ambient3d:
-                        bassMult = 1.3;
-                        vocalMult = 0.8;
-                        trebleMult = 1.3;
-                        break;
-                      // Extended genre presets — use EQ curve only, no visualizer mods
-                      case SoundEnhancer.electronic:
-                      case SoundEnhancer.rockMetal:
-                      case SoundEnhancer.hipHop:
-                      case SoundEnhancer.pop:
-                      case SoundEnhancer.acoustic:
-                      case SoundEnhancer.jazzBlues:
-                      case SoundEnhancer.nightMode:
-                        break;
-                    }
-                  }
-                  bassMult = bassMult.clamp(0.1, 2.5);
-                  vocalMult = vocalMult.clamp(0.1, 2.5);
-                  trebleMult = trebleMult.clamp(0.1, 2.5);
-
-                  final double timeMs =
-                      playerProvider.position.inMilliseconds.toDouble();
-                  final int seed = _songSeed(song);
-                  final int quality = visualizerQuality(context);
-
-                  if (theme == 'waveform') {
-                    return RepaintBoundary(
-                      child: CustomPaint(
-                        painter: FluidWaveformPainter(
-                          timeMs: timeMs,
-                          seed: seed,
-                          colors: auraColors,
-                          isPlaying: isPlaying,
-                          quality: quality,
-                          bassMultiplier: bassMult,
-                          vocalMultiplier: vocalMult,
-                          trebleMultiplier: trebleMult,
-                        ),
-                      ),
-                    );
-                  } else if (theme == 'circle') {
-                    return const SizedBox.shrink();
-                  } else {
-                    return RepaintBoundary(
-                      child: CustomPaint(
-                        painter: BarsVisualizerPainter(
-                          timeMs: timeMs,
-                          seed: seed,
-                          colors: auraColors,
-                          isPlaying: isPlaying,
-                          quality: quality,
-                          bassMultiplier: bassMult,
-                          vocalMultiplier: vocalMult,
-                          trebleMultiplier: trebleMult,
-                        ),
-                      ),
-                    );
-                  }
-                },
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
 }
 
 class _PlayPauseMainButton extends StatefulWidget {
