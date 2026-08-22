@@ -16,9 +16,6 @@ import 'glassmorphic_card.dart';
 import 'app_toast.dart';
 import 'storage_operation_dialog.dart';
 import '../screens/sound_studio_screen.dart';
-import 'audiophile_signal_path_sheet.dart';
-import 'parametric_eq_view.dart';
-import 'ambient_soundscape_sheet.dart';
 
 /// Shared "three-dot" song options sheet used by both the Classic and Aurora
 /// player screens: Sleep Timer, Sound Enhancer, Lyrics, Download and
@@ -102,10 +99,10 @@ void showSongOptionsSheet(BuildContext context, Song song) {
               },
             ),
 
-            // Option 2: Acoustic Equalizer Presets
+            // Option 2: Sound Enhancer
             _buildOptionTile(
               icon: Icons.equalizer_rounded,
-              title: 'Acoustic Sound Enhancer',
+              title: 'Sound Enhancer',
               subtitle:
                   'Preset: ${_getSoundEnhancerName(context.read<SettingsProvider>().soundEnhancer)}',
               onTap: () {
@@ -114,49 +111,17 @@ void showSongOptionsSheet(BuildContext context, Song song) {
               },
             ),
 
-            // Option 3: Lyrics
-            _buildOptionTile(
-              icon: Icons.lyrics_rounded,
-              title: 'View Lyrics',
-              subtitle: 'Karaoke sync mode',
-              onTap: () {
-                Navigator.pop(context);
-                _showLyricsDialog(context, song);
-              },
-            ),
-
-            // Option 3b: Parametric Equalizer (PEQ)
-            _buildOptionTile(
-              icon: Icons.tune_rounded,
-              title: 'Parametric Equalizer (PEQ)',
-              subtitle: '5-band interactive Bézier spline',
-              onTap: () {
-                Navigator.pop(context);
-                ParametricEqView.show(context);
-              },
-            ),
-
-            // Option 3c: Audiophile Signal Path
-            _buildOptionTile(
-              icon: Icons.stream_rounded,
-              title: 'Audiophile Signal Path',
-              subtitle: 'Bit-perfect DAC & stream telemetry',
-              onTap: () {
-                Navigator.pop(context);
-                AudiophileSignalPathSheet.show(context, song);
-              },
-            ),
-
-            // Option 3d: Ambient Soundscape Layer
-            _buildOptionTile(
-              icon: Icons.cloud_queue_rounded,
-              title: 'Ambient Soundscape Layer',
-              subtitle: 'Mix rain, ocean, cafe & binaural sounds',
-              onTap: () {
-                Navigator.pop(context);
-                AmbientSoundscapeSheet.show(context);
-              },
-            ),
+            // Option 3: Lyrics (Only for JioSaavn tracks)
+            if (song.videoId.startsWith('jiosaavn_'))
+              _buildOptionTile(
+                icon: Icons.lyrics_rounded,
+                title: 'View Lyrics',
+                subtitle: 'Karaoke sync mode',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showLyricsDialog(context, song);
+                },
+              ),
 
             // Option 4: Move to Album & Download Actions
             Consumer<PlayerProvider>(

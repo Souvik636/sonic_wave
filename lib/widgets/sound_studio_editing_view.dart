@@ -420,7 +420,7 @@ class _SoundStudioEditingViewState extends State<SoundStudioEditingView> {
               Row(
                 children: [
                   Text(
-                    'SOUND STUDIO',
+                    'SOUND ENHANCER',
                     style: GoogleFonts.outfit(
                       color: Colors.white,
                       fontSize: 18,

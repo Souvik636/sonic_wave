@@ -62,7 +62,7 @@ class _SoundStudioScreenState extends State<SoundStudioScreen>
         title: Column(
           children: [
             Text(
-              'SOUND STUDIO PRO',
+              'SOUND ENHANCER',
               style: GoogleFonts.outfit(
                 color: primary,
                 fontSize: 11,
@@ -103,7 +103,7 @@ class _SoundStudioScreenState extends State<SoundStudioScreen>
               settings.setUseCustomEqualizer(false);
               settings.setSoundEnhancer(SoundEnhancer.none);
               playerProvider.setPlaybackSpeed(1.0);
-              AppToast.show(context, 'Reset all Sound Studio effects', type: ToastType.info);
+              AppToast.show(context, 'Reset all Sound Enhancer effects', type: ToastType.info);
             },
           ),
         ],

@@ -19,9 +19,6 @@ import '../widgets/queue_sheet.dart';
 import '../widgets/sound_studio_editing_view.dart';
 import 'player_screen.dart';
 import '../widgets/karaoke_lyrics_view.dart';
-import '../widgets/audiophile_signal_path_sheet.dart';
-import '../widgets/parametric_eq_view.dart';
-import '../widgets/ambient_soundscape_sheet.dart';
 import '../widgets/audio_visualizer_suite.dart';
 
 /// Aurora Player — a premium glassmorphic alternative to the classic disc player.
@@ -466,8 +463,9 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                               _buildTopBar(context, song, pp),
                               const SizedBox(height: 6),
 
-                              // ── Deck switcher ─────────────────────────────
-                              _buildDeckModeSwitcher(dynamicPrimary),
+                              // ── Deck switcher (Only for JioSaavn tracks) ───
+                              if (song.videoId.startsWith('jiosaavn_'))
+                                _buildDeckModeSwitcher(dynamicPrimary),
 
                               const Spacer(flex: 2),
 
@@ -578,7 +576,8 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   Widget _buildCenterDeck(
     double screenWidth, Song song, PlayerProvider pp, double progress, Color primary,
   ) {
-    if (_centerDeckMode == 1) {
+    final isJioSaavn = song.videoId.startsWith('jiosaavn_');
+    if (isJioSaavn && _centerDeckMode == 1) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: AudioVisualizerSuite(
@@ -586,7 +585,7 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
         ),
       );
     }
-    if (_centerDeckMode == 2) {
+    if (isJioSaavn && _centerDeckMode == 2) {
       return Container(
         height: screenWidth * 0.70,
         margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -605,103 +604,44 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   // TOP BAR
   // ════════════════════════════════════════════════════════════════════════
   Widget _buildTopBar(BuildContext context, Song song, PlayerProvider pp) {
-    final isFlac = (song.filePath?.toLowerCase().endsWith('.flac') ?? false) || song.videoId.endsWith('.flac');
-    final isLossless = isFlac || (song.filePath?.toLowerCase().endsWith('.wav') ?? false);
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Stack(
-        alignment: Alignment.center,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Centered Audiophile Signal Path Badge
-          GestureDetector(
-            onTap: () => AudiophileSignalPathSheet.show(context, song),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: isLossless
-                    ? const Color(0xFF00FFC2).withValues(alpha: 0.12)
-                    : Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isLossless
-                      ? const Color(0xFF00FFC2).withValues(alpha: 0.4)
-                      : Colors.white.withValues(alpha: 0.12),
-                  width: 0.8,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    isLossless ? 'HI-RES • BIT-PERFECT' : 'HQ AUDIO • 320K',
-                    style: GoogleFonts.spaceMono(
-                      color: isLossless ? const Color(0xFF00FFC2) : Colors.white70,
-                      letterSpacing: 0.8,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.info_outline_rounded,
-                    size: 10,
-                    color: isLossless ? const Color(0xFF00FFC2) : Colors.white60,
-                  ),
-                ],
-              ),
-            ),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                color: Colors.white70, size: 30),
           ),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.min,
             children: [
+              // Toggle to classic player
               IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                    color: Colors.white70, size: 30),
+                onPressed: () {
+                  AppHaptics.selection();
+                  Provider.of<SettingsProvider>(context, listen: false)
+                      .setPlayerStyle('classic');
+                  Navigator.pushReplacement(
+                    context,
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) => const PlayerScreen(),
+                      transitionsBuilder: (context, anim, secondaryAnimation, child) =>
+                          FadeTransition(opacity: anim, child: child),
+                      transitionDuration: const Duration(milliseconds: 300),
+                    ),
+                  );
+                },
+                tooltip: 'Switch to Classic Player',
+                icon: const Icon(Icons.album_rounded, color: Colors.white38, size: 22),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Parametric Equalizer button
-                  IconButton(
-                    onPressed: () => ParametricEqView.show(context),
-                    tooltip: 'Parametric Equalizer (PEQ)',
-                    icon: const Icon(Icons.tune_rounded, color: Colors.white70, size: 20),
-                  ),
-                  // Ambient Soundscape Layer button
-                  IconButton(
-                    onPressed: () => AmbientSoundscapeSheet.show(context),
-                    tooltip: 'Ambient Soundscape Layer',
-                    icon: const Icon(Icons.cloud_queue_rounded, color: Colors.white70, size: 20),
-                  ),
-                  // Toggle to classic player
-                  IconButton(
-                    onPressed: () {
-                      AppHaptics.selection();
-                      Provider.of<SettingsProvider>(context, listen: false)
-                          .setPlayerStyle('classic');
-                      Navigator.pushReplacement(
-                        context,
-                        PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => const PlayerScreen(),
-                          transitionsBuilder: (context, anim, secondaryAnimation, child) =>
-                              FadeTransition(opacity: anim, child: child),
-                          transitionDuration: const Duration(milliseconds: 300),
-                        ),
-                      );
-                    },
-                    tooltip: 'Switch to Classic Player',
-                    icon: const Icon(Icons.album_rounded, color: Colors.white38, size: 22),
-                  ),
-                  // Three-dot options: Sleep Timer → Detailed Info & Metadata
-                  IconButton(
-                    onPressed: () => showSongOptionsSheet(context, song),
-                    tooltip: 'More options',
-                    icon: const Icon(Icons.more_vert_rounded,
-                        color: Colors.white70, size: 22),
-                  ),
-                ],
+              // Three-dot options: Sleep Timer → Detailed Info & Metadata
+              IconButton(
+                onPressed: () => showSongOptionsSheet(context, song),
+                tooltip: 'More options',
+                icon: const Icon(Icons.more_vert_rounded,
+                    color: Colors.white70, size: 22),
               ),
             ],
           ),

@@ -3,7 +3,6 @@ import 'package:sonic_wave/models/song.dart';
 import 'package:sonic_wave/models/album.dart';
 import 'package:sonic_wave/providers/player_provider.dart';
 import 'package:sonic_wave/services/lyrics_service.dart';
-import 'package:sonic_wave/services/ambient_soundscape_service.dart';
 import 'package:sonic_wave/widgets/audio_visualizer_suite.dart';
 
 void main() {
@@ -123,46 +122,36 @@ void main() {
       expect(streamingSong.isLocalFile, isFalse);
       expect(streamingSong.filePath, isNull);
     });
-  });
 
-  group('4. Parametric Equalizer Math & Presets Tests', () {
-    test('PEQ gains clamped correctly between -12dB and +12dB', () {
-      double clampGain(double g) => g.clamp(-12.0, 12.0);
+    test('JioSaavn tracks are identified for karaoke lyrics deck mode', () {
+      final jioSaavnSong = Song(
+        id: 'jio_1',
+        title: 'Tum Hi Ho',
+        artist: 'Arijit Singh',
+        thumbnailUrl: '',
+        highResThumbnailUrl: '',
+        duration: const Duration(seconds: 262),
+        videoId: 'jiosaavn_7I9urT8B',
+      );
 
-      expect(clampGain(15.5), equals(12.0));
-      expect(clampGain(-20.0), equals(-12.0));
-      expect(clampGain(4.5), equals(4.5));
-      expect(clampGain(0.0), equals(0.0));
+      final ytSong = Song(
+        id: 'yt_1',
+        title: 'Shape of You',
+        artist: 'Ed Sheeran',
+        thumbnailUrl: '',
+        highResThumbnailUrl: '',
+        duration: const Duration(seconds: 233),
+        videoId: 'JGwWNGJdvx8',
+      );
+
+      bool isKaraokeAvailable(Song s) => s.videoId.startsWith('jiosaavn_');
+
+      expect(isKaraokeAvailable(jioSaavnSong), isTrue);
+      expect(isKaraokeAvailable(ytSong), isFalse);
     });
   });
 
-  group('5. Ambient Soundscape Service Tests', () {
-    test('Soundscapes list contains 5 rich relaxing atmospheres', () {
-      final service = AmbientSoundscapeService();
-      expect(service.soundscapes.length, equals(5));
-
-      final types = service.soundscapes.map((s) => s.type).toList();
-      expect(types, contains(AmbientType.rain));
-      expect(types, contains(AmbientType.ocean));
-      expect(types, contains(AmbientType.cafe));
-      expect(types, contains(AmbientType.campfire));
-      expect(types, contains(AmbientType.binaural));
-    });
-
-    test('Volume clamping works properly', () {
-      final service = AmbientSoundscapeService();
-      service.setVolume(1.5);
-      expect(service.volumeNotifier.value, equals(1.0));
-
-      service.setVolume(-0.2);
-      expect(service.volumeNotifier.value, equals(0.0));
-
-      service.setVolume(0.65);
-      expect(service.volumeNotifier.value, equals(0.65));
-    });
-  });
-
-  group('6. Real-Time 60FPS Audio Visualizer Suite Tests', () {
+  group('4. Real-Time 60FPS Audio Visualizer Suite Tests', () {
     test('VisualizerMode enum defines 4 GPU modes', () {
       expect(VisualizerMode.values.length, equals(4));
       expect(VisualizerMode.values, contains(VisualizerMode.spectrumBars));

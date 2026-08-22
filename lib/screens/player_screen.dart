@@ -20,9 +20,6 @@ import '../widgets/sound_studio_editing_view.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'aurora_player_screen.dart';
 import '../widgets/karaoke_lyrics_view.dart';
-import '../widgets/audiophile_signal_path_sheet.dart';
-import '../widgets/parametric_eq_view.dart';
-import '../widgets/ambient_soundscape_sheet.dart';
 import '../widgets/audio_visualizer_suite.dart';
 
 class PlayerScreen extends StatefulWidget {
@@ -272,17 +269,18 @@ class _PlayerScreenState extends State<PlayerScreen>
                       child: SafeArea(
                         child: Column(
                           children: [
-                            // Top bar with Audiophile Telemetry
+                            // Top bar
                             _buildTopBar(context, song),
 
                             const SizedBox(height: 6),
 
-                            // Deck mode switcher (Vinyl / Visualizer / Lyrics)
-                            _buildDeckModeSwitcher(),
+                            // Deck mode switcher (Classic / Visualizer / Lyrics) - Only for JioSaavn
+                            if (song.videoId.startsWith('jiosaavn_'))
+                              _buildDeckModeSwitcher(),
 
                             const Spacer(flex: 1),
 
-                            // Center dynamic deck (Vinyl Art / 60FPS Visualizer / Synced Lyrics)
+                            // Center dynamic deck (Classic Art / 60FPS Visualizer / Synced Lyrics)
                             _buildCenterDeck(screenWidth, song),
 
                             const Spacer(flex: 1),
@@ -339,7 +337,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _deckPill('Vinyl', 0, Icons.album_rounded),
+          _deckPill('Classic', 0, Icons.album_rounded),
           const SizedBox(width: 8),
           _deckPill('60FPS Visualizer', 1, Icons.graphic_eq_rounded),
           const SizedBox(width: 8),
@@ -389,7 +387,8 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Widget _buildCenterDeck(double screenWidth, Song song) {
-    if (_centerDeckMode == 1) {
+    final isJioSaavn = song.videoId.startsWith('jiosaavn_');
+    if (isJioSaavn && _centerDeckMode == 1) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: AudioVisualizerSuite(
@@ -397,7 +396,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         ),
       );
     }
-    if (_centerDeckMode == 2) {
+    if (isJioSaavn && _centerDeckMode == 2) {
       return Container(
         height: screenWidth * 0.74,
         margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -413,102 +412,43 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Widget _buildTopBar(BuildContext context, Song song) {
-    final isFlac = (song.filePath?.toLowerCase().endsWith('.flac') ?? false) || song.videoId.endsWith('.flac');
-    final isLossless = isFlac || (song.filePath?.toLowerCase().endsWith('.wav') ?? false);
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Stack(
-        alignment: Alignment.center,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Centered Audiophile Signal Path Badge
-          GestureDetector(
-            onTap: () => AudiophileSignalPathSheet.show(context, song),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: isLossless
-                    ? const Color(0xFF00FFC2).withValues(alpha: 0.12)
-                    : Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isLossless
-                      ? const Color(0xFF00FFC2).withValues(alpha: 0.4)
-                      : Colors.white.withValues(alpha: 0.12),
-                  width: 0.8,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    isLossless ? 'HI-RES • BIT-PERFECT' : 'HQ AUDIO • 320K',
-                    style: GoogleFonts.spaceMono(
-                      color: isLossless ? const Color(0xFF00FFC2) : Colors.white70,
-                      letterSpacing: 0.8,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.info_outline_rounded,
-                    size: 10,
-                    color: isLossless ? const Color(0xFF00FFC2) : Colors.white60,
-                  ),
-                ],
-              ),
-            ),
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                color: Colors.white, size: 32),
           ),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.min,
             children: [
+              // Toggle to Aurora player
               IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                    color: Colors.white, size: 32),
+                onPressed: () {
+                  AppHaptics.selection();
+                  Provider.of<SettingsProvider>(context, listen: false)
+                      .setPlayerStyle('aurora');
+                  Navigator.pushReplacement(
+                    context,
+                    PageRouteBuilder(
+                      pageBuilder: (_, _, _) => const AuroraPlayerScreen(),
+                      transitionsBuilder: (_, anim, _, child) =>
+                          FadeTransition(opacity: anim, child: child),
+                      transitionDuration: const Duration(milliseconds: 300),
+                    ),
+                  );
+                },
+                tooltip: 'Switch to Aurora Player',
+                icon: const Icon(Icons.flare_rounded,
+                    color: Colors.white54, size: 22),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Parametric Equalizer button
-                  IconButton(
-                    onPressed: () => ParametricEqView.show(context),
-                    tooltip: 'Parametric Equalizer (PEQ)',
-                    icon: const Icon(Icons.tune_rounded, color: Colors.white70, size: 20),
-                  ),
-                  // Ambient Soundscape Layer button
-                  IconButton(
-                    onPressed: () => AmbientSoundscapeSheet.show(context),
-                    tooltip: 'Ambient Soundscape Layer',
-                    icon: const Icon(Icons.cloud_queue_rounded, color: Colors.white70, size: 20),
-                  ),
-                  // Toggle to Aurora player
-                  IconButton(
-                    onPressed: () {
-                      AppHaptics.selection();
-                      Provider.of<SettingsProvider>(context, listen: false)
-                          .setPlayerStyle('aurora');
-                      Navigator.pushReplacement(
-                        context,
-                        PageRouteBuilder(
-                          pageBuilder: (_, _, _) => const AuroraPlayerScreen(),
-                          transitionsBuilder: (_, anim, _, child) =>
-                              FadeTransition(opacity: anim, child: child),
-                          transitionDuration: const Duration(milliseconds: 300),
-                        ),
-                      );
-                    },
-                    tooltip: 'Switch to Aurora Player',
-                    icon: const Icon(Icons.flare_rounded,
-                        color: Colors.white54, size: 22),
-                  ),
-                  IconButton(
-                    onPressed: () => showSongOptionsSheet(context, song),
-                    icon: const Icon(Icons.more_vert_rounded,
-                        color: Colors.white, size: 24),
-                  ),
-                ],
+              IconButton(
+                onPressed: () => showSongOptionsSheet(context, song),
+                icon: const Icon(Icons.more_vert_rounded,
+                    color: Colors.white, size: 24),
               ),
             ],
           ),
