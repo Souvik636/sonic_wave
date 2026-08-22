@@ -20,7 +20,19 @@ class LyricsService {
   LyricsService._internal();
 
   static const String _userAgent =
-      'SonicWave/1.2.10 (https://github.com/sonicwave; contact@sonicwave.app)';
+      'SonicWave/1.2.12 (https://github.com/sonicwave; contact@sonicwave.app)';
+
+  /// Fast in-memory session cache for streamed / online songs.
+  /// Streaming lyrics live purely in memory to prevent unnecessary permanent disk consumption.
+  final Map<String, List<LyricEntry>> _streamingSessionCache = {};
+
+  bool _isSongDownloadedOrLocal(Song song) {
+    if (song.isLocalFile) return true;
+    if (song.filePath != null && song.filePath!.isNotEmpty) {
+      return File(song.filePath!).existsSync();
+    }
+    return false;
+  }
 
   // ─────────────────────────────────────────────────────────
   // Public API
@@ -56,43 +68,71 @@ class LyricsService {
   /// Get time-synced lyrics for a song.
   ///
   /// Resolution order:
-  ///  1. Local LRC file cache → instant
-  ///  2. Embedded USLT tag (offline/downloaded files only)
-  ///  3. LRCLIB /api/get (exact title+artist+duration match)
-  ///  4. LRCLIB /api/search (fuzzy title+artist fallback)
-  ///  5. JioSaavn wrapper  (only for jiosaavn_ IDs)
-  ///  6. Dynamic placeholder generation
+  ///  1. In-memory session cache (instant RAM lookup for active/streaming songs)
+  ///  2. Local persistent LRC file on disk (ONLY for downloaded/local files)
+  ///  3. Embedded USLT tag (offline/downloaded files only)
+  ///  4. LRCLIB /api/get (exact title+artist+duration match)
+  ///  5. LRCLIB /api/search (fuzzy title+artist fallback)
+  ///  6. JioSaavn wrapper (only for jiosaavn_ IDs)
+  ///  7. Dynamic placeholder generation
   Future<List<LyricEntry>> getLyricsForSong(Song song) async {
-    // 1. Check local LRC cache first — fastest possible path
-    final cached = await _readLrcCache(song.videoId);
-    if (cached != null) {
-      final entries = parseLrc(cached);
-      if (entries.isNotEmpty) return entries;
+    // 1. Check in-memory streaming/session cache
+    if (_streamingSessionCache.containsKey(song.videoId)) {
+      return _streamingSessionCache[song.videoId]!;
     }
 
-    // 2. Embedded lyrics in local file (USLT / ID3 tag)
-    if (song.filePath != null) {
-      final embedded = await _readEmbeddedLyrics(song.filePath!);
-      if (embedded != null && embedded.isNotEmpty) {
-        // Convert plain embedded lyrics to timed LRC and cache them
-        final entries = _generatePlainLrc(embedded, song);
-        await _writeLrcCache(song.videoId, _entriesToLrc(entries));
-        return entries;
+    final isOfflineFile = _isSongDownloadedOrLocal(song);
+
+    // 2. Check local permanent LRC disk cache (ONLY for offline/downloaded songs)
+    if (isOfflineFile) {
+      final cached = await _readLrcCache(song.videoId);
+      if (cached != null) {
+        final entries = parseLrc(cached);
+        if (entries.isNotEmpty) {
+          _streamingSessionCache[song.videoId] = entries;
+          return entries;
+        }
+      }
+
+      // 3. Embedded lyrics in local file (USLT / ID3 tag)
+      if (song.filePath != null) {
+        final embedded = await _readEmbeddedLyrics(song.filePath!);
+        if (embedded != null && embedded.isNotEmpty) {
+          final entries = _generatePlainLrc(embedded, song);
+          await saveLyricsOffline(song.videoId, _entriesToLrc(entries), filePath: song.filePath);
+          _streamingSessionCache[song.videoId] = entries;
+          return entries;
+        }
       }
     }
 
-    // 3 & 4. LRCLIB — exact then fuzzy
+    // 4 & 5. Fetch from LRCLIB
     final networkEntries = await _fetchFromLrcLib(song);
-    if (networkEntries != null) return networkEntries;
-
-    // 5. JioSaavn lyrics (only for saavn-originated songs)
-    if (song.videoId.startsWith('jiosaavn_')) {
-      final saavnEntries = await _fetchFromJioSaavn(song);
-      if (saavnEntries != null) return saavnEntries;
+    if (networkEntries != null && networkEntries.isNotEmpty) {
+      _streamingSessionCache[song.videoId] = networkEntries;
+      if (isOfflineFile) {
+        // Persist permanently only because this is an offline/downloaded track
+        await saveLyricsOffline(song.videoId, _entriesToLrc(networkEntries), filePath: song.filePath);
+      }
+      return networkEntries;
     }
 
-    // 6. Dynamic placeholder
-    return _generateDynamicLrc(song);
+    // 6. JioSaavn lyrics (only for saavn-originated songs)
+    if (song.videoId.startsWith('jiosaavn_')) {
+      final saavnEntries = await _fetchFromJioSaavn(song);
+      if (saavnEntries != null && saavnEntries.isNotEmpty) {
+        _streamingSessionCache[song.videoId] = saavnEntries;
+        if (isOfflineFile) {
+          await saveLyricsOffline(song.videoId, _entriesToLrc(saavnEntries), filePath: song.filePath);
+        }
+        return saavnEntries;
+      }
+    }
+
+    // 7. Dynamic placeholder
+    final placeholder = _generateDynamicLrc(song);
+    _streamingSessionCache[song.videoId] = placeholder;
+    return placeholder;
   }
 
   // ─────────────────────────────────────────────────────────
@@ -100,7 +140,7 @@ class LyricsService {
   // ─────────────────────────────────────────────────────────
 
   Future<Directory> _lrcCacheDir() async {
-    final base = await getApplicationCacheDirectory();
+    final base = await getApplicationDocumentsDirectory();
     final dir  = Directory('${base.path}/lyrics');
     if (!await dir.exists()) await dir.create(recursive: true);
     return dir;
@@ -130,6 +170,21 @@ class LyricsService {
     }
   }
 
+  /// Persist lyrics permanently when a user downloads or saves a song.
+  Future<void> persistLyricsForDownloadedSong(Song song, {String? filePath}) async {
+    final targetPath = filePath ?? song.filePath;
+    List<LyricEntry>? entries = _streamingSessionCache[song.videoId];
+    if (entries == null || entries.isEmpty) {
+      entries = await _fetchFromLrcLib(song) ??
+          (song.videoId.startsWith('jiosaavn_') ? await _fetchFromJioSaavn(song) : null);
+    }
+    if (entries != null && entries.isNotEmpty) {
+      final lrcText = _entriesToLrc(entries);
+      await saveLyricsOffline(song.videoId, lrcText, filePath: targetPath);
+      _streamingSessionCache[song.videoId] = entries;
+    }
+  }
+
   /// Manually save or update lyrics for offline access.
   Future<void> saveLyricsOffline(String videoId, String lrcText, {String? filePath}) async {
     await _writeLrcCache(videoId, lrcText);
@@ -142,6 +197,7 @@ class LyricsService {
         }
       } catch (_) {}
     }
+    _streamingSessionCache[videoId] = parseLrc(lrcText);
   }
 
   /// Get manual synchronization offset in milliseconds for fine-tuning timing.
@@ -208,7 +264,6 @@ class LyricsService {
         final data    = json.decode(body) as Map<String, dynamic>;
         final entries = _extractLrcLibEntries(data, song);
         if (entries != null) {
-          await _writeLrcCache(song.videoId, _entriesToLrc(entries));
           return entries;
         }
       } else {
@@ -249,7 +304,6 @@ class LyricsService {
         if (best != null) {
           final entries = _extractLrcLibEntries(best, song);
           if (entries != null) {
-            await _writeLrcCache(song.videoId, _entriesToLrc(entries));
             return entries;
           }
         }

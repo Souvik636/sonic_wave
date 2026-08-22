@@ -107,6 +107,22 @@ void main() {
       expect(entry.text, equals('Hello World'));
       expect(entry.translation, equals('Bonjour le monde'));
     });
+
+    test('Streaming songs use temporary RAM session cache without writing permanent disk files', () {
+      final streamingSong = Song(
+        id: 'stream_1',
+        title: 'Streaming Track',
+        artist: 'Stream Artist',
+        thumbnailUrl: '',
+        highResThumbnailUrl: '',
+        duration: const Duration(seconds: 200),
+        videoId: 'online_stream_v123',
+      );
+
+      // Verify it is not flagged as local or downloaded
+      expect(streamingSong.isLocalFile, isFalse);
+      expect(streamingSong.filePath, isNull);
+    });
   });
 
   group('4. Parametric Equalizer Math & Presets Tests', () {

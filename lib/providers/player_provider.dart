@@ -20,6 +20,7 @@ import '../services/download_notification_service.dart';
 import '../services/local_metadata_service.dart';
 import '../services/recommendation_engine.dart';
 import '../services/stream_cache_service.dart';
+import '../services/lyrics_service.dart';
 import '../widgets/app_toast.dart';
 import 'settings_provider.dart';
 
@@ -1658,6 +1659,12 @@ class PlayerProvider extends ChangeNotifier {
       }, quality: _audioQuality);
       _downloadProgress.remove(song.videoId);
       await loadDownloads();
+      // Persist lyrics permanently to disk for offline playback
+      final downloadedSong = _downloadedSongs.firstWhere(
+        (s) => s.videoId == song.videoId,
+        orElse: () => song,
+      );
+      unawaited(LyricsService().persistLyricsForDownloadedSong(downloadedSong));
       if (!isSharedLinkDownload) {
         unawaited(DownloadNotificationService.complete(
           videoId: song.videoId,
