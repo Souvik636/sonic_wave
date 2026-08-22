@@ -65,6 +65,7 @@ class RadioService {
           HttpHeaders.userAgentHeader,
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         );
+        req.headers.set('Accept-Encoding', 'identity');
         req.headers.set('Icy-MetaData', '1');
         final res = await req.close().timeout(const Duration(seconds: 4));
         if (res.statusCode == 200) {
@@ -96,6 +97,7 @@ class RadioService {
         HttpHeaders.userAgentHeader,
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       );
+      headReq.headers.set('Accept-Encoding', 'identity');
       headReq.headers.set('Icy-MetaData', '1');
       headReq.followRedirects = true;
       headReq.maxRedirects = 4;

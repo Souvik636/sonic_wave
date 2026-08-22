@@ -134,7 +134,9 @@ class Song {
     double? fadeOut,
     String? searchQuery,
     String? filePath,
+    bool clearFilePath = false,
     String? albumFolderName,
+    bool clearAlbumFolderName = false,
     bool? isEdited,
     String? isolationMode,
   }) {
@@ -151,8 +153,8 @@ class Song {
       fadeIn: fadeIn ?? this.fadeIn,
       fadeOut: fadeOut ?? this.fadeOut,
       searchQuery: searchQuery ?? this.searchQuery,
-      filePath: filePath ?? this.filePath,
-      albumFolderName: albumFolderName ?? this.albumFolderName,
+      filePath: clearFilePath ? null : (filePath ?? this.filePath),
+      albumFolderName: clearAlbumFolderName ? null : (albumFolderName ?? this.albumFolderName),
       isEdited: isEdited ?? this.isEdited,
       isolationMode: isolationMode ?? this.isolationMode,
     );

@@ -20,7 +20,6 @@ import '../services/download_notification_service.dart';
 import '../services/local_metadata_service.dart';
 import '../services/recommendation_engine.dart';
 import '../services/stream_cache_service.dart';
-import '../services/radio_service.dart';
 import '../widgets/app_toast.dart';
 import 'settings_provider.dart';
 
@@ -773,15 +772,12 @@ class PlayerProvider extends ChangeNotifier {
   Song? get loadingSong => _loadingSong;
   bool get isPlaying => _audioHandler.player.playing;
   bool get isBuffering {
-    final cur = currentSong;
-    if (cur != null) {
-      final chunkState = StreamCacheService.chunkStateNotifier.value[cur.videoId];
-      if (chunkState == ChunkLifecycleState.ready || chunkState == ChunkLifecycleState.completed) {
-        return _audioHandler.player.processingState == ProcessingState.buffering;
-      }
-    }
     if (_audioHandler.player.playing && _audioHandler.player.position > Duration.zero) {
       return _audioHandler.player.processingState == ProcessingState.buffering;
+    }
+    if (_audioHandler.player.processingState == ProcessingState.ready ||
+        _audioHandler.player.processingState == ProcessingState.completed) {
+      return false;
     }
     return _loadingSong != null ||
         _audioHandler.player.processingState == ProcessingState.loading ||
@@ -790,37 +786,34 @@ class PlayerProvider extends ChangeNotifier {
   bool get hasCurrentSong => currentSong != null;
 
   /// Returns true only when a song is actively playing or in a playable/ready paused state.
-  /// When true, the Play/Pause button is active. When false (track is still resolving/loading/buffering),
+  /// When true, the Play/Pause button is active. When false (track is still resolving/loading),
   /// the UI shows the loading animation and clicking on it is a no-op.
   bool get isPlayPauseEnabled {
     if (!hasCurrentSong) return false;
     if (_loadingSong != null) return false;
-    if (_audioHandler.player.processingState == ProcessingState.loading) return false;
-    final cur = currentSong;
-    if (cur != null && !cur.isLocalFile && !RadioService.isRadioId(cur.videoId)) {
-      final chunkState = StreamCacheService.chunkStateNotifier.value[cur.videoId];
-      final isChunkReady = chunkState == ChunkLifecycleState.ready || chunkState == ChunkLifecycleState.completed;
-      if (!isChunkReady && !_audioHandler.player.playing && _audioHandler.player.position == Duration.zero) {
-        return false;
-      }
+    final procState = _audioHandler.player.processingState;
+    if (procState == ProcessingState.loading) return false;
+    if (procState == ProcessingState.ready || procState == ProcessingState.completed) return true;
+    if (_audioHandler.player.playing) return true;
+    if (procState == ProcessingState.idle) {
+      // Lazy restore state — clicking play will load and play the song
+      return true;
     }
-    return true;
+    return false;
   }
 
   bool isSongLoading(Song song) {
-    if (RadioService.isRadioId(song.videoId)) {
-      return _loadingSong?.videoId == song.videoId ||
-          (currentSong?.videoId == song.videoId &&
-              (_audioHandler.player.processingState == ProcessingState.loading ||
-                  _audioHandler.player.processingState == ProcessingState.buffering));
+    if (_loadingSong?.videoId == song.videoId) return true;
+    if (currentSong?.videoId == song.videoId) {
+      final procState = _audioHandler.player.processingState;
+      if (procState == ProcessingState.ready || procState == ProcessingState.completed) {
+        return false;
+      }
+      if (procState == ProcessingState.loading || procState == ProcessingState.buffering) {
+        return true;
+      }
     }
-    final chunkState = StreamCacheService.chunkStateNotifier.value[song.videoId];
-    if (chunkState == ChunkLifecycleState.ready || chunkState == ChunkLifecycleState.completed) {
-      return currentSong?.videoId == song.videoId &&
-          _audioHandler.player.processingState == ProcessingState.buffering;
-    }
-    return _loadingSong?.videoId == song.videoId ||
-        (currentSong?.videoId == song.videoId && isBuffering);
+    return false;
   }
 
   Duration get position => _audioHandler.player.position;
@@ -974,8 +967,28 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
+  /// Sanitizes a song instance before playback. If an online song has a stale/deleted
+  /// filePath from a previous session or pruned cache, filePath is reset to null
+  /// so StreamResolverService seamlessly resolves a fresh live stream URL.
+  Song _sanitizePlayableSong(Song song) {
+    if (song.filePath != null && !File(song.filePath!).existsSync()) {
+      final isOnlineId = !song.videoId.startsWith('/') &&
+          !(song.videoId.length >= 3 &&
+              song.videoId[1] == ':' &&
+              (song.videoId[2] == '/' || song.videoId[2] == '\\')) &&
+          !song.videoId.startsWith('content://') &&
+          !song.videoId.startsWith('file://') &&
+          !song.videoId.startsWith('local_');
+      if (isOnlineId) {
+        return song.copyWith(clearFilePath: true);
+      }
+    }
+    return song;
+  }
+
   /// Play a song — handles rapid tapping by cancelling stale requests
-  Future<void> playSong(Song song) async {
+  Future<void> playSong(Song rawSong) async {
+    final song = _sanitizePlayableSong(rawSong);
     final thisGeneration = ++_playGeneration;
     _loadingSong = song;
     _playbackError = null;
@@ -998,18 +1011,21 @@ class PlayerProvider extends ChangeNotifier {
     }
   }
 
-  void addSongToQueue(Song song) {
+  void addSongToQueue(Song rawSong) {
+    final song = _sanitizePlayableSong(rawSong);
     _audioHandler.addSongToQueue(song);
     notifyListeners();
   }
 
-  void playSongNext(Song song) {
+  void playSongNext(Song rawSong) {
+    final song = _sanitizePlayableSong(rawSong);
     _audioHandler.insertSongNext(song);
     notifyListeners();
   }
 
   /// Play a playlist starting from index — handles rapid tapping
-  Future<void> playPlaylist(List<Song> songs, {int startIndex = 0}) async {
+  Future<void> playPlaylist(List<Song> rawSongs, {int startIndex = 0}) async {
+    final songs = rawSongs.map(_sanitizePlayableSong).toList();
     final thisGeneration = ++_playGeneration;
     if (startIndex < songs.length) {
       _loadingSong = songs[startIndex];

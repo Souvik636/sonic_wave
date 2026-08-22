@@ -153,12 +153,12 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       _player = AudioPlayer(
         audioPipeline: pipeline,
         audioLoadConfiguration: _loadConfiguration,
-        userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+        userAgent: 'SonicWave/1.2.11 (Linux; Android 14)',
       );
     } else {
       _player = AudioPlayer(
         audioLoadConfiguration: _loadConfiguration,
-        userAgent: 'com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip',
+        userAgent: 'SonicWave/1.2.11 (Linux; Android 14)',
       );
     }
     _init();
@@ -926,9 +926,19 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
       }
     }
 
+    if (resolved.source == 'radio' || resolved.isLive) {
+      return const {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Encoding': 'identity',
+        'Icy-MetaData': '1',
+      };
+    }
+
     return const {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': '*/*',
+      'Accept-Encoding': 'identity',
     };
   }
 
@@ -1195,6 +1205,12 @@ class SonicWaveAudioHandler extends BaseAudioHandler with SeekHandler, QueueHand
     _pendingRestoreSongId = _playlist[_currentIndex].videoId;
     _pendingRestorePosition = position;
     _updateMediaItem(_playlist[_currentIndex]);
+    
+    // Explicitly enforce that player is idle and NOT playing on cold start session restore
+    playbackState.add(playbackState.value.copyWith(
+      processingState: AudioProcessingState.idle,
+      playing: false,
+    ));
   }
 
   /// Move a queue entry from [oldIndex] to [newIndex], keeping the playing

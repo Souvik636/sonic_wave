@@ -573,8 +573,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
             ),
-            ...recentlyPlayed.take(5).map(
-                  (song) => SongTile(song: song),
+            ...recentlyPlayed.take(5).toList().asMap().entries.map(
+                  (entry) => SongTile(
+                    song: entry.value,
+                    onTap: () {
+                      context.read<PlayerProvider>().playPlaylist(
+                        recentlyPlayed,
+                        startIndex: entry.key,
+                      );
+                    },
+                  ),
                 ),
           ],
         );
