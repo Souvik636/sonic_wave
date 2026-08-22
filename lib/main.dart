@@ -26,6 +26,12 @@ Future<void> main() async {
   // Set Jamendo Client ID
   JamendoService().clientId = '3dce8b55';
 
+  // Lock orientation to Portrait mode only (prevents landscape rotation)
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   // Set system UI style
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
