@@ -287,7 +287,12 @@ class _PlayerScreenState extends State<PlayerScreen>
                             // Song info
                             _buildSongInfo(song),
 
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 6),
+
+                            // Dynamic Music Visualizer (Classic Bars / Fluid Waveform)
+                            _buildVisualizerPanel(playerProvider),
+
+                            const SizedBox(height: 8),
 
                             // Progress bar
                             _buildProgressBar(playerProvider),
@@ -1529,6 +1534,119 @@ class _PlayerScreenState extends State<PlayerScreen>
       HSVColor.fromAHSV(1.0, hue2, 0.65, 0.75).toColor(),
       HSVColor.fromAHSV(1.0, hue3, 0.60, 0.80).toColor(),
     ];
+  }
+
+  Widget _buildVisualizerPanel(PlayerProvider playerProvider) {
+    final settings = Provider.of<SettingsProvider>(context);
+    if (!settings.showVisualizer) return const SizedBox.shrink();
+
+    final theme = settings.visualizerTheme;
+    final isPlaying = playerProvider.isPlaying;
+    final song = playerProvider.currentSong;
+    if (song == null) return const SizedBox.shrink();
+    final auraColors = _getAuraColors(song.videoId);
+
+    return SlideTransition(
+      position: _controlsSlide,
+      child: FadeTransition(
+        opacity: _controlsOpacity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 36),
+          child: GestureDetector(
+            onTap: () {
+              AppHaptics.selection();
+              final themes = ['bars', 'waveform'];
+              final nextIdx = (themes.indexOf(theme) + 1) % themes.length;
+              settings.setVisualizerTheme(themes[nextIdx]);
+            },
+            child: Container(
+              width: double.infinity,
+              height: 38,
+              color: Colors.transparent,
+              child: AnimatedBuilder(
+                animation: _visualizerController,
+                builder: (context, child) {
+                  final gains = settings.customEqualizerGains;
+                  final useCustom = settings.useCustomEqualizer;
+                  final enhancer = settings.soundEnhancer;
+
+                  double bassMult = 1.0;
+                  double vocalMult = 1.0;
+                  double trebleMult = 1.0;
+
+                  if (useCustom && gains.length >= 5) {
+                    bassMult = 1.0 + (gains[0] / 12.0);
+                    vocalMult = 1.0 + (gains[2] / 12.0);
+                    trebleMult = 1.0 + (gains[4] / 12.0);
+                  } else {
+                    switch (enhancer) {
+                      case SoundEnhancer.none:
+                        break;
+                      case SoundEnhancer.bassBoost:
+                        bassMult = 1.6;
+                        break;
+                      case SoundEnhancer.trebleBoost:
+                        trebleMult = 1.6;
+                        break;
+                      case SoundEnhancer.vocal:
+                        vocalMult = 1.5;
+                        break;
+                      case SoundEnhancer.ambient3d:
+                        bassMult = 1.3;
+                        vocalMult = 0.8;
+                        trebleMult = 1.3;
+                        break;
+                      default:
+                        break;
+                    }
+                  }
+                  bassMult = bassMult.clamp(0.1, 2.5);
+                  vocalMult = vocalMult.clamp(0.1, 2.5);
+                  trebleMult = trebleMult.clamp(0.1, 2.5);
+
+                  final double timeMs =
+                      playerProvider.position.inMilliseconds.toDouble();
+                  final int seed = _songSeed(song);
+                  final int quality = visualizerQuality(context);
+
+                  if (theme == 'waveform') {
+                    return RepaintBoundary(
+                      child: CustomPaint(
+                        painter: FluidWaveformPainter(
+                          timeMs: timeMs,
+                          seed: seed,
+                          colors: auraColors,
+                          isPlaying: isPlaying,
+                          quality: quality,
+                          bassMultiplier: bassMult,
+                          vocalMultiplier: vocalMult,
+                          trebleMultiplier: trebleMult,
+                        ),
+                      ),
+                    );
+                  } else {
+                    return RepaintBoundary(
+                      child: CustomPaint(
+                        painter: BarsVisualizerPainter(
+                          timeMs: timeMs,
+                          seed: seed,
+                          colors: auraColors,
+                          isPlaying: isPlaying,
+                          quality: quality,
+                          bassMultiplier: bassMult,
+                          vocalMultiplier: vocalMult,
+                          trebleMultiplier: trebleMult,
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

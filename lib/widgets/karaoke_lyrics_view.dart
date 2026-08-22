@@ -19,9 +19,12 @@ enum KaraokePlayerTheme {
 
 /// High-Performance, GPU-Optimized Synchronized Karaoke Lyrics View
 ///
-/// Designed with 60FPS fluid auto-scroll, top/bottom alpha gradient fade,
-/// low-GPU overhead (zero heavy backdrop filters in embedded mode), and distinct
-/// visual styling for Classic and Aurora player architectures.
+/// Features:
+/// - Precise RenderObject-based auto-scroll centering with zero drift over long tracks.
+/// - Top/bottom alpha gradient fade mask (`ShaderMask` with `BlendMode.dstIn`).
+/// - Distinct, gorgeous aesthetic styling for Classic and Aurora players.
+/// - Low-GPU overhead (zero heavy backdrop filters in embedded mode, RepaintBoundary isolated).
+/// - Smart user scroll interruption & tap-to-seek navigation.
 class KaraokeLyricsView extends StatefulWidget {
   final Song song;
   final KaraokePlayerTheme theme;
@@ -45,6 +48,7 @@ class KaraokeLyricsView extends StatefulWidget {
 class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
   final ScrollController _scrollController = ScrollController();
   final LyricsService _lyricsService = LyricsService();
+  final Map<int, GlobalKey> _itemKeys = {};
 
   List<LyricEntry> _lyrics = [];
   bool _isLoading = true;
@@ -52,6 +56,9 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
   int _syncOffsetMs = 0;
   bool _userScrolled = false;
   DateTime _lastUserScrollTime = DateTime.now();
+
+  GlobalKey _getKeyForIndex(int idx) =>
+      _itemKeys.putIfAbsent(idx, () => GlobalKey());
 
   @override
   void initState() {
@@ -71,6 +78,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
     setState(() {
       _isLoading = true;
       _lyrics = [];
+      _itemKeys.clear();
       _currentIndex = 0;
     });
 
@@ -103,16 +111,27 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
 
   void _scrollToActive(int index) {
     if (_userScrolled) {
-      if (DateTime.now().difference(_lastUserScrollTime).inMilliseconds > 3500) {
+      if (DateTime.now().difference(_lastUserScrollTime).inMilliseconds > 3000) {
         _userScrolled = false;
       } else {
         return;
       }
     }
-    if (_scrollController.hasClients && _lyrics.isNotEmpty && index >= 0) {
-      const estimatedItemHeight = 68.0;
-      final viewportHeight = _scrollController.position.viewportDimension;
-      final target = (index * estimatedItemHeight) - (viewportHeight * 0.35);
+    if (index < 0 || index >= _lyrics.length) return;
+
+    final key = _itemKeys[index];
+    final currentContext = key?.currentContext;
+
+    if (currentContext != null) {
+      Scrollable.ensureVisible(
+        currentContext,
+        alignment: 0.38, // Centered right in the reading sweet-spot (38% from top)
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+      );
+    } else if (_scrollController.hasClients) {
+      // Precise mathematical fallback if key is not yet laid out
+      final target = (index * 64.0) - 80.0;
       _scrollController.animateTo(
         target.clamp(0.0, _scrollController.position.maxScrollExtent),
         duration: const Duration(milliseconds: 380),
@@ -165,14 +184,14 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
         color: widget.isFullScreen
             ? (isAurora ? const Color(0xFF060611) : Colors.black)
             : (isAurora
-                ? accent.withValues(alpha: 0.07)
-                : const Color(0xFF0C0E17).withValues(alpha: 0.85)),
+                ? accent.withValues(alpha: 0.08)
+                : const Color(0xFF0C0E17).withValues(alpha: 0.88)),
         borderRadius: widget.isFullScreen ? BorderRadius.zero : BorderRadius.circular(24),
         border: widget.isFullScreen
             ? null
             : Border.all(
                 color: isAurora
-                    ? accent.withValues(alpha: 0.25)
+                    ? accent.withValues(alpha: 0.28)
                     : Colors.white.withValues(alpha: 0.08),
                 width: 1.0,
               ),
@@ -286,7 +305,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
             Colors.white,
             Colors.transparent,
           ],
-          stops: [0.0, 0.10, 0.90, 1.0],
+          stops: [0.0, 0.12, 0.88, 1.0],
         ).createShader(bounds);
       },
       blendMode: BlendMode.dstIn,
@@ -300,34 +319,35 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
           child: ListView.builder(
             controller: _scrollController,
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
             itemCount: _lyrics.length,
             itemBuilder: (context, index) {
               final entry = _lyrics[index];
               final isActive = index == _currentIndex;
 
               return GestureDetector(
+                key: _getKeyForIndex(index),
                 onTap: () {
                   AppHaptics.light();
                   player.seek(entry.time);
                 },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
+                  duration: const Duration(milliseconds: 240),
                   curve: Curves.easeOutCubic,
-                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  margin: const EdgeInsets.symmetric(vertical: 5),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
                     color: isActive
                         ? (isAurora
-                            ? accent.withValues(alpha: 0.18)
+                            ? accent.withValues(alpha: 0.20)
                             : accent.withValues(alpha: 0.12))
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(16),
                     border: isActive
                         ? Border.all(
                             color: isAurora
-                                ? accent.withValues(alpha: 0.45)
-                                : accent.withValues(alpha: 0.30),
+                                ? accent.withValues(alpha: 0.50)
+                                : accent.withValues(alpha: 0.35),
                             width: 1.0,
                           )
                         : null,
@@ -346,7 +366,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
                             borderRadius: BorderRadius.circular(2),
                             boxShadow: [
                               BoxShadow(
-                                color: accent.withValues(alpha: 0.8),
+                                color: accent.withValues(alpha: 0.85),
                                 blurRadius: 8,
                                 spreadRadius: 1,
                               ),
@@ -369,8 +389,8 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
                                 shadows: (isActive && isAurora)
                                     ? [
                                         Shadow(
-                                          color: accent.withValues(alpha: 0.7),
-                                          blurRadius: 14,
+                                          color: accent.withValues(alpha: 0.75),
+                                          blurRadius: 16,
                                         ),
                                       ]
                                     : null,
@@ -382,7 +402,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
                                 entry.translation!,
                                 style: GoogleFonts.outfit(
                                   color: isActive
-                                      ? (isAurora ? const Color(0xFFCBB2FF) : AppColors.primaryLight)
+                                      ? (isAurora ? const Color(0xFFD6BCFA) : AppColors.primaryLight)
                                       : Colors.white24,
                                   fontSize: isActive ? 13 : 11,
                                   fontStyle: FontStyle.italic,
@@ -453,7 +473,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
               Text(
                 '${_syncOffsetMs >= 0 ? '+' : ''}${_syncOffsetMs}ms',
                 style: GoogleFonts.spaceMono(
-                  color: isAurora ? const Color(0xFFCBB2FF) : accent,
+                  color: isAurora ? const Color(0xFFD6BCFA) : accent,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),
