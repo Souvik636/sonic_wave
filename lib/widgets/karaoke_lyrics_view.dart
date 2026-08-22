@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/song.dart';
@@ -13,18 +15,19 @@ enum KaraokePlayerTheme {
   /// Studio Obsidian & Neon Cyan aesthetic with studio equalizer precision
   classic,
 
-  /// Ethereal dynamic color-shifting glow with cosmic aura particles
+  /// Ethereal dynamic color-shifting glow with cosmic aura wave
   aurora,
 }
 
 /// High-Performance, GPU-Optimized Synchronized Karaoke Lyrics View
 ///
 /// Features:
-/// - Precise RenderObject-based auto-scroll centering with zero drift over long tracks.
+/// - Active 60ms ticker-driven real-time audio playback synchronization.
+/// - Precise RenderObject-based auto-scroll centering with zero drift.
+/// - Full-lyrics copy to clipboard support for all players.
 /// - Top/bottom alpha gradient fade mask (`ShaderMask` with `BlendMode.dstIn`).
-/// - Distinct, gorgeous aesthetic styling for Classic and Aurora players.
-/// - Live animated equalizer bars for Classic and sparkling cosmic aura for Aurora.
-/// - Low-GPU overhead (RepaintBoundary isolated, smooth 60fps spring physics).
+/// - Distinct aesthetic styling for Classic and Aurora players.
+/// - Live animated mini-equalizer bars for Classic and fluid pulse wave for Aurora.
 /// - Smart user scroll interruption & tap-to-seek navigation.
 class KaraokeLyricsView extends StatefulWidget {
   final Song song;
@@ -53,6 +56,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
   final Map<int, GlobalKey> _itemKeys = {};
 
   late AnimationController _pulseController;
+  Timer? _positionTicker;
 
   List<LyricEntry> _lyrics = [];
   bool _isLoading = true;
@@ -73,6 +77,15 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
     )..repeat(reverse: true);
 
     _loadLyrics();
+
+    // High-frequency position ticker ensuring flawless continuous lyric synchronization
+    _positionTicker = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) return;
+      final player = Provider.of<PlayerProvider>(context, listen: false);
+      if (_lyrics.isNotEmpty) {
+        _updateActiveLyric(player.position.inMilliseconds + _syncOffsetMs);
+      }
+    });
   }
 
   @override
@@ -100,6 +113,28 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
         _syncOffsetMs = offset;
         _isLoading = false;
       });
+      // Initial scroll position
+      final player = Provider.of<PlayerProvider>(context, listen: false);
+      _updateActiveLyric(player.position.inMilliseconds + _syncOffsetMs);
+    }
+  }
+
+  void _updateActiveLyric(int positionMs) {
+    if (_lyrics.isEmpty) return;
+
+    int activeIdx = 0;
+    for (int i = _lyrics.length - 1; i >= 0; i--) {
+      if (positionMs >= _lyrics[i].time.inMilliseconds) {
+        activeIdx = i;
+        break;
+      }
+    }
+
+    if (activeIdx != _currentIndex) {
+      setState(() {
+        _currentIndex = activeIdx;
+      });
+      _scrollToActive(_currentIndex);
     }
   }
 
@@ -118,6 +153,37 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
     );
   }
 
+  void _copyFullLyrics() {
+    if (_lyrics.isEmpty) {
+      AppToast.show(
+        context,
+        'No lyrics to copy',
+        type: ToastType.warning,
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+
+    final textBuffer = StringBuffer();
+    textBuffer.writeln('${widget.song.title} — ${widget.song.artist}');
+    textBuffer.writeln('');
+    for (final entry in _lyrics) {
+      textBuffer.writeln(entry.text);
+      if (entry.translation != null && entry.translation!.isNotEmpty) {
+        textBuffer.writeln('(${entry.translation})');
+      }
+    }
+
+    Clipboard.setData(ClipboardData(text: textBuffer.toString()));
+    AppHaptics.medium();
+    AppToast.show(
+      context,
+      'Full lyrics copied to clipboard',
+      type: ToastType.success,
+      icon: Icons.copy_rounded,
+    );
+  }
+
   void _scrollToActive(int index) {
     if (_userScrolled) {
       if (DateTime.now().difference(_lastUserScrollTime).inMilliseconds > 3000) {
@@ -127,6 +193,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
       }
     }
     if (index < 0 || index >= _lyrics.length) return;
+    if (!_scrollController.hasClients) return;
 
     final key = _itemKeys[index];
     final currentContext = key?.currentContext;
@@ -134,11 +201,11 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
     if (currentContext != null) {
       Scrollable.ensureVisible(
         currentContext,
-        alignment: 0.35, // Perfectly centered in reading sweet spot
+        alignment: 0.35, // Centered right in the reading sweet spot
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
       );
-    } else if (_scrollController.hasClients) {
+    } else {
       final viewportHeight = _scrollController.position.viewportDimension;
       final target = (index * 68.0) - (viewportHeight * 0.35);
       _scrollController.animateTo(
@@ -151,6 +218,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
 
   @override
   void dispose() {
+    _positionTicker?.cancel();
     _pulseController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -166,27 +234,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
   @override
   Widget build(BuildContext context) {
     final player = context.watch<PlayerProvider>();
-    final positionMs = player.position.inMilliseconds + _syncOffsetMs;
     final accent = _getPrimaryAccent();
-
-    // Determine active lyric index
-    int activeIdx = 0;
-    if (_lyrics.isNotEmpty) {
-      for (int i = _lyrics.length - 1; i >= 0; i--) {
-        if (positionMs >= _lyrics[i].time.inMilliseconds) {
-          activeIdx = i;
-          break;
-        }
-      }
-    }
-
-    if (activeIdx != _currentIndex && !_isLoading) {
-      _currentIndex = activeIdx;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToActive(_currentIndex);
-      });
-    }
-
     final isAurora = widget.theme == KaraokePlayerTheme.aurora;
 
     return Container(
@@ -237,7 +285,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
         borderRadius: widget.isFullScreen ? BorderRadius.zero : BorderRadius.circular(24),
         child: Column(
           children: [
-            // Top Mini-Header with Sync Calibration Toggle
+            // Top Mini-Header with Sync Calibration Toggle & Copy Lyrics
             _buildTopActionBar(accent, isAurora),
 
             // Lyrics Main Viewport with Smooth Gradient Fade Mask
@@ -278,7 +326,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
                   border: Border.all(color: accent.withValues(alpha: 0.35), width: 0.8),
                 ),
                 child: Icon(
-                  isAurora ? Icons.auto_awesome_rounded : Icons.equalizer_rounded,
+                  isAurora ? Icons.graphic_eq_rounded : Icons.equalizer_rounded,
                   color: accent,
                   size: 14,
                 ),
@@ -295,37 +343,52 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
               ),
             ],
           ),
-          if (_userScrolled)
-            GestureDetector(
-              onTap: () {
-                AppHaptics.light();
-                _userScrolled = false;
-                _scrollToActive(_currentIndex);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent.withValues(alpha: 0.5), width: 1.0),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.center_focus_strong_rounded, size: 12, color: Colors.white),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Sync Line',
-                      style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Copy Full Lyrics Button
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                icon: const Icon(Icons.copy_rounded, size: 16, color: Colors.white70),
+                tooltip: 'Copy Full Lyrics',
+                onPressed: _copyFullLyrics,
               ),
-            ),
+              if (_userScrolled) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () {
+                    AppHaptics.light();
+                    _userScrolled = false;
+                    _scrollToActive(_currentIndex);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: accent.withValues(alpha: 0.5), width: 1.0),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.center_focus_strong_rounded, size: 12, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Sync Line',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     );
@@ -397,13 +460,13 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Active indicator: Mini dynamic equalizer for Classic vs Sparkling Orb for Aurora
+                      // Active indicator: Mini dynamic equalizer for Classic vs Pulse Waves for Aurora
                       if (isActive) ...[
                         if (isAurora)
                           Padding(
                             padding: const EdgeInsets.only(right: 10),
                             child: Icon(
-                              Icons.auto_awesome_rounded,
+                              Icons.graphic_eq_rounded,
                               size: 16,
                               color: accent,
                             ),
@@ -481,7 +544,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.mic_off_rounded, size: 36, color: Colors.white24),
+          const Icon(Icons.mic_off_rounded, size: 36, color: Colors.white24),
           const SizedBox(height: 12),
           Text(
             'Lyrics unavailable for this track',
