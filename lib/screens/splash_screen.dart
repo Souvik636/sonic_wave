@@ -46,10 +46,10 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
 
-    // 2. Logo entrance animations (elastic spring ease-out, optimized for low GPU)
+    // 2. Logo entrance animations (elastic spring ease-out)
     _logoController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 650),
+      duration: const Duration(milliseconds: 1100),
     );
     _logoScale = Tween<double>(begin: 0.2, end: 1.0).animate(
       CurvedAnimation(
@@ -73,13 +73,13 @@ class _SplashScreenState extends State<SplashScreen>
     // 3. Text & Subtitle fade controllers
     _textController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 700),
     );
 
     // 4. Exit screen transition controllers
     _exitController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 650),
     );
     _exitScale = Tween<double>(begin: 1.0, end: 0.45).animate(
       CurvedAnimation(parent: _exitController, curve: Curves.easeInBack),
@@ -100,15 +100,15 @@ class _SplashScreenState extends State<SplashScreen>
       _startTypingSubtitle();
     });
 
-    // Pre-warm / pre-fetch home data in background so home screen opens instantly
+    // Pre-warm / pre-fetch home data in background so home screen opens completely loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         Provider.of<HomeProvider>(context, listen: false).initialize();
       } catch (_) {}
     });
 
-    // Exit to Home Screen swiftly (no long stalls on low-end devices)
-    Future.delayed(const Duration(milliseconds: 1700), () {
+    // Exit to Home Screen (Full cinematic splash experience)
+    Future.delayed(const Duration(milliseconds: 3900), () {
       if (mounted) {
         _exitController.forward().then((_) {
           if (!mounted) return;
@@ -119,12 +119,12 @@ class _SplashScreenState extends State<SplashScreen>
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
                 final curve = CurvedAnimation(
                   parent: animation,
-                  curve: Curves.easeOutCubic,
+                  curve: Curves.easeInOutQuart,
                 );
                 
-                final scale = Tween<double>(begin: 0.94, end: 1.0).animate(curve);
+                final scale = Tween<double>(begin: 0.90, end: 1.0).animate(curve);
                 final slide = Tween<Offset>(
-                  begin: const Offset(0.0, 0.04),
+                  begin: const Offset(0.0, 0.06),
                   end: Offset.zero,
                 ).animate(curve);
 
@@ -139,7 +139,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 );
               },
-              transitionDuration: const Duration(milliseconds: 450),
+              transitionDuration: const Duration(milliseconds: 900),
             ),
           );
         });
@@ -149,7 +149,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _startTypingSubtitle() {
     int index = 0;
-    _typingTimer = Timer.periodic(const Duration(milliseconds: 26), (timer) {
+    _typingTimer = Timer.periodic(const Duration(milliseconds: 55), (timer) {
       if (index < _fullSubtitle.length) {
         if (mounted) {
           setState(() {
@@ -166,7 +166,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _startTypingCreatedBy() {
     int index = 0;
-    _typingTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
+    _typingTimer = Timer.periodic(const Duration(milliseconds: 65), (timer) {
       if (index < _fullCreatedBy.length) {
         if (mounted) {
           setState(() {

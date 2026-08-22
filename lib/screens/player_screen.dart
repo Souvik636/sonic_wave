@@ -20,6 +20,7 @@ import '../widgets/sound_studio_editing_view.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'aurora_player_screen.dart';
 import '../widgets/karaoke_lyrics_view.dart';
+import '../widgets/app_toast.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
@@ -271,9 +272,9 @@ class _PlayerScreenState extends State<PlayerScreen>
                             // Top bar
                             _buildTopBar(context, song),
 
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 1),
 
-                            // Deck mode switcher (Classic / Visualizer / Lyrics) - Only for JioSaavn
+                            // Deck mode switcher (Classic / Lyrics) - Elevated position
                             if (song.videoId.startsWith('jiosaavn_'))
                               _buildDeckModeSwitcher(),
 
@@ -332,7 +333,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Widget _buildDeckModeSwitcher() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.only(top: 0, bottom: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -1555,9 +1556,24 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: GestureDetector(
             onTap: () {
               AppHaptics.selection();
-              final themes = ['bars', 'waveform'];
+              final themes = ['bars', 'circle', 'waveform'];
               final nextIdx = (themes.indexOf(theme) + 1) % themes.length;
-              settings.setVisualizerTheme(themes[nextIdx]);
+              final nextTheme = themes[nextIdx];
+              settings.setVisualizerTheme(nextTheme);
+
+              final name = nextTheme == 'bars'
+                  ? 'Classic Bars'
+                  : (nextTheme == 'circle' ? 'Circular Wave' : 'Fluid Wave');
+              final icon = nextTheme == 'bars'
+                  ? Icons.equalizer_rounded
+                  : (nextTheme == 'circle' ? Icons.blur_circular_rounded : Icons.waves_rounded);
+
+              AppToast.show(
+                context,
+                'Visualizer: $name',
+                type: ToastType.info,
+                icon: icon,
+              );
             },
             child: Container(
               width: double.infinity,
@@ -1621,6 +1637,25 @@ class _PlayerScreenState extends State<PlayerScreen>
                           bassMultiplier: bassMult,
                           vocalMultiplier: vocalMult,
                           trebleMultiplier: trebleMult,
+                        ),
+                      ),
+                    );
+                  } else if (theme == 'circle') {
+                    return RepaintBoundary(
+                      child: Center(
+                        child: CustomPaint(
+                          size: const Size(38, 38),
+                          painter: CircularVisualizerPainter(
+                            timeMs: timeMs,
+                            seed: seed,
+                            colors: auraColors,
+                            radius: 12.0,
+                            isPlaying: isPlaying,
+                            quality: quality,
+                            bassMultiplier: bassMult,
+                            vocalMultiplier: vocalMult,
+                            trebleMultiplier: trebleMult,
+                          ),
                         ),
                       ),
                     );

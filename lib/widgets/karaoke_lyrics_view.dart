@@ -1,19 +1,19 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../services/lyrics_service.dart';
-import '../theme/app_colors.dart';
 import 'app_toast.dart';
 import 'premium_interaction.dart';
 
 /// Style theme for Karaoke Lyrics View
 enum KaraokePlayerTheme {
-  /// Studio Obsidian & Neon Cyan aesthetic with studio precision
+  /// Studio Obsidian & Neon Cyan aesthetic with studio equalizer precision
   classic,
 
-  /// Ethereal dynamic color-shifting glow with cosmic atmosphere
+  /// Ethereal dynamic color-shifting glow with cosmic aura particles
   aurora,
 }
 
@@ -23,7 +23,8 @@ enum KaraokePlayerTheme {
 /// - Precise RenderObject-based auto-scroll centering with zero drift over long tracks.
 /// - Top/bottom alpha gradient fade mask (`ShaderMask` with `BlendMode.dstIn`).
 /// - Distinct, gorgeous aesthetic styling for Classic and Aurora players.
-/// - Low-GPU overhead (zero heavy backdrop filters in embedded mode, RepaintBoundary isolated).
+/// - Live animated equalizer bars for Classic and sparkling cosmic aura for Aurora.
+/// - Low-GPU overhead (RepaintBoundary isolated, smooth 60fps spring physics).
 /// - Smart user scroll interruption & tap-to-seek navigation.
 class KaraokeLyricsView extends StatefulWidget {
   final Song song;
@@ -45,10 +46,13 @@ class KaraokeLyricsView extends StatefulWidget {
   State<KaraokeLyricsView> createState() => _KaraokeLyricsViewState();
 }
 
-class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
+class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
+    with SingleTickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   final LyricsService _lyricsService = LyricsService();
   final Map<int, GlobalKey> _itemKeys = {};
+
+  late AnimationController _pulseController;
 
   List<LyricEntry> _lyrics = [];
   bool _isLoading = true;
@@ -63,6 +67,11 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+
     _loadLyrics();
   }
 
@@ -125,12 +134,11 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
     if (currentContext != null) {
       Scrollable.ensureVisible(
         currentContext,
-        alignment: 0.38, // Centered right in the reading sweet-spot (38% from top)
+        alignment: 0.35, // Perfectly centered in reading sweet spot
         duration: const Duration(milliseconds: 380),
         curve: Curves.easeOutCubic,
       );
     } else if (_scrollController.hasClients) {
-      // Precise mathematical fallback if key is not yet laid out
       final target = (index * 64.0) - 80.0;
       _scrollController.animateTo(
         target.clamp(0.0, _scrollController.position.maxScrollExtent),
@@ -142,6 +150,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -149,8 +158,8 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
   Color _getPrimaryAccent() {
     if (widget.accentColor != null) return widget.accentColor!;
     return widget.theme == KaraokePlayerTheme.aurora
-        ? const Color(0xFF9D6BFF)
-        : AppColors.primary;
+        ? const Color(0xFFB388FF)
+        : const Color(0xFF00E5FF);
   }
 
   @override
@@ -181,20 +190,47 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
 
     return Container(
       decoration: BoxDecoration(
+        gradient: widget.isFullScreen
+            ? null
+            : (isAurora
+                ? LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      accent.withValues(alpha: 0.15),
+                      const Color(0xFF060714).withValues(alpha: 0.90),
+                    ],
+                  )
+                : const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF0E111E),
+                      Color(0xFF060810),
+                    ],
+                  )),
         color: widget.isFullScreen
             ? (isAurora ? const Color(0xFF060611) : Colors.black)
-            : (isAurora
-                ? accent.withValues(alpha: 0.08)
-                : const Color(0xFF0C0E17).withValues(alpha: 0.88)),
+            : null,
         borderRadius: widget.isFullScreen ? BorderRadius.zero : BorderRadius.circular(24),
         border: widget.isFullScreen
             ? null
             : Border.all(
                 color: isAurora
-                    ? accent.withValues(alpha: 0.28)
-                    : Colors.white.withValues(alpha: 0.08),
-                width: 1.0,
+                    ? accent.withValues(alpha: 0.35)
+                    : const Color(0xFF00E5FF).withValues(alpha: 0.22),
+                width: 1.2,
               ),
+        boxShadow: widget.isFullScreen
+            ? null
+            : [
+                BoxShadow(
+                  color: (isAurora ? accent : const Color(0xFF00E5FF))
+                      .withValues(alpha: 0.08),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
       ),
       child: ClipRRect(
         borderRadius: widget.isFullScreen ? BorderRadius.zero : BorderRadius.circular(24),
@@ -238,20 +274,21 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: accent.withValues(alpha: 0.35), width: 0.8),
                 ),
                 child: Icon(
-                  isAurora ? Icons.auto_awesome_rounded : Icons.lyrics_rounded,
+                  isAurora ? Icons.auto_awesome_rounded : Icons.equalizer_rounded,
                   color: accent,
                   size: 14,
                 ),
               ),
               const SizedBox(width: 8),
               Text(
-                isAurora ? 'AURORA LYRICS' : 'SYNCED LYRICS',
+                isAurora ? 'AURORA KARAOKE' : 'STUDIO KARAOKE',
                 style: GoogleFonts.outfit(
-                  color: isAurora ? Colors.white : Colors.white70,
+                  color: Colors.white,
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
                   letterSpacing: 1.2,
                 ),
               ),
@@ -265,16 +302,16 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
                 _scrollToActive(_currentIndex);
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.22),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: accent.withValues(alpha: 0.4), width: 0.8),
+                  color: accent.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accent.withValues(alpha: 0.5), width: 1.0),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.center_focus_strong_rounded, size: 11, color: accent),
+                    Icon(Icons.center_focus_strong_rounded, size: 12, color: Colors.white),
                     const SizedBox(width: 4),
                     Text(
                       'Sync Line',
@@ -319,7 +356,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
           child: ListView.builder(
             controller: _scrollController,
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
             itemCount: _lyrics.length,
             itemBuilder: (context, index) {
               final entry = _lyrics[index];
@@ -332,47 +369,49 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
                   player.seek(entry.time);
                 },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 240),
+                  duration: const Duration(milliseconds: 260),
                   curve: Curves.easeOutCubic,
                   margin: const EdgeInsets.symmetric(vertical: 5),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isActive
                         ? (isAurora
-                            ? accent.withValues(alpha: 0.20)
-                            : accent.withValues(alpha: 0.12))
+                            ? accent.withValues(alpha: 0.22)
+                            : const Color(0xFF00E5FF).withValues(alpha: 0.14))
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                     border: isActive
                         ? Border.all(
                             color: isAurora
-                                ? accent.withValues(alpha: 0.50)
-                                : accent.withValues(alpha: 0.35),
-                            width: 1.0,
+                                ? accent.withValues(alpha: 0.65)
+                                : const Color(0xFF00E5FF).withValues(alpha: 0.50),
+                            width: 1.2,
                           )
                         : null,
                   ),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Active glowing bar indicator
-                      if (isActive)
-                        Container(
-                          width: 3.5,
-                          height: 22,
-                          margin: const EdgeInsets.only(right: 10, top: 4),
-                          decoration: BoxDecoration(
-                            color: accent,
-                            borderRadius: BorderRadius.circular(2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: accent.withValues(alpha: 0.85),
-                                blurRadius: 8,
-                                spreadRadius: 1,
-                              ),
-                            ],
+                      // Active indicator: Mini dynamic equalizer for Classic vs Sparkling Orb for Aurora
+                      if (isActive) ...[
+                        if (isAurora)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: Icon(
+                              Icons.auto_awesome_rounded,
+                              size: 16,
+                              color: accent,
+                            ),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: _AnimatedMiniEqualizer(
+                              color: const Color(0xFF00E5FF),
+                              isPlaying: player.isPlaying,
+                            ),
                           ),
-                        ),
+                      ],
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -383,28 +422,37 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
                                 color: isActive
                                     ? Colors.white
                                     : Colors.white.withValues(alpha: 0.38),
-                                fontSize: isActive ? 21 : 16,
-                                fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
-                                height: 1.32,
-                                shadows: (isActive && isAurora)
+                                fontSize: isActive ? 22 : 16,
+                                fontWeight: isActive ? FontWeight.w900 : FontWeight.w500,
+                                height: 1.30,
+                                shadows: isActive
                                     ? [
                                         Shadow(
-                                          color: accent.withValues(alpha: 0.75),
-                                          blurRadius: 16,
+                                          color: (isAurora ? accent : const Color(0xFF00E5FF))
+                                              .withValues(alpha: 0.80),
+                                          blurRadius: isAurora ? 20 : 12,
                                         ),
+                                        if (isAurora)
+                                          Shadow(
+                                            color: Colors.white.withValues(alpha: 0.7),
+                                            blurRadius: 6,
+                                          ),
                                       ]
                                     : null,
                               ),
                             ),
                             if (entry.translation != null && entry.translation!.isNotEmpty) ...[
-                              const SizedBox(height: 3),
+                              const SizedBox(height: 4),
                               Text(
                                 entry.translation!,
                                 style: GoogleFonts.outfit(
                                   color: isActive
-                                      ? (isAurora ? const Color(0xFFD6BCFA) : AppColors.primaryLight)
+                                      ? (isAurora
+                                          ? const Color(0xFFE9D8FD)
+                                          : const Color(0xFF80DEEA))
                                       : Colors.white24,
                                   fontSize: isActive ? 13 : 11,
+                                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                                   fontStyle: FontStyle.italic,
                                 ),
                               ),
@@ -473,7 +521,7 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
               Text(
                 '${_syncOffsetMs >= 0 ? '+' : ''}${_syncOffsetMs}ms',
                 style: GoogleFonts.spaceMono(
-                  color: isAurora ? const Color(0xFFD6BCFA) : accent,
+                  color: isAurora ? const Color(0xFFE9D8FD) : accent,
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                 ),
@@ -501,6 +549,84 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView> {
             style: GoogleFonts.spaceMono(color: Colors.white70, fontSize: 10),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Animated 3-Bar Equalizer Icon for Classic Lyrics Active Line
+class _AnimatedMiniEqualizer extends StatefulWidget {
+  final Color color;
+  final bool isPlaying;
+
+  const _AnimatedMiniEqualizer({
+    required this.color,
+    required this.isPlaying,
+  });
+
+  @override
+  State<_AnimatedMiniEqualizer> createState() => _AnimatedMiniEqualizerState();
+}
+
+class _AnimatedMiniEqualizerState extends State<_AnimatedMiniEqualizer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, child) {
+        final t = _anim.value;
+        final h1 = widget.isPlaying ? (6.0 + 10.0 * math.sin(t * math.pi)) : 4.0;
+        final h2 = widget.isPlaying ? (4.0 + 12.0 * math.cos(t * math.pi)) : 6.0;
+        final h3 = widget.isPlaying ? (8.0 + 8.0 * math.sin(t * math.pi + 1.0)) : 4.0;
+
+        return SizedBox(
+          width: 14,
+          height: 18,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _bar(h1.clamp(3.0, 16.0)),
+              _bar(h2.clamp(3.0, 16.0)),
+              _bar(h3.clamp(3.0, 16.0)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _bar(double height) {
+    return Container(
+      width: 3.0,
+      height: height,
+      decoration: BoxDecoration(
+        color: widget.color,
+        borderRadius: BorderRadius.circular(2),
+        boxShadow: [
+          BoxShadow(
+            color: widget.color.withValues(alpha: 0.6),
+            blurRadius: 4,
+          ),
+        ],
       ),
     );
   }
