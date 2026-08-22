@@ -867,12 +867,30 @@ class SongTile extends StatelessWidget {
           TextButton(
             onPressed: () async {
               final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                Navigator.pop(ctx);
-                final op = await _promptMoveType(context);
-                if (op == null) return;
+              if (name.isEmpty) return;
+              if (playerProvider.isAlbumNameReserved(name)) {
+                AppToast.show(
+                  context,
+                  '"$name" is a reserved system name and cannot be used.',
+                  type: ToastType.error,
+                  icon: Icons.block_rounded,
+                );
+                return;
+              }
+              if (playerProvider.isAlbumNameDuplicate(name)) {
+                AppToast.show(
+                  context,
+                  'An album named "$name" already exists.',
+                  type: ToastType.error,
+                  icon: Icons.warning_amber_rounded,
+                );
+                return;
+              }
+              Navigator.pop(ctx);
+              final op = await _promptMoveType(context);
+              if (op == null) return;
 
-                final newAlbum = await playerProvider.createAlbum(name);
+              final newAlbum = await playerProvider.createAlbum(name);
                 final success = await playerProvider.moveSongToAnotherAlbumFolder(
                   song,
                   newAlbum.id,
@@ -889,7 +907,6 @@ class SongTile extends StatelessWidget {
                     type: success ? ToastType.success : ToastType.error,
                   );
                 }
-              }
             },
             child: Text('Create & Continue',
                 style:

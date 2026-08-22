@@ -1890,7 +1890,42 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   // Albums Management
-  List<UserAlbum> get albums => List.unmodifiable(_albums);
+  static const Set<String> reservedAlbumNames = {
+    'download',
+    'downloads',
+    'recovery',
+    '.recovery',
+    'recovery vault',
+    'all songs',
+    'all',
+    'favorites',
+    'local',
+    'storage',
+    'opened_audio',
+  };
+
+  /// Returns true if [name] matches any system-reserved album keyword.
+  bool isAlbumNameReserved(String name) {
+    final clean = name.trim().toLowerCase();
+    return reservedAlbumNames.contains(clean);
+  }
+
+  /// Returns true if an album with [name] already exists (excluding [excludeId]).
+  bool isAlbumNameDuplicate(String name, {String? excludeId}) {
+    final clean = name.trim().toLowerCase();
+    return _albums.any((a) =>
+        a.id != excludeId && a.name.trim().toLowerCase() == clean);
+  }
+
+  /// Albums list exposed to UI — Recovery album is ONLY visible when it contains >= 1 songs.
+  List<UserAlbum> get albums => List.unmodifiable(
+        _albums.where((a) {
+          if (a.id == 'recovery_vault' || a.name.trim().toLowerCase() == 'recovery') {
+            return a.songs.isNotEmpty;
+          }
+          return true;
+        }),
+      );
 
   Future<void> _loadAlbums() async {
     try {
@@ -1927,6 +1962,17 @@ class PlayerProvider extends ChangeNotifier {
   }
 
   Future<UserAlbum> createAlbum(String name, {bool isCustom = true}) async {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) {
+      throw ArgumentError('Album name cannot be empty');
+    }
+    if (isAlbumNameReserved(cleanName)) {
+      throw ArgumentError('"$cleanName" is a reserved system name and cannot be used for an album.');
+    }
+    if (isAlbumNameDuplicate(cleanName)) {
+      throw ArgumentError('An album named "$cleanName" already exists.');
+    }
+
     String? folderPath;
     bool isFolderBased = false;
 
@@ -1934,7 +1980,7 @@ class PlayerProvider extends ChangeNotifier {
     await storageService.initialize();
     if (storageService.storageType != StorageType.appInternal) {
       try {
-        final albumDir = await storageService.getAlbumDir(name);
+        final albumDir = await storageService.getAlbumDir(cleanName);
         folderPath = albumDir.path;
         isFolderBased = true;
       } catch (e) {
@@ -1944,7 +1990,7 @@ class PlayerProvider extends ChangeNotifier {
 
     final newAlbum = UserAlbum(
       id: 'alb_${DateTime.now().microsecondsSinceEpoch}_${_albums.length + 1}',
-      name: name,
+      name: cleanName,
       songs: [],
       isCustom: isCustom,
       folderPath: folderPath,
@@ -1962,6 +2008,9 @@ class PlayerProvider extends ChangeNotifier {
     final cleanName = newName.trim();
     final album = _albums[idx];
     if (album.name == cleanName) return true;
+    if (isAlbumNameReserved(cleanName) || isAlbumNameDuplicate(cleanName, excludeId: albumId)) {
+      return false;
+    }
 
     String? newFolderPath = album.folderPath;
     List<Song> updatedSongs = List<Song>.from(album.songs);

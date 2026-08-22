@@ -3,13 +3,15 @@ import 'dart:io';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 
 class LyricEntry {
   final Duration time;
   final String text;
+  final String? translation;
 
-  LyricEntry(this.time, this.text);
+  LyricEntry(this.time, this.text, {this.translation});
 }
 
 class LyricsService {
@@ -126,6 +128,38 @@ class LyricsService {
     } catch (e) {
       debugPrint('[LyricsService] Cache write error: $e');
     }
+  }
+
+  /// Manually save or update lyrics for offline access.
+  Future<void> saveLyricsOffline(String videoId, String lrcText, {String? filePath}) async {
+    await _writeLrcCache(videoId, lrcText);
+    if (filePath != null && filePath.isNotEmpty) {
+      try {
+        final audioFile = File(filePath);
+        if (await audioFile.exists()) {
+          final lrcFile = File('${filePath.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '')}.lrc');
+          await lrcFile.writeAsString(lrcText);
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Get manual synchronization offset in milliseconds for fine-tuning timing.
+  Future<int> getSyncOffset(String videoId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt('lyric_offset_${_safeCacheId(videoId)}') ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Persist manual synchronization offset in milliseconds.
+  Future<void> setSyncOffset(String videoId, int offsetMs) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('lyric_offset_${_safeCacheId(videoId)}', offsetMs);
+    } catch (_) {}
   }
 
   // ─────────────────────────────────────────────────────────

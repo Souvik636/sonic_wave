@@ -10,7 +10,6 @@ import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../providers/settings_provider.dart';
 import '../theme/app_colors.dart';
-import '../widgets/animated_equalizer.dart';
 import '../services/download_service.dart';
 import '../services/stream_cache_service.dart';
 import '../widgets/song_album_art.dart';
@@ -20,6 +19,11 @@ import '../widgets/song_options_sheet.dart';
 import '../widgets/sound_studio_editing_view.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'aurora_player_screen.dart';
+import '../widgets/karaoke_lyrics_view.dart';
+import '../widgets/audiophile_signal_path_sheet.dart';
+import '../widgets/parametric_eq_view.dart';
+import '../widgets/ambient_soundscape_sheet.dart';
+import '../widgets/audio_visualizer_suite.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key});
@@ -50,6 +54,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
     });
   }
+  int _centerDeckMode = 0; // 0: Album Art, 1: 60FPS Visualizer Suite, 2: Synced Karaoke Lyrics
   late AnimationController _entranceController;
   late AnimationController _ambientController;
   late AnimationController _visualizerController;
@@ -267,13 +272,18 @@ class _PlayerScreenState extends State<PlayerScreen>
                       child: SafeArea(
                         child: Column(
                           children: [
-                            // Top bar
+                            // Top bar with Audiophile Telemetry
                             _buildTopBar(context, song),
+
+                            const SizedBox(height: 6),
+
+                            // Deck mode switcher (Vinyl / Visualizer / Lyrics)
+                            _buildDeckModeSwitcher(),
 
                             const Spacer(flex: 1),
 
-                            // Album art
-                            _buildAlbumArt(screenWidth, song),
+                            // Center dynamic deck (Vinyl Art / 60FPS Visualizer / Synced Lyrics)
+                            _buildCenterDeck(screenWidth, song),
 
                             const Spacer(flex: 1),
 
@@ -323,32 +333,132 @@ class _PlayerScreenState extends State<PlayerScreen>
     );
   }
 
-  Widget _buildTopBar(BuildContext context, Song song) {
+  Widget _buildDeckModeSwitcher() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _deckPill('Vinyl', 0, Icons.album_rounded),
+          const SizedBox(width: 8),
+          _deckPill('60FPS Visualizer', 1, Icons.graphic_eq_rounded),
+          const SizedBox(width: 8),
+          _deckPill('Karaoke Lyrics', 2, Icons.lyrics_rounded),
+        ],
+      ),
+    );
+  }
+
+  Widget _deckPill(String label, int mode, IconData icon) {
+    final isActive = _centerDeckMode == mode;
+    return GestureDetector(
+      onTap: () {
+        AppHaptics.light();
+        setState(() => _centerDeckMode = mode);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.primary.withValues(alpha: 0.22)
+              : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive ? AppColors.primary : Colors.white.withValues(alpha: 0.08),
+            width: isActive ? 1.2 : 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: isActive ? AppColors.primary : Colors.white60),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                color: isActive ? Colors.white : Colors.white60,
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCenterDeck(double screenWidth, Song song) {
+    if (_centerDeckMode == 1) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: AudioVisualizerSuite(
+          height: screenWidth * 0.70,
+        ),
+      );
+    }
+    if (_centerDeckMode == 2) {
+      return Container(
+        height: screenWidth * 0.74,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: KaraokeLyricsView(song: song),
+      );
+    }
+    return _buildAlbumArt(screenWidth, song);
+  }
+
+  Widget _buildTopBar(BuildContext context, Song song) {
+    final isFlac = (song.filePath?.toLowerCase().endsWith('.flac') ?? false) || song.videoId.endsWith('.flac');
+    final isLossless = isFlac || (song.filePath?.toLowerCase().endsWith('.wav') ?? false);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Perfectly centered "NOW PLAYING" label
-          Column(
-            children: [
-              Text(
-                'NOW PLAYING',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.textTertiary,
-                      letterSpacing: 2,
-                      fontSize: 10,
+          // Centered Audiophile Signal Path Badge
+          GestureDetector(
+            onTap: () => AudiophileSignalPathSheet.show(context, song),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: isLossless
+                    ? const Color(0xFF00FFC2).withValues(alpha: 0.12)
+                    : Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isLossless
+                      ? const Color(0xFF00FFC2).withValues(alpha: 0.4)
+                      : Colors.white.withValues(alpha: 0.12),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isLossless ? 'HI-RES • BIT-PERFECT' : 'HQ AUDIO • 320K',
+                    style: GoogleFonts.spaceMono(
+                      color: isLossless ? const Color(0xFF00FFC2) : Colors.white70,
+                      letterSpacing: 0.8,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 10,
+                    color: isLossless ? const Color(0xFF00FFC2) : Colors.white60,
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              AnimatedEqualizer(
-                isPlaying: context.watch<PlayerProvider>().isPlaying,
-                height: 12,
-                barWidth: 2,
-                barCount: 5,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ],
+            ),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -361,6 +471,18 @@ class _PlayerScreenState extends State<PlayerScreen>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Parametric Equalizer button
+                  IconButton(
+                    onPressed: () => ParametricEqView.show(context),
+                    tooltip: 'Parametric Equalizer (PEQ)',
+                    icon: const Icon(Icons.tune_rounded, color: Colors.white70, size: 20),
+                  ),
+                  // Ambient Soundscape Layer button
+                  IconButton(
+                    onPressed: () => AmbientSoundscapeSheet.show(context),
+                    tooltip: 'Ambient Soundscape Layer',
+                    icon: const Icon(Icons.cloud_queue_rounded, color: Colors.white70, size: 20),
+                  ),
                   // Toggle to Aurora player
                   IconButton(
                     onPressed: () {

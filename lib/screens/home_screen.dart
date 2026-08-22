@@ -1169,12 +1169,29 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          onTap: () {
+                          onTap: () async {
                             final name = controller.text.trim();
-                            if (name.isNotEmpty) {
-                              provider.createAlbum(name);
-                              Navigator.pop(ctx);
+                            if (name.isEmpty) return;
+                            if (provider.isAlbumNameReserved(name)) {
+                              AppToast.show(
+                                context,
+                                '"$name" is a reserved system name and cannot be used.',
+                                type: ToastType.error,
+                                icon: Icons.block_rounded,
+                              );
+                              return;
                             }
+                            if (provider.isAlbumNameDuplicate(name)) {
+                              AppToast.show(
+                                context,
+                                'An album named "$name" already exists.',
+                                type: ToastType.error,
+                                icon: Icons.warning_amber_rounded,
+                              );
+                              return;
+                            }
+                            await provider.createAlbum(name);
+                            if (ctx.mounted) Navigator.pop(ctx);
                           },
                           borderRadius: BorderRadius.circular(12),
                           child: const Padding(

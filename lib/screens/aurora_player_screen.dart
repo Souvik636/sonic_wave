@@ -18,6 +18,11 @@ import '../widgets/song_options_sheet.dart';
 import '../widgets/queue_sheet.dart';
 import '../widgets/sound_studio_editing_view.dart';
 import 'player_screen.dart';
+import '../widgets/karaoke_lyrics_view.dart';
+import '../widgets/audiophile_signal_path_sheet.dart';
+import '../widgets/parametric_eq_view.dart';
+import '../widgets/ambient_soundscape_sheet.dart';
+import '../widgets/audio_visualizer_suite.dart';
 
 /// Aurora Player — a premium glassmorphic alternative to the classic disc player.
 /// Background, aurora ribbons, floating orbs, glow ring, and particles all react
@@ -39,6 +44,7 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
   late AnimationController _orbController;
   late AnimationController _particleController;
   late AnimationController _entranceController;
+  int _centerDeckMode = 0; // 0: Aurora Orb Art, 1: 60FPS Visualizer Suite, 2: Synced Lyrics
 
   /// Playback-state subscription — cancelled in dispose (leak guard).
   StreamSubscription<bool>? _playingSub;
@@ -458,10 +464,15 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
                             children: [
                               // ── Top bar ────────────────────────────────────
                               _buildTopBar(context, song, pp),
+                              const SizedBox(height: 6),
+
+                              // ── Deck switcher ─────────────────────────────
+                              _buildDeckModeSwitcher(dynamicPrimary),
+
                               const Spacer(flex: 2),
 
-                              // ── Album art island with glow + orbs ─────────
-                              _buildAlbumArtIsland(screenWidth, song, pp, progress, dynamicPrimary),
+                              // ── Center dynamic deck (Orb Art / 60FPS Visualizer / Synced Lyrics) ──
+                              _buildCenterDeck(screenWidth, song, pp, progress, dynamicPrimary),
                               const Spacer(flex: 1),
 
                               // ── Song info ─────────────────────────────────
@@ -511,48 +522,135 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
     );
   }
 
+  Widget _buildDeckModeSwitcher(Color primary) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _deckPill('Aurora Orb', 0, Icons.blur_on_rounded, primary),
+          const SizedBox(width: 8),
+          _deckPill('60FPS Visualizer', 1, Icons.graphic_eq_rounded, primary),
+          const SizedBox(width: 8),
+          _deckPill('Karaoke Lyrics', 2, Icons.lyrics_rounded, primary),
+        ],
+      ),
+    );
+  }
+
+  Widget _deckPill(String label, int mode, IconData icon, Color primary) {
+    final isActive = _centerDeckMode == mode;
+    return GestureDetector(
+      onTap: () {
+        AppHaptics.light();
+        setState(() => _centerDeckMode = mode);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: isActive ? primary.withValues(alpha: 0.22) : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive ? primary : Colors.white.withValues(alpha: 0.08),
+            width: isActive ? 1.2 : 0.8,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: isActive ? primary : Colors.white60),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                color: isActive ? Colors.white : Colors.white60,
+                fontSize: 10,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCenterDeck(
+    double screenWidth, Song song, PlayerProvider pp, double progress, Color primary,
+  ) {
+    if (_centerDeckMode == 1) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: AudioVisualizerSuite(
+          height: screenWidth * 0.65,
+        ),
+      );
+    }
+    if (_centerDeckMode == 2) {
+      return Container(
+        height: screenWidth * 0.70,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: KaraokeLyricsView(song: song),
+      );
+    }
+    return _buildAlbumArtIsland(screenWidth, song, pp, progress, primary);
+  }
+
   // ════════════════════════════════════════════════════════════════════════
   // TOP BAR
   // ════════════════════════════════════════════════════════════════════════
   Widget _buildTopBar(BuildContext context, Song song, PlayerProvider pp) {
+    final isFlac = (song.filePath?.toLowerCase().endsWith('.flac') ?? false) || song.videoId.endsWith('.flac');
+    final isLossless = isFlac || (song.filePath?.toLowerCase().endsWith('.wav') ?? false);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Perfectly centered "NOW PLAYING" label
-          Column(
-            children: [
-              Text(
-                'NOW PLAYING',
-                style: GoogleFonts.outfit(
-                  color: Colors.white30,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 3,
+          // Centered Audiophile Signal Path Badge
+          GestureDetector(
+            onTap: () => AudiophileSignalPathSheet.show(context, song),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: isLossless
+                    ? const Color(0xFF00FFC2).withValues(alpha: 0.12)
+                    : Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isLossless
+                      ? const Color(0xFF00FFC2).withValues(alpha: 0.4)
+                      : Colors.white.withValues(alpha: 0.12),
+                  width: 0.8,
                 ),
               ),
-              const SizedBox(height: 2),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isLossless ? 'HI-RES • BIT-PERFECT' : 'HQ AUDIO • 320K',
+                    style: GoogleFonts.spaceMono(
+                      color: isLossless ? const Color(0xFF00FFC2) : Colors.white70,
+                      letterSpacing: 0.8,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                child: Text(
-                  'AURORA',
-                  style: GoogleFonts.outfit(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2,
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 10,
+                    color: isLossless ? const Color(0xFF00FFC2) : Colors.white60,
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -565,6 +663,18 @@ class _AuroraPlayerScreenState extends State<AuroraPlayerScreen>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Parametric Equalizer button
+                  IconButton(
+                    onPressed: () => ParametricEqView.show(context),
+                    tooltip: 'Parametric Equalizer (PEQ)',
+                    icon: const Icon(Icons.tune_rounded, color: Colors.white70, size: 20),
+                  ),
+                  // Ambient Soundscape Layer button
+                  IconButton(
+                    onPressed: () => AmbientSoundscapeSheet.show(context),
+                    tooltip: 'Ambient Soundscape Layer',
+                    icon: const Icon(Icons.cloud_queue_rounded, color: Colors.white70, size: 20),
+                  ),
                   // Toggle to classic player
                   IconButton(
                     onPressed: () {

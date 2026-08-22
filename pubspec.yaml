@@ -1,7 +1,7 @@
 name: sonic_wave
 description: "SonicWave — A modern, beautiful music streaming app"
 publish_to: 'none'
-version: 1.2.11+1
+version: 1.2.12+1
 
 environment:
   sdk: ^3.11.0
