@@ -1547,6 +1547,11 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (song == null) return const SizedBox.shrink();
     final auraColors = _getAuraColors(song.videoId);
 
+    // If theme is 'circle', the radial visualizer renders around the album art disk directly
+    if (theme == 'circle') {
+      return const SizedBox(height: 4);
+    }
+
     return SlideTransition(
       position: _controlsSlide,
       child: FadeTransition(
@@ -1556,17 +1561,15 @@ class _PlayerScreenState extends State<PlayerScreen>
           child: GestureDetector(
             onTap: () {
               AppHaptics.selection();
-              final themes = ['bars', 'circle', 'waveform'];
+              final themes = ['bars', 'waveform'];
               final nextIdx = (themes.indexOf(theme) + 1) % themes.length;
               final nextTheme = themes[nextIdx];
               settings.setVisualizerTheme(nextTheme);
 
-              final name = nextTheme == 'bars'
-                  ? 'Classic Bars'
-                  : (nextTheme == 'circle' ? 'Circular Wave' : 'Fluid Wave');
+              final name = nextTheme == 'bars' ? 'Classic Bars' : 'Fluid Wave';
               final icon = nextTheme == 'bars'
                   ? Icons.equalizer_rounded
-                  : (nextTheme == 'circle' ? Icons.blur_circular_rounded : Icons.waves_rounded);
+                  : Icons.waves_rounded;
 
               AppToast.show(
                 context,
@@ -1637,25 +1640,6 @@ class _PlayerScreenState extends State<PlayerScreen>
                           bassMultiplier: bassMult,
                           vocalMultiplier: vocalMult,
                           trebleMultiplier: trebleMult,
-                        ),
-                      ),
-                    );
-                  } else if (theme == 'circle') {
-                    return RepaintBoundary(
-                      child: Center(
-                        child: CustomPaint(
-                          size: const Size(38, 38),
-                          painter: CircularVisualizerPainter(
-                            timeMs: timeMs,
-                            seed: seed,
-                            colors: auraColors,
-                            radius: 12.0,
-                            isPlaying: isPlaying,
-                            quality: quality,
-                            bassMultiplier: bassMult,
-                            vocalMultiplier: vocalMult,
-                            trebleMultiplier: trebleMult,
-                          ),
                         ),
                       ),
                     );

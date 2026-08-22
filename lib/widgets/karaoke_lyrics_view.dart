@@ -139,7 +139,8 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
         curve: Curves.easeOutCubic,
       );
     } else if (_scrollController.hasClients) {
-      final target = (index * 64.0) - 80.0;
+      final viewportHeight = _scrollController.position.viewportDimension;
+      final target = (index * 68.0) - (viewportHeight * 0.35);
       _scrollController.animateTo(
         target.clamp(0.0, _scrollController.position.maxScrollExtent),
         duration: const Duration(milliseconds: 380),
@@ -347,10 +348,14 @@ class _KaraokeLyricsViewState extends State<KaraokeLyricsView>
       },
       blendMode: BlendMode.dstIn,
       child: RepaintBoundary(
-        child: NotificationListener<UserScrollNotification>(
-          onNotification: (_) {
-            _userScrolled = true;
-            _lastUserScrollTime = DateTime.now();
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (ScrollNotification notification) {
+            // Only trigger userScrolled on genuine physical touch drags (dragDetails != null)
+            if (notification is ScrollStartNotification &&
+                notification.dragDetails != null) {
+              _userScrolled = true;
+              _lastUserScrollTime = DateTime.now();
+            }
             return false;
           },
           child: ListView.builder(
